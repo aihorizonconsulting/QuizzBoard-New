@@ -3,9 +3,7 @@
    Direction Artistique : Modern SaaS + Gamification + Éducation Collaborative
    Palette : Primary Yellow (#FFC400) • Navy (#032447) • Orange (#F4510B)
    ========================================================================== */
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
-
+/* Fonts are loaded via index.html link tags to optimize browser caching and avoid build-time network requirements */
 :root {
   /* Brand Colors */
   --color-primary: #FFC400;
