@@ -172,6 +172,26 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
     }
 
+    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleHttpMessageNotReadable(org.springframework.http.converter.HttpMessageNotReadableException ex, HttpServletRequest request) {
+        log.warn("400 Payload illisible ou format JSON invalide sur {} : {}", request.getRequestURI(), ex.getMessage());
+
+        List<LinkDto> links = List.of(
+                LinkDto.of("self", request.getRequestURI(), request.getMethod())
+        );
+
+        ApiResponse<Void> response = ApiResponse.<Void>builder()
+                .status(HttpStatus.BAD_REQUEST.value())
+                .success(false)
+                .message("Format de données JSON invalide ou illisible : " + (ex.getMostSpecificCause() != null ? ex.getMostSpecificCause().getMessage() : ex.getMessage()))
+                .links(links)
+                .path(request.getRequestURI())
+                .timestamp(LocalDateTime.now())
+                .build();
+
+        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+    }
+
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ApiResponse<Void>> handleIllegalState(IllegalStateException ex, HttpServletRequest request) {
         log.warn("400 Rejet métier / Quota sur {} : {}", request.getRequestURI(), ex.getMessage());

@@ -28,8 +28,10 @@ public class ParticipationServiceImpl implements ParticipationService {
     @Transactional
     public Participation submitParticipation(Participation participation, List<ParticipantAnswer> answers) {
         Quiz quiz = quizRepository.findById(participation.getQuizId())
-                .orElseThrow(() -> new ResourceNotFoundException("Quiz non trouvé"));
+                .orElseGet(() -> quizRepository.findByShareCode(participation.getQuizId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Quiz non trouvé avec l'identifiant ou code: " + participation.getQuizId())));
 
+        participation.setQuizId(quiz.getId());
         participation.setQuizTitle(quiz.getTitle());
 
         // Attach answers
@@ -62,6 +64,9 @@ public class ParticipationServiceImpl implements ParticipationService {
         }
 
         Participation saved = participationRepository.save(participation);
+        if (saved.getId() == null) {
+            saved.setId(java.util.UUID.randomUUID().toString());
+        }
 
         // Update Quiz Stats
         int count = quiz.getParticipationsCount() != null ? quiz.getParticipationsCount() : 0;
@@ -96,7 +101,7 @@ public class ParticipationServiceImpl implements ParticipationService {
             }
             totalPlayers = Math.max(1, rankingList.size());
             for (int i = 0; i < rankingList.size(); i++) {
-                if (rankingList.get(i).getId().equals(saved.getId())) {
+                if (saved.getId() != null && saved.getId().equals(rankingList.get(i).getId())) {
                     rank = i + 1;
                     break;
                 }

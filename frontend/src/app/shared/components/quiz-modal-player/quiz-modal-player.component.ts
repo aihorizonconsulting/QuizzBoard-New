@@ -618,6 +618,7 @@ export class QuizModalPlayerComponent implements OnInit, OnDestroy, OnChanges {
     const user = this.authService.currentUser();
     const guest = this.playerModalService.guestParticipant();
     const participantName = user ? `${user.prenom} ${user.nom}` : (guest?.nickname || 'Participant Invité');
+    const totalTimeSpent = this.recordedAnswers.reduce((acc, a) => acc + a.timeSpentSeconds, 0);
 
     this.partService.saveParticipation({
       quizId: this.quiz.id,
@@ -629,7 +630,7 @@ export class QuizModalPlayerComponent implements OnInit, OnDestroy, OnChanges {
       score: this.totalScore,
       maxScore: this.maxTotalScore,
       percentage: this.scorePercentage,
-      timeTotalSeconds: 60,
+      timeTotalSeconds: totalTimeSpent || 60,
       status: 'COMPLETED',
       answers: this.recordedAnswers
     });

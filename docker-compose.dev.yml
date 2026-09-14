@@ -65,6 +65,11 @@ services:
       - REDIS_HOST=redis-dev
       - REDIS_PORT=6379
       - CORS_ORIGINS=${CORS_ORIGINS:-https://dev.quizzboard.com,http://dev.quizzboard.com,http://localhost:4201,http://127.0.0.1:4201}
+      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USERNAME=${SMTP_USERNAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - MAIL_FROM=${MAIL_FROM:-QuizzBoard Dev <no-reply@quizzboard.com>}
     ports:
       - "127.0.0.1:8081:8080"
     volumes:

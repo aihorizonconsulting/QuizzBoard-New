@@ -32,6 +32,17 @@ public class ParticipationController {
             @Valid @RequestBody Participation participation,
             @AuthenticationPrincipal UserPrincipal currentUser,
             HttpServletRequest request) {
+        // Garantir qu'aucune fausse clé primaire ou date côté client ne perturbe l'insertion JPA
+        participation.setId(null);
+        participation.setCompletedAt(null);
+        participation.setCertificateId(null);
+        if (participation.getAnswers() != null) {
+            for (com.iahorizonplus.quizzboardbackend.entity.ParticipantAnswer ans : participation.getAnswers()) {
+                ans.setId(null);
+                ans.setParticipation(participation);
+            }
+        }
+
         if (currentUser != null) {
             participation.setUserId(currentUser.getId());
             if (participation.getParticipantName() == null || participation.getParticipantName().isBlank()) {

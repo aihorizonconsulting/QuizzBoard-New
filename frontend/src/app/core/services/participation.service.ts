@@ -63,13 +63,41 @@ export class ParticipationService {
 
     this.participations.update(list => [newParticipation, ...list]);
 
-    // Send to backend in background
-    this.http.post<any>(`${environment.apiUrl}/participations`, newParticipation).subscribe({
-      next: (saved) => {
+    // Send clean payload to backend (omitting fake client IDs and ISO dates that conflict with JPA)
+    const payload = {
+      quizId: participation.quizId,
+      quizTitle: participation.quizTitle,
+      classId: participation.classId,
+      className: participation.className,
+      participantName: participation.participantName,
+      participantEmail: participation.participantEmail,
+      score: participation.score,
+      maxScore: participation.maxScore,
+      percentage: participation.percentage,
+      timeTotalSeconds: participation.timeTotalSeconds,
+      status: participation.status || 'COMPLETED',
+      answers: (participation.answers || []).map(a => ({
+        questionId: a.questionId,
+        selectedChoiceIds: a.selectedChoiceIds,
+        isCorrect: a.isCorrect,
+        timeSpentSeconds: a.timeSpentSeconds,
+        pointsEarned: a.pointsEarned
+      }))
+    };
+
+    this.http.post<any>(`${environment.apiUrl}/participations`, payload).subscribe({
+      next: (response) => {
+        const saved = response?.data || response;
+        if (saved && saved.id) {
+          this.participations.update(list => list.map(p => p.id === id ? { ...p, id: saved.id, certificateId: saved.certificateId } : p));
+        }
         if (saved && saved.certificateId) {
-          this.http.get<Certificate>(`${environment.apiUrl}/certificates/${saved.certificateId}`).subscribe({
-            next: (cert) => {
-              this.certificates.update(list => [cert, ...list.filter(c => c.id !== cert.id)]);
+          this.http.get<any>(`${environment.apiUrl}/certificates/${saved.certificateId}`).subscribe({
+            next: (certRes) => {
+              const cert = certRes?.data || certRes;
+              if (cert && cert.id) {
+                this.certificates.update(list => [cert, ...list.filter(c => c.id !== cert.id)]);
+              }
             }
           });
         }
