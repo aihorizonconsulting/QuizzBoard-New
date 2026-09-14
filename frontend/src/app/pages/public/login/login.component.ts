@@ -362,19 +362,16 @@ export class LoginComponent {
     }
   }
 
-  loginWithGoogle() {
-    this.errorMessage = null;
-    this.fieldErrors = {};
+  private isGoogleInitialized = false;
 
-    if (typeof google === 'undefined' || !google?.accounts?.id) {
-      this.errorMessage = 'Le service Google Identity Services est en cours de chargement. Veuillez réessayer dans quelques secondes ou utiliser la connexion par email.';
-      this.cdr.markForCheck();
+  private initGoogleAuth() {
+    if (this.isGoogleInitialized || typeof google === 'undefined' || !google?.accounts?.id) {
       return;
     }
-
     try {
       google.accounts.id.initialize({
         client_id: (environment as any).googleClientId || '385748483146-1r3b7ab8tmhetu1t4pshvelc35lalabg.apps.googleusercontent.com',
+        use_fedcm_for_prompt: true,
         callback: (response: any) => {
           if (response?.credential) {
             this.isGoogleLoading = true;
@@ -395,17 +392,24 @@ export class LoginComponent {
           }
         }
       });
-
-      google.accounts.id.prompt((notification: any) => {
-        if (notification.isNotDisplayed()) {
-          this.errorMessage = 'Veuillez autoriser les fenêtres contextuelles ou les cookies tiers pour vous connecter avec Google.';
-          this.cdr.markForCheck();
-        }
-      });
+      this.isGoogleInitialized = true;
     } catch (e) {
-      this.errorMessage = 'Erreur lors de l\'initialisation de Google Auth.';
-      this.cdr.markForCheck();
+      console.warn('Google Auth init warning:', e);
     }
+  }
+
+  loginWithGoogle() {
+    this.errorMessage = null;
+    this.fieldErrors = {};
+
+    if (typeof google === 'undefined' || !google?.accounts?.id) {
+      this.errorMessage = 'Le service Google Identity Services est en cours de chargement. Veuillez réessayer dans quelques secondes ou utiliser la connexion par email.';
+      this.cdr.markForCheck();
+      return;
+    }
+
+    this.initGoogleAuth();
+    google.accounts.id.prompt();
   }
 
   handleManualLogin() {
