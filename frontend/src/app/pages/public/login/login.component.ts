@@ -5,6 +5,9 @@ import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../../core/services/auth.service';
 import { IconComponent } from '../../../shared/components/icon/icon.component';
 import { extractFieldErrors, getGeneralErrorMessage } from '../../../core/utils/form-error.util';
+import { environment } from '../../../../environments/environment';
+
+declare const google: any;
 
 @Component({
   selector: 'app-login',
@@ -360,8 +363,49 @@ export class LoginComponent {
   }
 
   loginWithGoogle() {
-    this.errorMessage = 'La connexion avec Google nécessite la configuration de GOOGLE_CLIENT_ID dans les variables d\'environnement du backend.';
-    this.cdr.markForCheck();
+    this.errorMessage = null;
+    this.fieldErrors = {};
+
+    if (typeof google === 'undefined' || !google?.accounts?.id) {
+      this.errorMessage = 'Le service Google Identity Services est en cours de chargement. Veuillez réessayer dans quelques secondes ou utiliser la connexion par email.';
+      this.cdr.markForCheck();
+      return;
+    }
+
+    try {
+      google.accounts.id.initialize({
+        client_id: (environment as any).googleClientId || '385748483146-1r3b7ab8tmhetu1t4pshvelc35lalabg.apps.googleusercontent.com',
+        callback: (response: any) => {
+          if (response?.credential) {
+            this.isGoogleLoading = true;
+            this.cdr.markForCheck();
+
+            this.authService.loginWithGoogle(response.credential).subscribe({
+              next: (authRes) => {
+                this.isGoogleLoading = false;
+                const target = authRes.user.role === 'ADMIN' ? '/admin/dashboard' : '/app/dashboard';
+                this.router.navigate([target]);
+              },
+              error: (err) => {
+                this.isGoogleLoading = false;
+                this.errorMessage = err?.error?.message || 'Échec de l\'authentification avec Google.';
+                this.cdr.markForCheck();
+              }
+            });
+          }
+        }
+      });
+
+      google.accounts.id.prompt((notification: any) => {
+        if (notification.isNotDisplayed()) {
+          this.errorMessage = 'Veuillez autoriser les fenêtres contextuelles ou les cookies tiers pour vous connecter avec Google.';
+          this.cdr.markForCheck();
+        }
+      });
+    } catch (e) {
+      this.errorMessage = 'Erreur lors de l\'initialisation de Google Auth.';
+      this.cdr.markForCheck();
+    }
   }
 
   handleManualLogin() {
