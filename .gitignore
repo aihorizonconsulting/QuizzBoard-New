@@ -1,0 +1,36 @@
+# ==============================================================================
+# QUIZZBOARD ROOT - GITIGNORE
+# ==============================================================================
+
+# Environment files with secrets
+.env
+.env.dev
+.env.prod
+.env.local
+*.env
+!*.env.example
+
+# Node / Angular build artifacts
+**/node_modules/
+**/dist/
+**/.angular/
+
+# Maven / Spring Boot build artifacts
+**/target/
+**/.mvn/wrapper/maven-wrapper.jar
+
+# Uploads & Local runtime data
+**/uploads/*
+!**/uploads/.gitkeep
+
+# IDEs & System files
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+.DS_Store
+Thumbs.db
+
+# Standalone git backups
+**/.git_*_backup/

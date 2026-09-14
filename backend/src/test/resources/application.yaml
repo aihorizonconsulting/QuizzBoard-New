@@ -1,0 +1,52 @@
+spring:
+  application:
+    name: quizzboard-backend-test
+
+  datasource:
+    url: jdbc:h2:mem:quizzboard_test;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=PostgreSQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: 
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+  mail:
+    host: localhost
+    port: 2525
+    username: test@quizzboard.com
+    password: test
+
+app:
+  jwt:
+    secret: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+    expiration-ms: 86400000
+    refresh-expiration-ms: 604800000
+  cors:
+    allowed-origins: "*"
+  storage:
+    upload-dir: ./uploads-test
+  payment:
+    simulation-enabled: true
+  paydunya:
+    master-key: test-master-key
+    private-key: test-private-key
+    token: test-token
+    mode: test
+    return-url: http://localhost:4200/app/subscription/callback
+    cancel-url: http://localhost:4200/app/subscription
+    callback-url: http://localhost:8080/api/v1/payments/paydunya/ipn
+  mail:
+    from: QuizzBoard Test <test@quizzboard.com>
+    reset-password-url: http://localhost:4200/reinitialisation-mot-de-passe?token=
+    invitation-base-url: http://localhost:4200/invitation/

@@ -1,0 +1,6 @@
+<router-outlet></router-outlet>
+<app-join-modal></app-join-modal>
+<app-live-waiting-modal></app-live-waiting-modal>
+@if (quizPlayerModalService.activeQuiz(); as activeQuiz) {
+  <app-quiz-modal-player [quiz]="activeQuiz" (closed)="quizPlayerModalService.close()"></app-quiz-modal-player>
+}

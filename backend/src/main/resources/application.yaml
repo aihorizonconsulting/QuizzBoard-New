@@ -1,0 +1,118 @@
+server:
+  port: ${SERVER_PORT:8080}
+  servlet:
+    context-path: ${API_PREFIX:/api/v1}
+
+spring:
+  application:
+    name: quizzboard-backend
+
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+  # 1. Base de données PostgreSQL
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:quizzboard_db}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+    open-in-view: true
+
+  # 2. Cache & Sessions Live Redis
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 3000ms
+
+  # 3. Service Email SMTP
+  mail:
+    host: ${SMTP_HOST:smtp.gmail.com}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:contact.quizzboard@gmail.com}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
+# 4. Paramètres Applicatifs
+app:
+  jwt:
+    secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+    refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000}
+  cors:
+    allowed-origins: ${CORS_ORIGINS:http://localhost:4200,http://localhost:80,http://127.0.0.1:4200}
+  mail:
+    from: ${MAIL_FROM:QuizzBoard Support <no-reply@quizzboard.com>}
+    reset-password-url: ${RESET_PASSWORD_URL:http://localhost:4200/reinitialisation-mot-de-passe?token=}
+  google:
+    client-id: ${GOOGLE_CLIENT_ID:google-client-id-placeholder}
+  payment:
+    simulation-enabled: ${ENABLE_PAYMENT_SIMULATION:true}
+    wave:
+      api-key: ${WAVE_API_KEY:}
+      webhook-secret: ${WAVE_WEBHOOK_SECRET:}
+      business-id: ${WAVE_BUSINESS_ID:}
+      base-url: https://api.wave.com/v1
+    orange-money:
+      client-id: ${OM_CLIENT_ID:}
+      client-secret: ${OM_CLIENT_SECRET:}
+      merchant-key: ${OM_MERCHANT_KEY:}
+      environment: ${OM_ENVIRONMENT:sandbox}
+    stripe:
+      secret-key: ${STRIPE_SECRET_KEY:}
+      webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
+    paydunya:
+      master-key: ${PAYDUNYA_MASTER_KEY:}
+      private-key: ${PAYDUNYA_PRIVATE_KEY:}
+      public-key: ${PAYDUNYA_PUBLIC_KEY:}
+      token: ${PAYDUNYA_TOKEN:}
+      mode: ${PAYDUNYA_MODE:sandbox}
+      cancel-url: ${PAYDUNYA_CANCEL_URL:http://localhost:4200/app/pricing?status=cancelled}
+      return-url: ${PAYDUNYA_RETURN_URL:http://localhost:4200/app/subscription/callback}
+      callback-url: ${PAYDUNYA_CALLBACK_URL:http://localhost:8080/api/v1/payments/paydunya/ipn}
+  ai:
+    gemini:
+      api-key: ${GEMINI_API_KEY:}
+      model: gemini-1.5-flash
+      base-url: https://generativelanguage.googleapis.com/v1beta
+    groq:
+      api-key: ${GROQ_API_KEY:}
+      model: llama-3.3-70b-versatile
+      base-url: https://api.groq.com/openai/v1
+  storage:
+    provider: ${STORAGE_PROVIDER:local}
+    local-dir: ${LOCAL_UPLOAD_DIR:uploads}
+    base-url: ${STORAGE_BASE_URL:http://localhost:8080/api/v1/files}
+  cloudinary:
+    cloud-name: ${CLOUDINARY_CLOUD_NAME:}
+    api-key: ${CLOUDINARY_API_KEY:}
+    api-secret: ${CLOUDINARY_API_SECRET:}
+
+# 5. Documentation OpenAPI / Swagger UI
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: method
+  api-docs:
+    path: /v3/api-docs

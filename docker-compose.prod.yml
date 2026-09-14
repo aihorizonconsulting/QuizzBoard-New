@@ -1,0 +1,102 @@
+services:
+  # ============================================================================
+  # 1. BASE DE DONNÉES POSTGRESQL 16 (PRODUCTION)
+  # ============================================================================
+  postgres-prod:
+    image: postgres:16-alpine
+    container_name: quizzboard-prod-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: ${DB_NAME:-quizzboard_prod_db}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    ports:
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
+    volumes:
+      - quizzboard_prod_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-quizzboard_prod_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - quizzboard-prod-network
+
+  # ============================================================================
+  # 2. CACHE & SESSIONS LIVE REDIS 7 (PRODUCTION)
+  # ============================================================================
+  redis-prod:
+    image: redis:7-alpine
+    container_name: quizzboard-prod-redis
+    restart: always
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - quizzboard_prod_redis_data:/data
+    networks:
+      - quizzboard-prod-network
+
+  # ============================================================================
+  # 3. BACKEND SPRING BOOT 3 (PRODUCTION - quizzboard.com)
+  # ============================================================================
+  backend-prod:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: quizzboard-prod-backend
+    restart: always
+    env_file:
+      - path: .env.prod
+        required: false
+      - path: .env
+        required: false
+    environment:
+      - DB_HOST=postgres-prod
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-quizzboard_prod_db}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - REDIS_HOST=redis-prod
+      - REDIS_PORT=6379
+      - CORS_ORIGINS=${CORS_ORIGINS:-https://quizzboard.com,https://www.quizzboard.com}
+    ports:
+      - "127.0.0.1:${SERVER_PORT:-8080}:8080"
+    volumes:
+      - ./backend/uploads:/app/uploads
+    depends_on:
+      postgres-prod:
+        condition: service_healthy
+      redis-prod:
+        condition: service_started
+    networks:
+      - quizzboard-prod-network
+
+  # ============================================================================
+  # 4. FRONTEND ANGULAR NGINX SPA (PRODUCTION - quizzboard.com)
+  # ============================================================================
+  client-prod:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: quizzboard-prod-client
+    restart: always
+    ports:
+      - "127.0.0.1:${CLIENT_PORT:-4200}:80"
+    depends_on:
+      - backend-prod
+    networks:
+      - quizzboard-prod-network
+
+# ==============================================================================
+# VOLUMES & RÉSEAU PRODUCTION
+# ==============================================================================
+volumes:
+  quizzboard_prod_postgres_data:
+    name: quizzboard_prod_postgres_data
+  quizzboard_prod_redis_data:
+    name: quizzboard_prod_redis_data
+
+networks:
+  quizzboard-prod-network:
+    name: quizzboard-prod-network
+    driver: bridge

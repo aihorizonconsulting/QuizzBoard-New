@@ -1,0 +1,115 @@
+services:
+  # ============================================================================
+  # 1. BASE DE DONNÉES POSTGRESQL 16
+  # ============================================================================
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-quizzboard_db}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-quizzboard_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - quizzboard-network
+
+  # ============================================================================
+  # 2. CACHE & LIVE SESSIONS REDIS 7
+  # ============================================================================
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - quizzboard-network
+
+  # ============================================================================
+  # 3. INTERFACE DE GESTION DE BASE DE DONNÉES PGADMIN 4
+  # ============================================================================
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@quizzboard.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    networks:
+      - quizzboard-network
+
+  # ============================================================================
+  # 4. BACKEND SPRING BOOT 3 (API REST, JWT, SWAGGER, SMTP)
+  # ============================================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-quizzboard_db}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:4200,http://localhost:80,http://127.0.0.1:4200}
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+    volumes:
+      - ./backend/uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - quizzboard-network
+
+  # ============================================================================
+  # 5. FRONTEND ANGULAR 21 (NGINX SPA)
+  # ============================================================================
+  client:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${CLIENT_PORT:-4200}:80"
+    depends_on:
+      - backend
+    networks:
+      - quizzboard-network
+
+# ==============================================================================
+# VOLUMES PERSISTANTS & RÉSEAU DÉDIÉ
+# ==============================================================================
+volumes:
+  postgres_data:
+    name: quizzboard_postgres_data
+  redis_data:
+    name: quizzboard_redis_data
+  pgadmin_data:
+    name: quizzboard_pgadmin_data
+
+networks:
+  quizzboard-network:
+    name: quizzboard-network
+    driver: bridge

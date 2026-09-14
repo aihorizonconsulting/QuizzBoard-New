@@ -1,0 +1,102 @@
+services:
+  # ============================================================================
+  # 1. BASE DE DONNÉES POSTGRESQL 16 (DEV)
+  # ============================================================================
+  postgres-dev:
+    image: postgres:16-alpine
+    container_name: quizzboard-dev-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-quizzboard_dev_db}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    ports:
+      - "127.0.0.1:${DB_PORT:-5433}:5432"
+    volumes:
+      - quizzboard_dev_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-quizzboard_dev_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - quizzboard-dev-network
+
+  # ============================================================================
+  # 2. CACHE & SESSIONS LIVE REDIS 7 (DEV)
+  # ============================================================================
+  redis-dev:
+    image: redis:7-alpine
+    container_name: quizzboard-dev-redis
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6380}:6379"
+    volumes:
+      - quizzboard_dev_redis_data:/data
+    networks:
+      - quizzboard-dev-network
+
+  # ============================================================================
+  # 3. BACKEND SPRING BOOT 3 (DEV - dev.quizzboard.com)
+  # ============================================================================
+  backend-dev:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: quizzboard-dev-backend
+    restart: unless-stopped
+    env_file:
+      - path: .env.dev
+        required: false
+      - path: .env
+        required: false
+    environment:
+      - DB_HOST=postgres-dev
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-quizzboard_dev_db}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - REDIS_HOST=redis-dev
+      - REDIS_PORT=6379
+      - CORS_ORIGINS=${CORS_ORIGINS:-https://dev.quizzboard.com,http://dev.quizzboard.com,http://localhost:4201,http://127.0.0.1:4201}
+    ports:
+      - "127.0.0.1:${SERVER_PORT:-8081}:8080"
+    volumes:
+      - ./backend/uploads:/app/uploads
+    depends_on:
+      postgres-dev:
+        condition: service_healthy
+      redis-dev:
+        condition: service_started
+    networks:
+      - quizzboard-dev-network
+
+  # ============================================================================
+  # 4. FRONTEND ANGULAR NGINX SPA (DEV - dev.quizzboard.com)
+  # ============================================================================
+  client-dev:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: quizzboard-dev-client
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${CLIENT_PORT:-4201}:80"
+    depends_on:
+      - backend-dev
+    networks:
+      - quizzboard-dev-network
+
+# ==============================================================================
+# VOLUMES & RÉSEAU DEV
+# ==============================================================================
+volumes:
+  quizzboard_dev_postgres_data:
+    name: quizzboard_dev_postgres_data
+  quizzboard_dev_redis_data:
+    name: quizzboard_dev_redis_data
+
+networks:
+  quizzboard-dev-network:
+    name: quizzboard-dev-network
+    driver: bridge

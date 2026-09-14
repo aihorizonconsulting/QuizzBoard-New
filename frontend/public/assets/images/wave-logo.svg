@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 50" width="160" height="50">
+  <rect width="160" height="50" rx="10" fill="#1DC2EC" />
+  <!-- Wave Penguin Icon Simplified Silhouette -->
+  <g transform="translate(14, 9)">
+    <circle cx="16" cy="16" r="14" fill="#FFFFFF" />
+    <path d="M12 12 C12 8, 20 8, 20 12 C20 16, 22 17, 24 20 C22 23, 10 23, 8 20 C10 17, 12 16, 12 12 Z" fill="#0C2340" />
+    <circle cx="14" cy="12" r="1.5" fill="#FFFFFF" />
+    <path d="M15 14 L18 16 L15 17 Z" fill="#FF8D00" />
+  </g>
+  <!-- Text "wave" -->
+  <text x="56" y="33" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="24" font-weight="900" fill="#FFFFFF" letter-spacing="-0.5">wave</text>
+</svg>

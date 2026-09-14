@@ -1,0 +1,42 @@
+name: Deploy Dev (dev.quizzboard.com)
+
+on:
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+
+jobs:
+  deploy-dev:
+    name: Deploy to Development Environment
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to Remote Server via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: 22
+          script_stop: true
+          script: |
+            echo "===================================================="
+            echo "🚀 DÉPLOIEMENT AUTOMATIQUE - BRANCHE DEVELOP (DEV)"
+            echo "===================================================="
+            cd /var/www/QuizzBoard-New
+            
+            echo "📥 Récupération des dernières modifications..."
+            git fetch origin develop
+            git checkout develop
+            git pull origin develop
+            
+            echo "🐳 Lancement et reconstruction des conteneurs DEV..."
+            docker compose -f docker-compose.dev.yml up -d --build
+            
+            echo "🧹 Nettoyage des images Docker orphelines..."
+            docker image prune -f
+            
+            echo "✅ DÉPLOIEMENT DEV TERMINÉ SUR https://dev.quizzboard.com"
+            echo "===================================================="

@@ -1,0 +1,639 @@
+<div class="course-list-page animate-fade-in">
+  <!-- PAGE HEADER -->
+  <div class="page-header">
+    <div>
+      <h1 class="h1">Gestion des Cours</h1>
+      <p class="body-small">Créez, structurez et assignez vos cours complets et leurs quiz à vos classes.</p>
+    </div>
+
+    <div class="header-actions">
+      @if (promotionService.isGlobalReadOnly()) {
+        <span class="locked-action-pill" title="La promotion active est archivée. Création de cours désactivée.">
+          <app-icon name="lock" [size]="14" color="#64748B"></app-icon>
+          <span>Création de Cours (Verrouillée)</span>
+        </span>
+      } @else {
+        <button type="button" class="btn btn-outline btn-sm" (click)="openManualCourseModal()">
+          <app-icon name="plus" [size]="14"></app-icon>
+          <span>Créer un Cours Manuellement</span>
+        </button>
+        <a routerLink="/app/quizzes/create" [queryParams]="{mode: 'course'}" class="btn btn-primary btn-sm">
+          <app-icon name="sparkles" [size]="15" color="var(--color-navy)"></app-icon>
+          <span>Générer un Cours avec l'IA</span>
+        </a>
+      }
+    </div>
+  </div>
+
+  <!-- UNIFIED COMPACT SEARCH & FILTER TOOLBAR (IDENTICAL TO QUIZ LIST) -->
+  <div class="filter-toolbar card animate-fade-in">
+    <div class="search-box">
+      <app-icon name="search" [size]="16" color="var(--color-text-secondary)"></app-icon>
+      <input 
+        type="text" 
+        [(ngModel)]="searchQuery" 
+        (ngModelChange)="onFilterChange()"
+        placeholder="Rechercher un cours par titre ou catégorie..." 
+        class="search-input">
+      @if (searchQuery) {
+        <button class="clear-btn" (click)="searchQuery = ''; onFilterChange()">✕</button>
+      }
+    </div>
+
+    <!-- Filter pills -->
+    <div class="filter-pills">
+      <button 
+        type="button" 
+        class="pill-btn" 
+        [class.active]="selectedLevel === 'ALL'" 
+        (click)="selectedLevel = 'ALL'; onFilterChange()">
+        Tous ({{ courses().length }})
+      </button>
+      <button 
+        type="button" 
+        class="pill-btn" 
+        [class.active]="selectedLevel === 'BEGINNER'" 
+        (click)="selectedLevel = 'BEGINNER'; onFilterChange()">
+        Débutant
+      </button>
+      <button 
+        type="button" 
+        class="pill-btn" 
+        [class.active]="selectedLevel === 'INTERMEDIATE'" 
+        (click)="selectedLevel = 'INTERMEDIATE'; onFilterChange()">
+        Intermédiaire
+      </button>
+      <button 
+        type="button" 
+        class="pill-btn" 
+        [class.active]="selectedLevel === 'ADVANCED'" 
+        (click)="selectedLevel = 'ADVANCED'; onFilterChange()">
+        Avancé
+      </button>
+      <button 
+        type="button" 
+        class="pill-btn" 
+        [class.active]="filterCertifiedOnly" 
+        (click)="filterCertifiedOnly = !filterCertifiedOnly; onFilterChange()">
+        🏅 Certifiants
+      </button>
+    </div>
+
+    <!-- View Mode Toggle (Grid vs List) -->
+    <div class="view-toggle-group">
+      <button 
+        type="button" 
+        class="toggle-btn" 
+        [class.active]="viewMode === 'grid'" 
+        (click)="viewMode = 'grid'" 
+        title="Affichage en Grille">
+        <app-icon name="grid" [size]="15"></app-icon>
+      </button>
+      <button 
+        type="button" 
+        class="toggle-btn" 
+        [class.active]="viewMode === 'list'" 
+        (click)="viewMode = 'list'" 
+        title="Affichage en Liste">
+        <app-icon name="list" [size]="15"></app-icon>
+      </button>
+    </div>
+  </div>
+
+  <!-- SKELETON LOADER STATE (FUN & CLEAN) -->
+  @if (isLoading) {
+    <div class="skeleton-grid-4 animate-fade-in" style="margin-bottom: 24px;">
+      @for (i of [1, 2, 3, 4, 5, 6]; track i) {
+        <div class="skeleton-compact-card">
+          <div class="sk-top">
+            <div class="skeleton-fun" style="height: 16px; width: 70px; border-radius: 9999px;"></div>
+            <div class="skeleton-fun" style="height: 14px; width: 40px;"></div>
+          </div>
+          <div class="skeleton-fun" style="height: 120px; width: 100%; border-radius: 8px; margin: 4px 0;"></div>
+          <div class="skeleton-fun" style="height: 16px; width: 80%;"></div>
+          <div class="skeleton-fun" style="height: 12px; width: 50%;"></div>
+          <div class="sk-footer" style="margin-top: 8px;">
+            <div class="skeleton-fun" style="height: 14px; width: 60px;"></div>
+            <div class="skeleton-fun" style="height: 28px; width: 70px; border-radius: 6px;"></div>
+          </div>
+        </div>
+      }
+    </div>
+  } @else if (courses().length === 0) {
+    <!-- INITIAL ZERO STATE -->
+    <div class="empty-state-box card animate-fade-in" style="text-align: center; padding: 48px 24px; border: 2px dashed #CBD5E1; background: #FAFBFD;">
+      <div class="empty-icon-wrap" style="width: 68px; height: 68px; margin: 0 auto 16px; border-radius: 50%; background: #EFF6FF; border: 1px solid #DBEAFE; display: flex; align-items: center; justify-content: center;">
+        <app-icon name="book-open" [size]="32" color="var(--color-navy)"></app-icon>
+      </div>
+      <h3 style="font-size: 20px; font-weight: 800; color: var(--color-navy); margin-bottom: 8px;">Aucun cours créé pour l'instant</h3>
+      <p style="color: var(--color-text-secondary); max-width: 500px; margin: 0 auto 24px; font-size: 14px; line-height: 1.6;">
+        Créez des parcours d'apprentissage complets avec syllabus, chapitres interactifs, quiz d'évaluation et délivrance de certificats de réussite.
+      </p>
+      <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+        <button type="button" (click)="openManualCourseModal()" class="btn btn-outline btn-lg" style="display: inline-flex; align-items: center; gap: 8px;">
+          <app-icon name="plus" [size]="18"></app-icon>
+          <span>Créer Manuellement</span>
+        </button>
+        <a routerLink="/app/quizzes/create" [queryParams]="{mode: 'course'}" class="btn btn-primary btn-lg" style="display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 14px rgba(255,107,0,0.25);">
+          <app-icon name="sparkles" [size]="18" color="var(--color-navy)"></app-icon>
+          <span>Générer un Cours avec l'IA ✨</span>
+        </a>
+      </div>
+    </div>
+  } @else if (filteredCourses().length === 0) {
+    <div class="empty-state-box card animate-fade-in" style="text-align: center; padding: 40px 24px;">
+      <div class="empty-icon-wrap" style="width: 56px; height: 56px; margin: 0 auto 14px; border-radius: 50%; background: #F1F5F9; display: flex; align-items: center; justify-content: center;">
+        <app-icon name="search" [size]="28" color="var(--color-navy)"></app-icon>
+      </div>
+      <h3 class="empty-title">Aucun cours trouvé</h3>
+      <p class="empty-desc">
+        Aucun résultat ne correspond à votre filtre de recherche <strong>"{{ searchQuery }}"</strong>.
+      </p>
+      <button class="btn btn-outline btn-sm" (click)="searchQuery = ''; selectedLevel = 'ALL'; filterCertifiedOnly = false; onFilterChange()">
+        Réinitialiser les filtres
+      </button>
+    </div>
+  } @else {
+    <!-- 1. GRID MODE -->
+    @if (viewMode === 'grid') {
+      <div class="courses-grid animate-fade-in">
+        @for (course of paginatedCourses(); track course.id) {
+          <div class="course-card card card-interactive animate-fade-in">
+            <!-- COMPACT COVER IMAGE -->
+            <div class="course-cover" [style.backgroundImage]="'url(' + course.coverImage + ')'">
+              <div class="cover-overlay"></div>
+              <div class="cover-top-badges">
+                <span class="badge badge-primary">{{ course.category }}</span>
+                <span class="badge badge-navy">{{ levelLabel(course.level) }}</span>
+                @if (course.hasCertificate) {
+                  <span class="badge" style="background: #FEF3C7; color: #92400E; font-weight: 800; display: inline-flex; align-items: center; gap: 3px;">
+                    <app-icon name="award" [size]="11" color="#D97706"></app-icon>
+                    <span>Certifiant</span>
+                  </span>
+                }
+              </div>
+              <span class="cover-time-tag">
+                <app-icon name="clock" [size]="10" color="var(--color-navy)"></app-icon>
+                <span>~{{ course.estimatedHours }}h</span>
+              </span>
+            </div>
+
+            <!-- COMPACT CARD BODY -->
+            <div class="course-body">
+              <h3 class="course-title" [title]="course.title">
+                <a [routerLink]="['/app/courses', course.id]">{{ course.title }}</a>
+              </h3>
+
+              <!-- COMPACT METRICS ROW -->
+              <div class="features-row">
+                <span class="feat-chip">
+                  <app-icon name="layers" [size]="12" color="var(--color-navy)"></app-icon>
+                  <span>{{ course.chapters.length }} chapitres</span>
+                </span>
+                @if (course.hasChapterQuizzes) {
+                  <span class="feat-chip quiz-on" title="Quiz inclus après chaque chapitre">
+                    <app-icon name="zap" [size]="11" color="var(--color-navy)"></app-icon>
+                    <span>Quiz / ch.</span>
+                  </span>
+                }
+                @if (course.hasFinalQuiz) {
+                  <span class="feat-chip exam-on" title="Examen final de validation">
+                    <app-icon name="trophy" [size]="11" color="var(--color-navy)"></app-icon>
+                    <span>Examen Final</span>
+                  </span>
+                }
+                @if (course.hasCertificate) {
+                  <span class="feat-chip" style="background: #FFFBEB; border-color: #FDE68A; color: #92400E;" title="Délivre un certificat de réussite officiel">
+                    <app-icon name="award" [size]="11" color="#D97706"></app-icon>
+                    <span>≥ {{ course.certificateMinimumScore || 80 }}%</span>
+                  </span>
+                }
+              </div>
+
+              <!-- COMPACT ASSIGNED CLASS ROW -->
+              <div class="assigned-classes-section">
+                <span class="assign-title">Classes :</span>
+                <div class="classes-chips-wrap">
+                  @if (course.assignedClassNames && course.assignedClassNames.length > 0) {
+                    @for (clsName of course.assignedClassNames; track clsName) {
+                      <span class="class-chip" [title]="clsName">
+                        {{ clsName }}
+                      </span>
+                    }
+                  } @else {
+                    <span class="no-class-text">Aucune classe</span>
+                  }
+                </div>
+                <button type="button" class="btn-manage-assign" (click)="openAssignModal(course)" title="Gérer les classes">
+                  <app-icon name="plus" [size]="11"></app-icon>
+                </button>
+              </div>
+
+              <!-- CARD ACTION FOOTER -->
+              <div class="course-footer-actions">
+                <a [routerLink]="['/app/courses', course.id]" class="btn btn-primary btn-sm btn-read">
+                  <app-icon name="book-open" [size]="13" color="var(--color-navy)"></app-icon>
+                  <span>Consulter</span>
+                </a>
+
+                @if (!promotionService.isGlobalReadOnly()) {
+                  <button type="button" class="btn btn-outline btn-sm btn-icon" (click)="openAssignModal(course)" title="Assigner aux classes">
+                    <app-icon name="school" [size]="13"></app-icon>
+                  </button>
+
+                  <button type="button" class="btn btn-outline btn-sm btn-icon btn-del" (click)="deleteCourse(course.id)" title="Supprimer">
+                    <app-icon name="trash" [size]="13" color="#DC2626"></app-icon>
+                  </button>
+                } @else {
+                  <span class="locked-mini-chip" title="Cours en lecture seule (Promotion archivée)">
+                    <app-icon name="lock" [size]="12" color="#64748B"></app-icon>
+                  </span>
+                }
+              </div>
+            </div>
+          </div>
+        }
+      </div>
+    }
+
+    <!-- 2. LIST MODE (HORIZONTAL ROWS) -->
+    @if (viewMode === 'list') {
+      <div class="course-list-rows animate-fade-in">
+        @for (course of paginatedCourses(); track course.id) {
+          <div class="course-list-row card animate-fade-in">
+            <img [src]="course.coverImage" [alt]="course.title" class="row-thumb">
+
+            <div class="row-main-info">
+              <div class="row-top-tags">
+                <span class="category-pill">{{ course.category }}</span>
+                <span class="level-pill">{{ levelLabel(course.level) }}</span>
+                <span class="hours-tag">
+                  <app-icon name="clock" [size]="10" color="var(--color-navy)"></app-icon>
+                  <span>~{{ course.estimatedHours }}h</span>
+                </span>
+                @if (course.hasCertificate) {
+                  <span class="cert-pill" style="background: #FEF3C7; color: #92400E; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: var(--radius-full); display: inline-flex; align-items: center; gap: 3px;">
+                    <app-icon name="award" [size]="11" color="#D97706"></app-icon>
+                    <span>Certifiant (≥ {{ course.certificateMinimumScore || 80 }}%)</span>
+                  </span>
+                }
+              </div>
+
+              <h4 class="row-title">
+                <a [routerLink]="['/app/courses', course.id]">{{ course.title }}</a>
+              </h4>
+
+              <!-- Assigned Classes in row -->
+              <div class="row-classes">
+                <span class="lbl">Classes :</span>
+                @if (course.assignedClassNames && course.assignedClassNames.length > 0) {
+                  @for (cls of course.assignedClassNames; track cls) {
+                    <span class="class-tag">{{ cls }}</span>
+                  }
+                } @else {
+                  <span class="no-class-tag">Non assigné</span>
+                }
+              </div>
+            </div>
+
+            <!-- Row metrics -->
+            <div class="row-stats">
+              <div class="stat-item">
+                <span class="stat-num">{{ course.chapters.length }}</span>
+                <span class="stat-label">Chapitres</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-num">{{ course.hasChapterQuizzes ? 'Oui' : 'Non' }}</span>
+                <span class="stat-label">Quiz / Chapitre</span>
+              </div>
+              <div class="stat-item hide-on-mobile">
+                <span class="stat-num" style="color: var(--color-navy);">{{ course.hasFinalQuiz ? (course.finalQuizQuestionsCount + ' Q') : 'Non' }}</span>
+                <span class="stat-label">Examen Final</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-num" [style.color]="course.hasCertificate ? '#16A34A' : '#64748B'">{{ course.hasCertificate ? 'Oui' : 'Non' }}</span>
+                <span class="stat-label">Certificat</span>
+              </div>
+            </div>
+
+            <!-- Row actions -->
+            <div class="row-actions">
+              <a [routerLink]="['/app/courses', course.id]" class="btn btn-primary btn-sm btn-action">
+                <app-icon name="book-open" [size]="13" color="var(--color-navy)"></app-icon>
+                <span>Consulter</span>
+              </a>
+              @if (!promotionService.isGlobalReadOnly()) {
+                <button class="btn btn-outline btn-sm btn-icon" (click)="openAssignModal(course)" title="Assigner aux classes">
+                  <app-icon name="school" [size]="13"></app-icon>
+                </button>
+                <button class="btn btn-outline btn-sm btn-icon btn-del" (click)="deleteCourse(course.id)" title="Supprimer">
+                  <app-icon name="trash" [size]="13" color="#DC2626"></app-icon>
+                </button>
+              } @else {
+                <span class="locked-mini-chip" title="Cours en lecture seule (Promotion archivée)">
+                  <app-icon name="lock" [size]="12" color="#64748B"></app-icon>
+                </span>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    }
+
+    <!-- SHARED PAGINATION COMPONENT -->
+    <app-pagination 
+      [currentPage]="currentPage" 
+      [pageSize]="pageSize" 
+      [totalItems]="filteredCourses().length" 
+      (pageChange)="currentPage = $event">
+    </app-pagination>
+  }
+
+  <!-- ASSIGN TO CLASSES MODAL -->
+  @if (modalCourse) {
+    <div class="modal-backdrop animate-fade-in" (click)="closeAssignModal()">
+      <div class="assign-modal card" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <div>
+            <h3 class="h3">Assigner le cours aux classes</h3>
+            <p class="body-small">{{ modalCourse.title }}</p>
+          </div>
+          <button class="close-btn" (click)="closeAssignModal()">✕</button>
+        </div>
+
+        <div class="classes-list-box">
+          @for (c of availableClasses(); track c.id) {
+            <label class="class-select-item" [class.selected]="isClassAssigned(c.id)">
+              <input 
+                type="checkbox" 
+                [checked]="isClassAssigned(c.id)" 
+                (change)="toggleAssignClass(c.id, c.name, $event)">
+              <div class="item-info">
+                <strong>{{ c.name }}</strong>
+                <span>{{ c.level }} • {{ c.studentsCount }} étudiants</span>
+              </div>
+            </label>
+          }
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-primary btn-sm btn-full" (click)="closeAssignModal()">
+            Terminer
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- =========================================================================
+       MODAL DE CRÉATION MANUELLE DE COURS (AVEC UPLOAD CLOUDINARY)
+       ========================================================================= -->
+  @if (showManualCourseModal) {
+    <div class="modal-backdrop animate-fade-in" (click)="closeManualCourseModal()">
+      <div class="manual-course-modal card" (click)="$event.stopPropagation()">
+        <!-- Header -->
+        <div class="modal-header">
+          <div class="header-title-group">
+            <div class="modal-icon-badge">
+              <app-icon name="book-open" [size]="20" color="var(--color-navy)"></app-icon>
+            </div>
+            <div>
+              <h2 class="modal-title">Créer un Cours Manuellement</h2>
+              <p class="modal-subtitle">Concevez votre syllabus sur-mesure, vos chapitres pédagogiques et téléversez votre image de couverture.</p>
+            </div>
+          </div>
+          <button class="close-btn" (click)="closeManualCourseModal()" title="Fermer">✕</button>
+        </div>
+
+        <div class="modal-scroll-body">
+          <!-- 1. Informations Générales -->
+          <div class="form-section">
+            <h4 class="section-title">
+              <app-icon name="file-text" [size]="15" color="var(--color-navy)"></app-icon>
+              <span>1. Informations Générales</span>
+            </h4>
+
+            <div class="form-grid-2">
+              <div class="form-group full-col">
+                <label class="form-label">Titre du Cours <span class="required">*</span></label>
+                <input 
+                  type="text" 
+                  [(ngModel)]="manualCourseTitle" 
+                  (input)="clearManualFieldError('title')"
+                  [class.input-error]="manualFieldErrors['title']"
+                  placeholder="Ex: Architecture Microservices avec Spring Boot & Docker..." 
+                  class="form-control">
+                @if (manualFieldErrors['title']) {
+                  <span class="field-error-msg animate-fade-in">{{ manualFieldErrors['title'] }}</span>
+                }
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Catégorie</label>
+                <select [(ngModel)]="manualCourseCategory" (change)="applyAiThematicCourseCover()" class="form-control">
+                  <option value="Développement Web">Développement Web</option>
+                  <option value="Intelligence Artificielle">Intelligence Artificielle</option>
+                  <option value="Cybersécurité">Cybersécurité</option>
+                  <option value="Business & Marketing">Business & Marketing</option>
+                  <option value="DevOps & Cloud">DevOps & Cloud</option>
+                  <option value="Data Science">Data Science</option>
+                  <option value="Design & UI/UX">Design & UI/UX</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Niveau Recommandé</label>
+                <select [(ngModel)]="manualCourseLevel" class="form-control">
+                  <option value="BEGINNER">Débutant</option>
+                  <option value="INTERMEDIATE">Intermédiaire</option>
+                  <option value="ADVANCED">Avancé</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Durée Estimée (heures)</label>
+                <input type="number" [(ngModel)]="manualCourseEstimatedHours" min="1" max="200" class="form-control">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Validation & Certificat</label>
+                <div class="toggle-cert-row">
+                  <label class="switch-label">
+                    <input type="checkbox" [(ngModel)]="manualCourseHasCertificate">
+                    <span>Délivrer un Certificat de Réussite</span>
+                  </label>
+                  @if (manualCourseHasCertificate) {
+                    <span class="cert-min-tag">Score requis ≥ {{ manualCourseCertMinScore }}%</span>
+                  }
+                </div>
+              </div>
+
+              <div class="form-group full-col">
+                <label class="form-label">Description & Objectifs d'Apprentissage <span class="required">*</span></label>
+                <textarea 
+                  [(ngModel)]="manualCourseDesc" 
+                  (input)="clearManualFieldError('desc')"
+                  [class.input-error]="manualFieldErrors['desc']"
+                  rows="3" 
+                  placeholder="Présentez le programme de ce cours, les compétences acquises par les étudiants et les prérequis nécessaires..." 
+                  class="form-control"></textarea>
+                @if (manualFieldErrors['desc']) {
+                  <span class="field-error-msg animate-fade-in">{{ manualFieldErrors['desc'] }}</span>
+                }
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Image de Couverture du Cours (Cloudinary / IA) -->
+          <div class="form-section">
+            <h4 class="section-title">
+              <app-icon name="image" [size]="15" color="var(--color-navy)"></app-icon>
+              <span>2. Image de Couverture du Cours</span>
+            </h4>
+
+            <div class="course-cover-box">
+              <input 
+                type="file" 
+                #courseCoverInput 
+                (change)="onCourseCoverSelected($event)" 
+                accept="image/png,image/jpeg,image/webp,image/jpg" 
+                style="display: none;">
+
+              <div class="cover-actions-bar">
+                <button 
+                  type="button" 
+                  class="btn btn-outline btn-xs" 
+                  (click)="courseCoverInput.click()" 
+                  [disabled]="isUploadingCourseCover">
+                  <app-icon name="upload" [size]="12"></app-icon>
+                  <span>{{ isUploadingCourseCover ? 'Téléversement...' : 'Téléverser une image (Cloudinary)' }}</span>
+                </button>
+
+                <button 
+                  type="button" 
+                  class="btn btn-outline btn-xs" 
+                  (click)="applyAiThematicCourseCover()" 
+                  [disabled]="isUploadingCourseCover"
+                  title="Générer automatiquement une image adaptée au sujet du cours">
+                  <app-icon name="sparkles" [size]="12" color="var(--color-navy)"></app-icon>
+                  <span>Suggérer avec l'IA</span>
+                </button>
+
+                @if (manualCourseCoverImage) {
+                  <button 
+                    type="button" 
+                    class="btn btn-outline btn-xs btn-danger-custom" 
+                    (click)="removeCourseCover()">
+                    <app-icon name="trash" [size]="12"></app-icon>
+                    <span>Supprimer</span>
+                  </button>
+                }
+              </div>
+
+              @if (uploadCourseCoverError) {
+                <div class="cover-error-banner animate-fade-in">
+                  <app-icon name="alert" [size]="13" color="var(--color-danger)"></app-icon>
+                  <span>{{ uploadCourseCoverError }}</span>
+                </div>
+              }
+
+              @if (manualCourseCoverImage) {
+                <div class="cover-preview-wrapper animate-fade-in">
+                  <img [src]="manualCourseCoverImage" alt="Couverture du cours" class="cover-preview-img">
+                  <div class="cover-tag">
+                    <span>{{ manualCourseCoverImage.includes('cloudinary') ? '☁️ Cloudinary' : '✨ Illustration Thématique IA' }}</span>
+                  </div>
+                </div>
+              } @else {
+                <div class="cover-drop-zone" (click)="courseCoverInput.click()">
+                  <app-icon name="image" [size]="32" color="var(--color-navy)"></app-icon>
+                  <div>
+                    <strong>Téléverser une image de couverture pour ce cours</strong>
+                    <span>JPG, PNG, WebP (Recommandé 1200x630) ou cliquez sur "Suggérer avec l'IA"</span>
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+
+          <!-- 3. Chapitres du Cours -->
+          <div class="form-section">
+            <div class="section-title-between">
+              <h4 class="section-title" style="margin: 0;">
+                <app-icon name="layers" [size]="15" color="var(--color-navy)"></app-icon>
+                <span>3. Chapitres du Cours ({{ manualCourseChapters.length }})</span>
+              </h4>
+              <button type="button" class="btn btn-outline btn-xs" (click)="addManualChapter()">
+                <app-icon name="plus" [size]="12"></app-icon>
+                <span>Ajouter un Chapitre</span>
+              </button>
+            </div>
+
+            <!-- Chapter Tabs Navigation -->
+            <div class="chapters-tabs-nav">
+              @for (ch of manualCourseChapters; track $index; let idx = $index) {
+                <button 
+                  type="button" 
+                  class="chap-tab-btn" 
+                  [class.active]="activeChapterIndex === idx" 
+                  (click)="activeChapterIndex = idx">
+                  <span>Chapitre {{ idx + 1 }}</span>
+                  @if (manualCourseChapters.length > 1) {
+                    <span class="remove-tab-x" (click)="$event.stopPropagation(); removeManualChapter(idx)" title="Supprimer ce chapitre">✕</span>
+                  }
+                </button>
+              }
+            </div>
+
+            <!-- Active Chapter Editor -->
+            @if (manualCourseChapters[activeChapterIndex]; as ch) {
+              <div class="active-chapter-editor card animate-fade-in">
+                <div class="form-grid-2">
+                  <div class="form-group full-col">
+                    <label class="form-label">Titre du Chapitre {{ activeChapterIndex + 1 }} <span class="required">*</span></label>
+                    <input type="text" [(ngModel)]="ch.title" placeholder="Titre explicite du chapitre..." class="form-control">
+                  </div>
+
+                  <div class="form-group full-col">
+                    <label class="form-label">Résumé / Objectifs du Chapitre</label>
+                    <input type="text" [(ngModel)]="ch.summary" placeholder="Bref résumé des notions abordées..." class="form-control">
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">Temps de lecture estimé (minutes)</label>
+                    <input type="number" [(ngModel)]="ch.estimatedMinutes" min="5" max="180" class="form-control">
+                  </div>
+
+                  <div class="form-group full-col">
+                    <label class="form-label">Contenu Pédagogique & Notions Clés</label>
+                    <textarea 
+                      [(ngModel)]="ch.content" 
+                      rows="6" 
+                      placeholder="Rédigez le contenu théorique du cours, points clés, explications détaillées et exemples pratiques..." 
+                      class="form-control mono-content"></textarea>
+                  </div>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+
+        <!-- Modal Footer Actions -->
+        <div class="modal-footer-actions">
+          <button type="button" class="btn btn-outline btn-sm" (click)="closeManualCourseModal()">
+            Annuler
+          </button>
+          <button 
+            type="button" 
+            class="btn btn-primary btn-sm" 
+            [disabled]="isSavingManualCourse" 
+            (click)="saveManualCourse()">
+            <app-icon name="check-circle" [size]="15" color="var(--color-navy)"></app-icon>
+            <span>{{ isSavingManualCourse ? 'Enregistrement...' : 'Créer et Publier le Cours' }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>
+

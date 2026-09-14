@@ -1,0 +1,793 @@
+<div class="quiz-create-page animate-fade-in">
+  <!-- 1. HEADER (CLEAN & MODERN WITH REAL ICONS) -->
+  <header class="ai-hero-header">
+    <div class="hero-badge">
+      <app-icon name="sparkles" [size]="14" color="var(--color-navy)"></app-icon>
+      <span>QUIZZMIND STUDIO IA</span>
+    </div>
+    
+    <h1 class="hero-title">
+      {{ editingQuizId ? 'Modification du Quiz' : 'Générateur de Quiz & Évaluations' }}
+    </h1>
+    <p class="hero-subtitle">
+      {{ editingQuizId 
+        ? 'Modifiez les questions, le temps par question, les réponses et les explications pédagogiques.' 
+        : 'Décrivez votre sujet ou déposez un fichier : l\'IA génère vos questions interactives avec chrono et corrigés.' }}
+    </p>
+
+    <!-- STUDIO MODE SELECTOR (SEULEMENT SI PAS EN MODE MODIFICATION) -->
+    @if (!editingQuizId) {
+      <div class="mode-toggle-bar">
+        <button 
+          type="button" 
+          class="mode-toggle-btn" 
+          [class.active]="studioMode === 'QUIZ' && creationMethod === 'AI'" 
+          (click)="setStudioMode('QUIZ'); setCreationMethod('AI')">
+          <app-icon name="sparkles" [size]="14"></app-icon>
+          <span>Quiz avec l'IA</span>
+        </button>
+        <button 
+          type="button" 
+          class="mode-toggle-btn" 
+          [class.active]="studioMode === 'QUIZ' && creationMethod === 'MANUAL'" 
+          (click)="setStudioMode('QUIZ'); setCreationMethod('MANUAL')">
+          <app-icon name="edit" [size]="14"></app-icon>
+          <span>Création Manuelle</span>
+        </button>
+        <button 
+          type="button" 
+          class="mode-toggle-btn" 
+          [class.active]="studioMode === 'COURSE'" 
+          (click)="setStudioMode('COURSE')">
+          <app-icon name="book-open" [size]="14"></app-icon>
+          <span>Cours Structuré IA</span>
+        </button>
+      </div>
+    }
+  </header>
+
+  <!-- BANNIÈRE MODE MANUEL (SI ACTIVÉ) -->
+  @if (creationMethod === 'MANUAL' && !editingQuizId && studioMode === 'QUIZ') {
+    <section class="manual-mode-banner card animate-fade-in">
+      <div class="banner-left">
+        <div class="banner-icon">
+          <app-icon name="edit" [size]="20" color="var(--color-navy)"></app-icon>
+        </div>
+        <div>
+          <h3 class="banner-title">Mode Création Manuelle de Quiz</h3>
+          <p class="banner-desc">Rédigez vos questions sur-mesure, choisissez la bonne réponse, configurez le chrono et ajoutez une image de couverture personnalisée stockée sur Cloudinary.</p>
+        </div>
+      </div>
+      <div class="banner-right">
+        <button type="button" class="btn btn-outline btn-sm" (click)="setCreationMethod('AI')">
+          <app-icon name="sparkles" [size]="14"></app-icon>
+          <span>Passer en mode IA</span>
+        </button>
+      </div>
+    </section>
+  }
+
+  <!-- 2. COMPACT PROMPT STUDIO BOX (SEULEMENT EN MODE IA OU COURS) -->
+  @if (creationMethod === 'AI' || studioMode === 'COURSE') {
+  <section class="prompt-studio-card card" [class.compact-view]="questions.length > 0 || isGenerating">
+    <!-- ATTACHED FILE BANNER (IF ANY) -->
+    @if (attachedFile) {
+      <div class="attached-file-badge animate-fade-in">
+        <div class="file-meta">
+          <app-icon name="file-text" [size]="14" color="var(--color-navy)"></app-icon>
+          <span class="file-name">{{ attachedFile.name }}</span>
+          <span class="file-size">({{ attachedFile.size }})</span>
+        </div>
+        <button type="button" class="btn-remove-file" (click)="removeAttachedFile()" title="Retirer ce document">✕</button>
+      </div>
+    }
+
+    <div class="prompt-input-container">
+      <textarea 
+        [(ngModel)]="promptText"
+        (input)="clearFieldError('prompt')"
+        [class.input-error]="fieldErrors['prompt']"
+        (keydown.control.enter)="generate()"
+        (keydown.meta.enter)="generate()"
+        [placeholder]="studioMode === 'QUIZ' 
+          ? 'Décrivez votre sujet (ex: 5 questions sur Docker & Kubernetes, pièges sur les volumes et le réseau...)' 
+          : 'Décrivez le cours à concevoir (ex: Cours complet sur Docker, conteneurs, volumes et orchestration...)'"
+        class="prompt-input"
+        rows="2">
+      </textarea>
+      @if (fieldErrors['prompt']) {
+        <span class="field-error-msg animate-fade-in" style="margin-top: 6px;">
+          <app-icon name="alert" [size]="13" color="var(--color-danger)"></app-icon>
+          <span>{{ fieldErrors['prompt'] }}</span>
+        </span>
+      }
+    </div>
+
+    <!-- Hidden file input -->
+    <input 
+      type="file" 
+      #fileInput 
+      (change)="onFileSelected($event)" 
+      accept=".pdf,.doc,.docx,.txt,.md" 
+      style="display: none;">
+
+    <!-- DIRECT QUICK CONTROLS AVEC SAISIE MANUELLE PAR LE FORMATEUR -->
+    <div class="studio-controls-bar">
+      <div class="controls-left">
+        <!-- Bouton Document avec vraie icône paperclip -->
+        <button 
+          type="button" 
+          class="control-pill-btn doc-btn" 
+          [class.active]="!!attachedFile"
+          (click)="fileInput.click()">
+          <app-icon name="paperclip" [size]="14"></app-icon>
+          <span>{{ attachedFile ? 'Document joint' : 'Joindre un PDF / Word' }}</span>
+        </button>
+
+        @if (studioMode === 'QUIZ') {
+          <!-- Saisie directe du nombre de questions + presets rapides -->
+          <div class="param-box">
+            <app-icon name="layers" [size]="13" color="var(--color-navy)"></app-icon>
+            <span class="param-title">Questions :</span>
+            <input 
+              type="number" 
+              [(ngModel)]="questionsCount" 
+              min="1" 
+              max="50" 
+              class="param-input"
+              title="Saisissez le nombre de questions souhaité">
+            <div class="mini-presets">
+              <button type="button" [class.active]="questionsCount === 3" (click)="setCount(3)">3</button>
+              <button type="button" [class.active]="questionsCount === 5" (click)="setCount(5)">5</button>
+              <button type="button" [class.active]="questionsCount === 10" (click)="setCount(10)">10</button>
+            </div>
+          </div>
+
+          <!-- Saisie directe du chrono par question + presets rapides -->
+          <div class="param-box">
+            <app-icon name="clock" [size]="13" color="var(--color-navy)"></app-icon>
+            <span class="param-title">Chrono :</span>
+            <input 
+              type="number" 
+              [(ngModel)]="timePerQuestion" 
+              min="5" 
+              max="180" 
+              class="param-input"
+              title="Saisissez la durée en secondes par question">
+            <span class="param-unit">sec</span>
+            <div class="mini-presets">
+              <button type="button" [class.active]="timePerQuestion === 15" (click)="setTime(15)">15s</button>
+              <button type="button" [class.active]="timePerQuestion === 30" (click)="setTime(30)">30s</button>
+              <button type="button" [class.active]="timePerQuestion === 60" (click)="setTime(60)">60s</button>
+            </div>
+          </div>
+
+          <!-- Sélecteur de difficulté avec vraies icônes -->
+          <div class="param-box">
+            <app-icon name="bar-chart" [size]="13" color="var(--color-navy)"></app-icon>
+            <span class="param-title">Niveau :</span>
+            <div class="diff-pills">
+              <button type="button" [class.active]="difficulty === 'EASY'" (click)="setDifficulty('EASY')">Débutant</button>
+              <button type="button" [class.active]="difficulty === 'MEDIUM'" (click)="setDifficulty('MEDIUM')">Moyen</button>
+              <button type="button" [class.active]="difficulty === 'HARD'" (click)="setDifficulty('HARD')">Avancé</button>
+            </div>
+          </div>
+        } @else {
+          <!-- Mode Cours : Saisie directe des chapitres -->
+          <div class="param-box">
+            <app-icon name="book-open" [size]="13" color="var(--color-navy)"></app-icon>
+            <span class="param-title">Chapitres :</span>
+            <input 
+              type="number" 
+              [(ngModel)]="courseChaptersCount" 
+              min="1" 
+              max="30" 
+              class="param-input"
+              title="Nombre de chapitres">
+            <div class="mini-presets">
+              <button type="button" [class.active]="courseChaptersCount === 3" (click)="setChaptersCount(3)">3</button>
+              <button type="button" [class.active]="courseChaptersCount === 5" (click)="setChaptersCount(5)">5</button>
+              <button type="button" [class.active]="courseChaptersCount === 8" (click)="setChaptersCount(8)">8</button>
+            </div>
+          </div>
+
+          <button 
+            type="button" 
+            class="control-pill-btn" 
+            [class.active]="courseWithChapterQuizzes" 
+            (click)="courseWithChapterQuizzes = !courseWithChapterQuizzes">
+            <app-icon name="zap" [size]="13"></app-icon>
+            <span>Quiz par chapitre : {{ courseWithChapterQuizzes ? 'Oui' : 'Non' }}</span>
+          </button>
+
+          <!-- Toggle Certificat de Réussite -->
+          <button 
+            type="button" 
+            class="control-pill-btn" 
+            [class.active]="courseHasCertificate" 
+            (click)="courseHasCertificate = !courseHasCertificate">
+            <app-icon name="award" [size]="13" [color]="courseHasCertificate ? 'var(--color-primary)' : 'var(--color-text-secondary)'"></app-icon>
+            <span>Certificat : {{ courseHasCertificate ? 'Oui' : 'Non' }}</span>
+          </button>
+        }
+      </div>
+
+      <!-- PANNEAU CONFIGURATION DU MODÈLE DE CERTIFICAT (SI CERTIFICAT = OUI) -->
+      @if (studioMode === 'COURSE' && courseHasCertificate) {
+        <div class="cert-config-panel card animate-fade-in">
+          <div class="cert-panel-head">
+            <div class="cert-title-group">
+              <app-icon name="award" [size]="16" color="var(--color-navy)"></app-icon>
+              <strong>Modèle de Certificat délivré aux Apprenants</strong>
+              <span class="cert-condition-badge">Validation si score ≥ {{ courseCertificateMinScore }}%</span>
+            </div>
+
+            <div class="template-choice-tabs">
+              <button 
+                type="button" 
+                class="choice-tab" 
+                [class.active]="courseCertificateTemplateType === 'DEFAULT'"
+                (click)="courseCertificateTemplateType = 'DEFAULT'">
+                <app-icon name="check-circle" [size]="13"></app-icon>
+                <span>Modèle officiel QuizzBoard (Défaut)</span>
+              </button>
+              <button 
+                type="button" 
+                class="choice-tab" 
+                [class.active]="courseCertificateTemplateType === 'CUSTOM'"
+                (click)="courseCertificateTemplateType = 'CUSTOM'">
+                <app-icon name="upload" [size]="13"></app-icon>
+                <span>Uploader mon modèle personnalisé</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Modèle Par Défaut -->
+          @if (courseCertificateTemplateType === 'DEFAULT') {
+            <div class="template-default-preview">
+              <div class="preview-info">
+                <p class="body-small" style="margin: 0;">
+                  Le modèle officiel comprend le sceau d'authenticité QuizzBoard, la mention d'excellence, le nom de l'élève, la date, et un QR/code de vérification infalsifiable.
+                </p>
+              </div>
+              <button type="button" class="btn btn-outline btn-xs" (click)="showCertPreviewModal = true">
+                <app-icon name="eye" [size]="13"></app-icon>
+                <span>Aperçu du diplôme officiel</span>
+              </button>
+            </div>
+          } @else {
+            <!-- Modèle Personnalisé Upload -->
+            <div class="template-custom-upload">
+              @if (!courseCertificateCustomTemplateUrl) {
+                <label class="custom-dropzone">
+                  <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" (change)="onCertificateFileSelected($event)" class="visually-hidden">
+                  <app-icon name="upload" [size]="24" color="var(--color-navy)"></app-icon>
+                  <span class="dropzone-text"><strong>Cliquez pour téléverser votre modèle de certificat</strong> ou glissez-déposez ici</span>
+                  <span class="body-small text-muted">Format PNG, JPG ou SVG • Recommandé : 1920x1080 (16:9 paysage)</span>
+                </label>
+              } @else {
+                <div class="custom-template-loaded">
+                  <img [src]="courseCertificateCustomTemplateUrl" alt="Modèle personnalisé" class="template-thumb">
+                  <div class="template-meta">
+                    <strong>{{ uploadedCertificateFileName || 'Modele_Certificat_Personnalise.png' }}</strong>
+                    <span class="body-small" style="color: #16A34A;">✓ Modèle chargé et associé à ce cours</span>
+                  </div>
+                  <div class="template-actions">
+                    <button type="button" class="btn btn-outline btn-xs" (click)="showCertPreviewModal = true">
+                      <app-icon name="eye" [size]="12"></app-icon>
+                      <span>Aperçu</span>
+                    </button>
+                    <button type="button" class="btn btn-outline btn-xs btn-danger-custom" (click)="removeCustomCertificateTemplate()">
+                      <app-icon name="trash" [size]="12"></app-icon>
+                      <span>Remplacer / Supprimer</span>
+                    </button>
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      }
+
+      <!-- BOUTON D'ACTION PRINCIPAL -->
+      <button 
+        type="button" 
+        class="btn-magic-generate" 
+        [disabled]="isGenerating"
+        (click)="generate()">
+        @if (isGenerating) {
+          <span class="spinner-dot"></span>
+          <span>Génération...</span>
+        } @else {
+          <app-icon name="sparkles" [size]="15" color="var(--color-navy)"></app-icon>
+          <span>{{ studioMode === 'QUIZ' ? 'Générer le Quiz' : 'Créer le Cours' }}</span>
+        }
+      </button>
+    </div>
+  </section>
+  }
+
+  <!-- 3. INSPIRATIONS AVEC VRAIES ICÔNES (SEULEMENT EN MODE IA QUAND LE CANVAS EST VIDE) -->
+  @if (creationMethod === 'AI' && questions.length === 0 && !generatedCourse && !isGenerating) {
+    <section class="suggestions-section animate-fade-in">
+      <span class="suggestions-heading">Exemples de sujets prêts à générer :</span>
+
+      <div class="suggestions-grid">
+        <button 
+          type="button" 
+          class="suggestion-card" 
+          (click)="useSuggestion('JavaScript Moderne ES6+, Promises, async/await, closures et typage statique TypeScript', 'Développement Web')">
+          <div class="sugg-icon-badge yellow-badge">
+            <app-icon name="zap" [size]="16" color="var(--color-navy)"></app-icon>
+          </div>
+          <div class="sugg-text">
+            <strong>JavaScript ES6+ & TypeScript</strong>
+            <span>Promises, closures, event loop et async/await</span>
+          </div>
+        </button>
+
+        <button 
+          type="button" 
+          class="suggestion-card" 
+          (click)="useSuggestion('Fonctionnement des LLMs, techniques de Prompt Engineering, Few-Shot et réduction des hallucinations', 'Intelligence Artificielle')">
+          <div class="sugg-icon-badge navy-badge">
+            <app-icon name="cpu" [size]="16" color="#FFFFFF"></app-icon>
+          </div>
+          <div class="sugg-text">
+            <strong>Prompt Engineering & LLMs</strong>
+            <span>Architecture des modèles, RAG et context window</span>
+          </div>
+        </button>
+
+        <button 
+          type="button" 
+          class="suggestion-card" 
+          (click)="useSuggestion('Sécurité des applications Web, failles OWASP Top 10, injections SQL, XSS, CSRF et authentification JWT', 'Cybersécurité')">
+          <div class="sugg-icon-badge orange-badge">
+            <app-icon name="shield" [size]="16" color="var(--color-orange)"></app-icon>
+          </div>
+          <div class="sugg-text">
+            <strong>Cybersécurité & OWASP</strong>
+            <span>Attaques XSS, SQLi, CSRF et sécurisation API</span>
+          </div>
+        </button>
+
+        <button 
+          type="button" 
+          class="suggestion-card" 
+          (click)="useSuggestion('Gestion de Projet Agile Scrum, rôles Product Owner et Scrum Master, cérémonies de sprint et backlog', 'Business & Marketing')">
+          <div class="sugg-icon-badge green-badge">
+            <app-icon name="trending-up" [size]="16" color="var(--color-success)"></app-icon>
+          </div>
+          <div class="sugg-text">
+            <strong>Méthodologie Agile & Scrum</strong>
+            <span>Sprints, cérémonies, user stories et vélocité</span>
+          </div>
+        </button>
+      </div>
+    </section>
+  }
+
+  <!-- 4. THINKING STATE AVEC VRAIES ICÔNES -->
+  @if (isGenerating) {
+    <section class="ai-generating-banner card animate-fade-in">
+      <div class="thinking-avatar-pulse">
+        <app-icon name="sparkles" [size]="24" color="var(--color-navy)"></app-icon>
+      </div>
+      
+      <div class="thinking-center">
+        <h3 class="thinking-headline">QuizzMind conçoit votre {{ studioMode === 'QUIZ' ? 'quiz' : 'cours' }}...</h3>
+        <p class="thinking-subline">{{ currentThinkingStep }}</p>
+        
+        <div class="custom-progress-track">
+          <div class="custom-progress-fill" [style.width.%]="thinkingProgress"></div>
+        </div>
+      </div>
+    </section>
+  }
+
+  <!-- 5. GENERATED QUIZ CANVAS (CLEAN, DIRECT & INTERACTIF) -->
+  @if (studioMode === 'QUIZ' && (questions.length > 0 || creationMethod === 'MANUAL') && !isGenerating) {
+    <section class="generated-canvas animate-fade-in">
+      <!-- 5.1 COVER IMAGE MANAGEMENT CARD -->
+      <div class="cover-image-card card animate-fade-in">
+        <div class="cover-image-header">
+          <div class="ci-title-group">
+            <app-icon name="image" [size]="18" color="var(--color-navy)"></app-icon>
+            <div>
+              <strong class="ci-heading">Image de Couverture du Quiz</strong>
+              <span class="ci-subline">Téléversez sur Cloudinary ou laissez l'IA choisir une illustration thématique</span>
+            </div>
+          </div>
+
+          <div class="ci-actions">
+            <input 
+              type="file" 
+              #coverFileInput 
+              (change)="onCoverImageSelected($event)" 
+              accept="image/png,image/jpeg,image/webp,image/jpg" 
+              style="display: none;">
+            
+            <button 
+              type="button" 
+              class="btn btn-outline btn-xs" 
+              (click)="coverFileInput.click()" 
+              [disabled]="isUploadingImage">
+              <app-icon name="upload" [size]="12"></app-icon>
+              <span>{{ isUploadingImage ? 'Téléversement...' : 'Téléverser (Cloudinary)' }}</span>
+            </button>
+
+            <button 
+              type="button" 
+              class="btn btn-outline btn-xs" 
+              (click)="applyAiThematicImage()" 
+              [disabled]="isUploadingImage"
+              title="Générer automatiquement une image thématique avec l'IA">
+              <app-icon name="sparkles" [size]="12" color="var(--color-navy)"></app-icon>
+              <span>Suggérer avec l'IA</span>
+            </button>
+
+            @if (coverImageUrl) {
+              <button 
+                type="button" 
+                class="btn btn-outline btn-xs btn-danger-custom" 
+                (click)="removeCoverImage()">
+                <app-icon name="trash" [size]="12"></app-icon>
+                <span>Supprimer</span>
+              </button>
+            }
+          </div>
+        </div>
+
+        @if (uploadImageError) {
+          <div class="upload-error-alert animate-fade-in">
+            <app-icon name="alert" [size]="14" color="var(--color-danger)"></app-icon>
+            <span>{{ uploadImageError }}</span>
+          </div>
+        }
+
+        @if (coverImageUrl) {
+          <div class="cover-image-preview-container animate-fade-in">
+            <img [src]="coverImageUrl" alt="Couverture du Quiz" class="cover-image-preview">
+            <div class="cover-overlay-tag">
+              <span class="provider-badge">{{ coverImageUrl.includes('cloudinary') ? '☁️ Cloudinary' : '✨ Illustration Thématique IA' }}</span>
+              <span class="title-badge">{{ quizCategory }} • {{ quizTitle || 'Sans titre' }}</span>
+            </div>
+          </div>
+        } @else {
+          <div class="cover-placeholder-box" (click)="coverFileInput.click()">
+            <div class="ph-icon">
+              <app-icon name="image" [size]="28" color="var(--color-navy)"></app-icon>
+            </div>
+            <div class="ph-text">
+              <strong>Aucune image de couverture sélectionnée</strong>
+              <span>Cliquez pour téléverser une image de votre ordinateur (Cloudinary) ou cliquez sur "Suggérer avec l'IA"</span>
+            </div>
+          </div>
+        }
+      </div>
+
+      <!-- 5.2 QUIZ HEADER SUMMARY & SETTINGS -->
+      <div class="quiz-canvas-head card">
+        <div class="head-info">
+          <div class="head-tags">
+            @if (creationMethod === 'MANUAL') {
+              <div class="manual-inline-controls">
+                <label class="control-label">
+                  <app-icon name="folder" [size]="12"></app-icon>
+                  <span>Catégorie :</span>
+                  <select [(ngModel)]="quizCategory" class="clean-select">
+                    <option value="Développement Web">Développement Web</option>
+                    <option value="Intelligence Artificielle">Intelligence Artificielle</option>
+                    <option value="Cybersécurité">Cybersécurité</option>
+                    <option value="Business & Marketing">Business & Marketing</option>
+                    <option value="DevOps & Cloud">DevOps & Cloud</option>
+                    <option value="Data Science">Data Science</option>
+                    <option value="Design & UI/UX">Design & UI/UX</option>
+                  </select>
+                </label>
+
+                <label class="control-label">
+                  <app-icon name="bar-chart" [size]="12"></app-icon>
+                  <span>Difficulté :</span>
+                  <select [(ngModel)]="difficulty" class="clean-select">
+                    <option value="EASY">Débutant</option>
+                    <option value="MEDIUM">Intermédiaire</option>
+                    <option value="HARD">Avancé</option>
+                  </select>
+                </label>
+
+                <label class="control-label">
+                  <app-icon name="clock" [size]="12"></app-icon>
+                  <span>Chrono :</span>
+                  <input type="number" [(ngModel)]="timePerQuestion" min="5" max="300" class="clean-num-input" title="Secondes par question">
+                  <span class="sec-unit">sec</span>
+                </label>
+              </div>
+            } @else {
+              <span class="tag-pill category">{{ quizCategory }}</span>
+              <span class="tag-pill difficulty">{{ difficultyLabel(difficulty) }}</span>
+              <span class="tag-pill count">{{ questions.length }} Questions</span>
+              <span class="tag-pill timer">
+                <app-icon name="clock" [size]="11"></app-icon>
+                {{ timePerQuestion }}s / question
+              </span>
+            }
+          </div>
+          <input 
+            type="text" 
+            [(ngModel)]="quizTitle" 
+            (input)="clearFieldError('title')"
+            [class.input-error]="fieldErrors['title']"
+            class="quiz-title-input" 
+            placeholder="Titre de votre quiz...">
+          @if (fieldErrors['title']) {
+            <span class="field-error-msg animate-fade-in" style="margin-top: 4px;">
+              <app-icon name="alert" [size]="12" color="var(--color-danger)"></app-icon>
+              <span>{{ fieldErrors['title'] }}</span>
+            </span>
+          }
+        </div>
+
+        <div class="head-quick-actions">
+          <button type="button" class="btn btn-outline btn-sm" (click)="addQuestion()">
+            <app-icon name="plus" [size]="14"></app-icon>
+            <span>Ajouter une question</span>
+          </button>
+          @if (creationMethod === 'AI') {
+            <button type="button" class="btn btn-outline btn-sm" (click)="generate()" title="Générer de nouvelles questions">
+              <app-icon name="refresh-cw" [size]="13"></app-icon>
+              <span>Régénérer</span>
+            </button>
+          }
+        </div>
+      </div>
+
+      <!-- QUESTIONS LIST -->
+      <div class="questions-deck">
+        @for (q of questions; track q.id; let qIdx = $index) {
+          <div class="question-card card">
+            <div class="q-header">
+              <div class="q-meta-left">
+                <span class="q-number-pill">Question {{ qIdx + 1 }}</span>
+                <span class="q-chip">
+                  <app-icon name="clock" [size]="11"></app-icon>
+                  {{ q.timeLimitSeconds }}s
+                </span>
+                <span class="q-chip">
+                  <app-icon name="star" [size]="11"></app-icon>
+                  {{ q.points }} pts
+                </span>
+              </div>
+              <button 
+                type="button" 
+                class="btn-delete-q" 
+                (click)="removeQuestion(qIdx)" 
+                title="Supprimer cette question">
+                <app-icon name="trash" [size]="14"></app-icon>
+              </button>
+            </div>
+
+            <!-- Question Textarea -->
+            <textarea 
+              [(ngModel)]="q.text" 
+              class="q-text-input" 
+              rows="2"
+              placeholder="Énoncé de la question...">
+            </textarea>
+
+            <!-- Choices Grid (Click directly to set correct answer) -->
+            <div class="choices-grid">
+              @for (choice of q.choices; track choice.id; let cIdx = $index) {
+                <div 
+                  class="choice-item" 
+                  [class.correct]="choice.isCorrect"
+                  (click)="setCorrectChoice(q, cIdx)">
+                  <div class="choice-letter-badge">
+                    {{ ['A', 'B', 'C', 'D'][cIdx] || (cIdx + 1) }}
+                  </div>
+                  <input 
+                    type="text" 
+                    [(ngModel)]="choice.text" 
+                    (click)="$event.stopPropagation()"
+                    class="choice-text-input" 
+                    placeholder="Réponse...">
+                  <div class="choice-check-indicator" [class.checked]="choice.isCorrect">
+                    <app-icon name="check" [size]="12"></app-icon>
+                  </div>
+                </div>
+              }
+            </div>
+
+            <!-- Pedagogical Explanation -->
+            <div class="explanation-box">
+              <div class="exp-icon-wrap">
+                <app-icon name="help-circle" [size]="16" color="var(--color-navy)"></app-icon>
+              </div>
+              <div class="exp-content">
+                <span class="exp-label">Explication pédagogique :</span>
+                <textarea 
+                  [(ngModel)]="q.explanation" 
+                  class="exp-text-input" 
+                  rows="1" 
+                  placeholder="Explication affichée aux apprenants après leur réponse...">
+                </textarea>
+              </div>
+            </div>
+          </div>
+        }
+      </div>
+
+      <!-- STICKY ACTION BOTTOM BAR -->
+      <div class="sticky-action-dock card">
+        <div class="dock-summary">
+          <span class="dock-ready">
+            <app-icon name="check-circle" [size]="16" color="var(--color-success)"></app-icon>
+            {{ questions.length }} Questions Prêtes
+          </span>
+          <span class="dock-time">Durée estimée : ~{{ (questions.length * timePerQuestion) / 60 | number:'1.0-1' }} min</span>
+        </div>
+
+        <div class="dock-buttons">
+          <button type="button" class="btn btn-outline" (click)="resetAll()">
+            <app-icon name="refresh-cw" [size]="14"></app-icon>
+            <span>Nouveau</span>
+          </button>
+          <button type="button" class="btn btn-primary" (click)="saveQuiz()">
+            <app-icon name="check-circle" [size]="15" color="var(--color-navy)"></app-icon>
+            <span>{{ editingQuizId ? 'Enregistrer les Modifications' : 'Enregistrer dans Mes Quiz' }}</span>
+          </button>
+          <button type="button" class="btn btn-secondary" (click)="launchLiveNow()">
+            <app-icon name="play" [size]="15" color="#FFFFFF"></app-icon>
+            <span>Lancer la Session Live</span>
+          </button>
+        </div>
+      </div>
+    </section>
+  }
+
+  <!-- 6. GENERATED COURSE CANVAS (IF COURSE MODE) -->
+  @if (studioMode === 'COURSE' && generatedCourse; as crs) {
+    <section class="generated-course-section animate-fade-in">
+      <div class="course-header-card card">
+        <div class="course-badges-row">
+          <span class="badge badge-primary">{{ crs.category }}</span>
+          <span class="badge badge-navy">{{ crs.level }}</span>
+          <span class="badge" style="background: #E2E8F0; color: var(--color-navy);">~{{ crs.estimatedHours }}h</span>
+          @if (crs.hasCertificate) {
+            <span class="badge" style="background: #FEF3C7; color: #92400E; display: inline-flex; align-items: center; gap: 4px;">
+              <app-icon name="award" [size]="12" color="#D97706"></app-icon>
+              Certifiant (≥ {{ crs.certificateMinimumScore || 80 }}%) • {{ crs.certificateTemplateType === 'CUSTOM' ? 'Modèle Personnalisé' : 'Modèle Standard' }}
+            </span>
+          } @else {
+            <span class="badge" style="background: #F1F5F9; color: #64748B;">Sans certificat</span>
+          }
+        </div>
+        <h2 class="course-title">{{ crs.title }}</h2>
+        <p class="course-desc">{{ crs.description }}</p>
+
+        <div class="chapters-pills-row">
+          @for (ch of crs.chapters; track ch.id; let idx = $index) {
+            <button 
+              type="button" 
+              class="ch-pill-btn" 
+              [class.active]="activeCourseChapterTab === idx"
+              (click)="activeCourseChapterTab = idx">
+              Chapitre {{ ch.order }} : {{ ch.title }}
+            </button>
+          }
+        </div>
+      </div>
+
+      <!-- Chapter Content -->
+      @if (crs.chapters[activeCourseChapterTab]; as ch) {
+        <div class="chapter-content-card card animate-fade-in">
+          <h3 class="ch-h3">{{ ch.title }}</h3>
+          <p class="ch-summary">{{ ch.summary }}</p>
+          <pre class="ch-body-text">{{ ch.content }}</pre>
+        </div>
+      }
+
+      <div class="sticky-action-dock card">
+        <div class="dock-summary">
+          <span class="dock-ready">Cours de {{ crs.chapters.length }} chapitres généré</span>
+        </div>
+        <div class="dock-buttons">
+          <button type="button" class="btn btn-outline" (click)="resetAll()">Nouveau</button>
+          <button type="button" class="btn btn-primary" (click)="goToGeneratedCourse()">
+            Consulter le Cours
+          </button>
+        </div>
+      </div>
+    </section>
+  }
+</div>
+
+<!-- =========================================================================
+     MODAL DE PRÉVISUALISATION DU CERTIFICAT (PLEIN ÉCRAN 100VW x 100VH)
+     ========================================================================= -->
+@if (showCertPreviewModal) {
+  <div class="modal-backdrop" (click)="showCertPreviewModal = false">
+    <div class="cert-preview-card card" (click)="$event.stopPropagation()">
+      <div class="cert-preview-head">
+        <div class="head-left">
+          <app-icon name="award" [size]="20" color="var(--color-navy)"></app-icon>
+          <h3 class="h3" style="margin: 0;">
+            Aperçu : {{ courseCertificateTemplateType === 'CUSTOM' ? 'Modèle Personnalisé' : 'Modèle Officiel QuizzBoard (Standard)' }}
+          </h3>
+        </div>
+        <button class="btn-close" (click)="showCertPreviewModal = false">✕</button>
+      </div>
+
+      <div class="cert-preview-body">
+        @if (courseCertificateTemplateType === 'CUSTOM' && courseCertificateCustomTemplateUrl) {
+          <div class="custom-diploma-wrapper">
+            <img [src]="courseCertificateCustomTemplateUrl" alt="Maquette personnalisée" class="custom-cert-full">
+            <div class="custom-overlay-hint">
+              <span>✓ Maquette personnalisée du formateur. Les informations (Nom de l'élève, note obtenue, date, code d'authenticité) seront générées automatiquement lors de la délivrance.</span>
+            </div>
+          </div>
+        } @else {
+          <!-- MODÈLE STANDARD QUIZZBOARD -->
+          <div class="cert-diploma-wrapper">
+            <div class="cert-inner-frame">
+              <div class="diploma-header">
+                <div class="diploma-seal">
+                  <app-icon name="award" [size]="30" color="var(--color-navy)"></app-icon>
+                </div>
+                <div class="diploma-label">CERTIFICAT OFFICIEL DE RÉUSSITE</div>
+                <span class="org-sub">DÉLIVRÉ PAR QUIZZBOARD ACADEMY</span>
+              </div>
+
+              <div class="diploma-body">
+                <p class="awarded-txt">Cette attestation de réussite académique est décernée à :</p>
+                <h2 class="student-name">Prénom & Nom de l'Apprenant</h2>
+                <p class="completion-txt">Pour avoir validé avec brio le parcours de formation :</p>
+                <h3 class="exam-title">{{ promptText || 'Titre du Cours Magistral' }}</h3>
+
+                <div class="diploma-badges-row">
+                  <div class="badge-item">
+                    <span class="b-lbl">SCORE REQUIS</span>
+                    <strong class="b-val">≥ {{ courseCertificateMinScore }}%</strong>
+                  </div>
+                  <div class="badge-item">
+                    <span class="b-lbl">MENTION</span>
+                    <strong class="b-val">Excellence</strong>
+                  </div>
+                  <div class="badge-item">
+                    <span class="b-lbl">STATUT</span>
+                    <strong class="b-val" style="color: #16A34A;">Certifié</strong>
+                  </div>
+                  <div class="badge-item">
+                    <span class="b-lbl">AUTHENTICITÉ</span>
+                    <strong class="b-val code-mono">QB-CERT-DEMO-2026</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div class="diploma-footer">
+                <div class="signature-block">
+                  <span class="signature-script">Prof. Formateur</span>
+                  <span class="signature-role">Directeur Pédagogique du Cours</span>
+                </div>
+
+                <div class="security-seal-block">
+                  <span class="verified-tag">
+                    <app-icon name="check" [size]="12" color="#16A34A"></app-icon>
+                    Sceau Officiel Vérifiable
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        }
+      </div>
+
+      <div class="cert-preview-foot">
+        <button type="button" class="btn btn-primary btn-sm" (click)="showCertPreviewModal = false">
+          Fermer l'Aperçu
+        </button>
+      </div>
+    </div>
+  </div>
+}

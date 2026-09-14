@@ -1,0 +1,831 @@
+<div class="course-player-page animate-fade-in">
+  @if (course(); as c) {
+    <!-- 1. TOP TEACHER MANAGEMENT BAR -->
+    <header class="player-topbar">
+      <div class="topbar-left">
+        <a routerLink="/app/courses" class="btn-back" title="Retourner à la liste de mes cours">
+          <app-icon name="arrow-left" [size]="14"></app-icon>
+          <span class="hide-mobile">Mes Cours</span>
+        </a>
+        <div class="topbar-divider hide-mobile"></div>
+        <div class="course-meta-title">
+          <span class="course-category-tag">{{ c.category }} • {{ c.level }}</span>
+          <h1 class="course-main-heading" [title]="c.title">{{ c.title }}</h1>
+        </div>
+      </div>
+
+      <!-- CENTER: MODE SWITCHER (LECTURE VS TOUS LES QUIZ) -->
+      <div class="topbar-center">
+        <div class="mode-switcher-pill">
+          <button 
+            type="button" 
+            class="switch-btn" 
+            [class.active]="viewMode === 'READ'"
+            (click)="viewMode = 'READ'">
+            <app-icon name="book-open" [size]="13"></app-icon>
+            <span>Contenu ({{ c.chapters.length }})</span>
+          </button>
+          <button 
+            type="button" 
+            class="switch-btn" 
+            [class.active]="viewMode === 'QUIZZES'"
+            (click)="viewMode = 'QUIZZES'">
+            <app-icon name="zap" [size]="13"></app-icon>
+            <span>Tous les Quiz ({{ getAllQuizzes().length }})</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- RIGHT: TEACHER ACTION BUTTONS (EDIT, ASSIGN, DELETE) -->
+      <div class="topbar-right">
+        <!-- EDIT COURSE INFO -->
+        <button 
+          type="button" 
+          class="btn-topbar-action" 
+          (click)="openEditCourseModal()"
+          title="Modifier les informations du cours">
+          <app-icon name="file-text" [size]="13" color="var(--color-navy)"></app-icon>
+          <span>Modifier</span>
+        </button>
+
+        <!-- ASSIGN TO CLASSES -->
+        <button 
+          type="button" 
+          class="btn-topbar-action" 
+          (click)="showAssignModal = true"
+          title="Gérer les classes assignées">
+          <app-icon name="school" [size]="13" color="var(--color-navy)"></app-icon>
+          <span>Classes ({{ c.assignedClassNames.length }})</span>
+        </button>
+
+        <!-- DELETE COURSE -->
+        <button 
+          type="button" 
+          class="btn-topbar-action btn-danger-action" 
+          (click)="openDeleteCourseModal()"
+          title="Supprimer ce cours">
+          <app-icon name="trash" [size]="13" color="#DC2626"></app-icon>
+          <span class="hide-mobile">Supprimer</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- =========================================================================
+         VIEW 1: COURSE CONTENT / CHAPTER READER
+         ========================================================================= -->
+    @if (viewMode === 'READ') {
+      <div class="player-body-layout animate-fade-in">
+        <!-- LEFT: LECTURE READER -->
+        <main class="lecture-main-area">
+          @if (selectedChapterIndex >= 0 && c.chapters[selectedChapterIndex]; as curCh) {
+            <article class="lecture-card card">
+              <!-- LECTURE HEADER -->
+              <header class="lecture-header">
+                <div class="header-top-row">
+                  <div class="lecture-breadcrumb-bar">
+                    <span class="breadcrumb-step">Chapitre {{ curCh.order }} sur {{ c.chapters.length }}</span>
+                    <span class="bullet-dot">•</span>
+                    <span class="lecture-duration">
+                      <app-icon name="clock" [size]="12"></app-icon>
+                      {{ curCh.estimatedMinutes }} min de lecture
+                    </span>
+                    @if (curCh.hasQuiz) {
+                      <span class="bullet-dot">•</span>
+                      <span class="badge badge-quiz-pill">
+                        <app-icon name="zap" [size]="10" color="#D97706"></app-icon>
+                        Quiz {{ curCh.quizQuestionsCount || 5 }}Q
+                      </span>
+                    }
+                  </div>
+
+                  <!-- EDIT CHAPTER ACTION BUTTON -->
+                  <button 
+                    type="button" 
+                    class="btn btn-outline btn-sm btn-edit-chapter"
+                    (click)="openEditChapterModal(selectedChapterIndex)">
+                    <app-icon name="file-text" [size]="12"></app-icon>
+                    <span>Éditer ce chapitre</span>
+                  </button>
+                </div>
+
+                <h2 class="lecture-title">{{ curCh.title }}</h2>
+                <p class="lecture-summary-callout">{{ curCh.summary }}</p>
+              </header>
+
+              <!-- OPENCLASSROOMS PEDAGOGICAL OBJECTIVES -->
+              <section class="learning-objectives-box">
+                <div class="box-head">
+                  <app-icon name="sparkles" [size]="16" color="var(--color-navy)"></app-icon>
+                  <h3>Objectifs d'apprentissage de cette leçon</h3>
+                </div>
+                <ul class="objectives-list">
+                  <li>
+                    <app-icon name="check" [size]="12" color="#059669"></app-icon>
+                    <span>Assimiler les concepts clés et principes directeurs développés dans ce chapitre.</span>
+                  </li>
+                  <li>
+                    <app-icon name="check" [size]="12" color="#059669"></app-icon>
+                    <span>Appliquer les règles techniques et bonnes pratiques industrielles.</span>
+                  </li>
+                  <li>
+                    <app-icon name="check" [size]="12" color="#059669"></app-icon>
+                    <span>Préparer les étudiants à réussir le quiz d'évaluation intermédiaire.</span>
+                  </li>
+                </ul>
+              </section>
+
+              <!-- LECTURE BODY PROSE & TERMINAL CODE -->
+              <section class="lecture-prose-content">
+                <div class="markdown-rendered-body" [innerHTML]="formatContent(curCh.content)"></div>
+              </section>
+
+              <!-- OPENCLASSROOMS KEY TAKEAWAYS -->
+              <section class="key-takeaways-card">
+                <div class="takeaway-head">
+                  <span class="takeaway-badge">SYNTHÈSE FORMATEUR</span>
+                  <h4>Points clés à retenir</h4>
+                </div>
+                <div class="takeaway-body">
+                  <div class="takeaway-item">
+                    <strong>Principe clé :</strong> Assurer la rigueur conceptuelle et l'isolation des composants pour garantir la scalabilité.
+                  </div>
+                  <div class="takeaway-item">
+                    <strong>Recommandation pédagogique :</strong> Inciter les étudiants à tester chaque configuration en TP pratique.
+                  </div>
+                </div>
+              </section>
+
+              <!-- CHAPTER QUIZ BANNER -->
+              @if (curCh.hasQuiz) {
+                <section class="chapter-quiz-card">
+                  <div class="quiz-visual-side">
+                    <div class="quiz-icon-avatar">
+                      <app-icon name="zap" [size]="20" color="#FFFFFF"></app-icon>
+                    </div>
+                  </div>
+                  <div class="quiz-details-side">
+                    <div class="quiz-tags">
+                      <span class="badge badge-quiz-level">QUIZ DU CHAPITRE</span>
+                      <span class="quiz-meta-count">{{ curCh.quizQuestionsCount || 5 }} questions interactives</span>
+                    </div>
+                    <h3 class="quiz-headline">{{ curCh.quizTitle || ('Quiz du Chapitre ' + curCh.order) }}</h3>
+                    <p class="quiz-subtext">
+                      Quiz d'assimilation des acquis. Lancez ce quiz en direct avec vos élèves pour vérifier leur niveau de compréhension.
+                    </p>
+                    <div class="quiz-actions-row">
+                      <button type="button" class="btn btn-secondary btn-sm" (click)="launchChapterQuizLive(curCh)">
+                        <app-icon name="play" [size]="13" color="#FFFFFF"></app-icon>
+                        <span>Lancer en Direct (Live)</span>
+                      </button>
+                      <button type="button" class="btn btn-outline btn-sm" (click)="openEditChapterModal(selectedChapterIndex)">
+                        <app-icon name="file-text" [size]="12"></app-icon>
+                        <span>Modifier le quiz</span>
+                      </button>
+                    </div>
+                  </div>
+                </section>
+              }
+
+              <!-- FOOTER NAVIGATION -->
+              <footer class="lecture-footer-nav">
+                <button 
+                  type="button" 
+                  class="btn btn-outline btn-sm nav-btn" 
+                  [disabled]="selectedChapterIndex === 0"
+                  (click)="selectedChapterIndex = selectedChapterIndex - 1">
+                  <app-icon name="arrow-left" [size]="13"></app-icon>
+                  <span>Chapitre Précédent</span>
+                </button>
+
+                <div class="footer-center-actions">
+                  <button type="button" class="btn btn-outline btn-sm" (click)="openAddChapterModal()">
+                    <app-icon name="plus" [size]="12"></app-icon>
+                    <span>Ajouter un chapitre</span>
+                  </button>
+                </div>
+
+                @if (selectedChapterIndex < c.chapters.length - 1) {
+                  <button 
+                    type="button" 
+                    class="btn btn-primary btn-sm nav-btn btn-next" 
+                    (click)="selectedChapterIndex = selectedChapterIndex + 1">
+                    <span>Chapitre Suivant</span>
+                    <app-icon name="arrow-right" [size]="13"></app-icon>
+                  </button>
+                } @else if (c.hasFinalQuiz) {
+                  <button 
+                    type="button" 
+                    class="btn btn-primary btn-sm nav-btn btn-final-exam" 
+                    (click)="selectedChapterIndex = -1">
+                    <span>Voir l'Examen Final</span>
+                    <app-icon name="trophy" [size]="13"></app-icon>
+                  </button>
+                }
+              </footer>
+            </article>
+          } @else if (selectedChapterIndex === -1 && c.hasFinalQuiz) {
+            <!-- FINAL CERTIFICATION EXAM SCREEN -->
+            <div class="final-exam-view card animate-fade-in">
+              <div class="exam-badge-icon">
+                <app-icon name="trophy" [size]="36" color="var(--color-navy)"></app-icon>
+              </div>
+              <span class="badge badge-primary">ÉVALUATION CERTIFIANTE FINALE</span>
+              <h2 class="exam-title">{{ c.finalQuizTitle || 'Examen Final de Validation' }}</h2>
+              <p class="exam-desc">
+                Cet examen final évalue l'ensemble des {{ c.chapters.length }} chapitres du cours "{{ c.title }}".
+              </p>
+
+              <div class="exam-specs-grid">
+                <div class="spec-card">
+                  <span class="spec-val">{{ c.finalQuizQuestionsCount || 10 }}</span>
+                  <span class="spec-label">Questions totales</span>
+                </div>
+                <div class="spec-card">
+                  <span class="spec-val">≥ {{ c.certificateMinimumScore || 80 }}%</span>
+                  <span class="spec-label">Score requis</span>
+                </div>
+                <div class="spec-card">
+                  <span class="spec-val" [style.color]="c.hasCertificate ? '#16A34A' : '#64748B'">{{ c.hasCertificate ? 'Certifiant' : 'Sans certificat' }}</span>
+                  <span class="spec-label">Attribution certificat</span>
+                </div>
+                <div class="spec-card">
+                  <span class="spec-val">{{ c.estimatedHours }}h</span>
+                  <span class="spec-label">Volume de formation</span>
+                </div>
+              </div>
+
+              <!-- BLOC CERTIFICAT DE RÉUSSITE -->
+              @if (c.hasCertificate) {
+                <div class="certif-callout-card card">
+                  <div class="certif-callout-left">
+                    <div class="certif-icon-circle">
+                      <app-icon name="award" [size]="24" color="var(--color-navy)"></app-icon>
+                    </div>
+                    <div>
+                      <h4 class="certif-callout-title" style="margin: 0 0 4px 0;">Ce cours délivre un Certificat de Réussite officiel</h4>
+                      <p class="body-small text-muted" style="margin: 0;">
+                        Modèle : <strong>{{ c.certificateTemplateType === 'CUSTOM' ? 'Modèle Personnalisé du Formateur' : 'Modèle Standard QuizzBoard Academy' }}</strong>
+                        • Condition : <strong>Score final ≥ {{ c.certificateMinimumScore || 80 }}%</strong>
+                      </p>
+                    </div>
+                  </div>
+                  <div class="certif-callout-right">
+                    <button type="button" class="btn btn-outline btn-sm" (click)="showCertPreviewModal = true">
+                      <app-icon name="eye" [size]="14"></app-icon>
+                      <span>Prévisualiser le Diplôme</span>
+                    </button>
+                  </div>
+                </div>
+              }
+
+              <div class="exam-cta-wrap">
+                <button type="button" class="btn btn-secondary btn-lg" (click)="launchFinalQuizLive(c)">
+                  <app-icon name="play" [size]="18" color="#FFFFFF"></app-icon>
+                  <span>Démarrer l'Examen Final en Direct (Live)</span>
+                </button>
+              </div>
+            </div>
+          }
+        </main>
+
+        <!-- RIGHT: CURRICULUM SIDEBAR (SOMMAIRE DU COURS) -->
+        <aside class="curriculum-sidebar card">
+          <header class="curriculum-header">
+            <div class="curriculum-title-wrap">
+              <h3 class="curriculum-heading">Sommaire du cours</h3>
+              <span class="curriculum-stats">{{ c.chapters.length }} chapitres au programme</span>
+            </div>
+            <button 
+              type="button" 
+              class="btn-add-ch-quick" 
+              (click)="openAddChapterModal()" 
+              title="Ajouter un nouveau chapitre">
+              <app-icon name="plus" [size]="12"></app-icon>
+              <span>Nouveau</span>
+            </button>
+          </header>
+
+          <!-- BADGE STATUT CERTIFICAT DU COURS -->
+          <div class="curriculum-cert-card" [class.certified]="c.hasCertificate">
+            <div class="cur-cert-info">
+              <app-icon name="award" [size]="15" [color]="c.hasCertificate ? '#D97706' : '#94A3B8'"></app-icon>
+              <div class="cur-cert-text">
+                <strong style="font-size: 11.5px; color: var(--color-navy);">
+                  {{ c.hasCertificate ? 'Certificat de Réussite Inclus' : 'Formation sans certificat' }}
+                </strong>
+                <span class="body-small text-muted" style="font-size: 10.5px;">
+                  {{ c.hasCertificate ? (c.certificateTemplateType === 'CUSTOM' ? 'Modèle Personnalisé' : 'Modèle Standard') : 'Activable dans Paramètres' }}
+                </span>
+              </div>
+            </div>
+            @if (c.hasCertificate) {
+              <button type="button" class="cur-cert-btn" (click)="showCertPreviewModal = true" title="Prévisualiser le diplôme">
+                <app-icon name="eye" [size]="12"></app-icon>
+              </button>
+            }
+          </div>
+
+          <nav class="curriculum-chapters-list">
+            @for (ch of c.chapters; track ch.id; let idx = $index) {
+              <div 
+                class="chapter-item" 
+                [class.active]="selectedChapterIndex === idx"
+                (click)="selectedChapterIndex = idx">
+                
+                <span class="chapter-idx-badge">{{ ch.order }}</span>
+
+                <div class="ch-text-info">
+                  <span class="ch-headline">{{ ch.title }}</span>
+                  <div class="ch-sub-meta">
+                    <span class="ch-type-indicator">
+                      <app-icon name="clock" [size]="10"></app-icon>
+                      {{ ch.estimatedMinutes }} min
+                    </span>
+                    @if (ch.hasQuiz) {
+                      <span class="ch-quiz-badge">
+                        <app-icon name="zap" [size]="9" color="#D97706"></app-icon>
+                        Quiz {{ ch.quizQuestionsCount || 5 }}Q
+                      </span>
+                    }
+                  </div>
+                </div>
+
+                <!-- EDIT / DELETE CHAPTER BUTTONS ON HOVER -->
+                <div class="item-actions" (click)="$event.stopPropagation()">
+                  <button 
+                    type="button" 
+                    class="action-mini-btn" 
+                    (click)="openEditChapterModal(idx)" 
+                    title="Modifier ce chapitre">
+                    <app-icon name="file-text" [size]="12"></app-icon>
+                  </button>
+                  @if (c.chapters.length > 1) {
+                    <button 
+                      type="button" 
+                      class="action-mini-btn delete-mini-btn" 
+                      (click)="deleteChapter(idx)" 
+                      title="Supprimer ce chapitre">
+                      <app-icon name="trash" [size]="12" color="#DC2626"></app-icon>
+                    </button>
+                  }
+                </div>
+              </div>
+            }
+
+            <!-- FINAL EXAM MILESTONE -->
+            @if (c.hasFinalQuiz) {
+              <div 
+                class="chapter-item exam-milestone-item" 
+                [class.active]="selectedChapterIndex === -1"
+                (click)="selectedChapterIndex = -1">
+                
+                <div class="exam-icon-wrap">
+                  <app-icon name="trophy" [size]="13" color="var(--color-navy)"></app-icon>
+                </div>
+
+                <div class="ch-text-info">
+                  <span class="ch-headline">Examen Final Certifiant</span>
+                  <div class="ch-sub-meta">
+                    <span class="badge-exam-pill">{{ c.finalQuizQuestionsCount || 10 }} Questions</span>
+                    <span class="badge-cert-pill">Certificat de réussite</span>
+                  </div>
+                </div>
+              </div>
+            }
+          </nav>
+        </aside>
+      </div>
+    }
+
+    <!-- =========================================================================
+         VIEW 2: DEDICATED ALL QUIZZES MANAGEMENT SCREEN (VOIR TOUS LES QUIZ)
+         ========================================================================= -->
+    @if (viewMode === 'QUIZZES') {
+      <div class="course-quizzes-management animate-fade-in">
+        <!-- QUIZZES DASHBOARD HEADER -->
+        <div class="quizzes-dashboard-head card">
+          <div class="dash-left">
+            <div class="head-icon-bubble">
+              <app-icon name="zap" [size]="24" color="var(--color-navy)"></app-icon>
+            </div>
+            <div>
+              <h2 class="dash-title">Tous les Quiz associés à ce cours ({{ getAllQuizzes().length }})</h2>
+              <p class="dash-desc">
+                Supervisez l'ensemble des évaluations prévues : quiz d'assimilation par chapitre et examen final de validation.
+              </p>
+            </div>
+          </div>
+          <div class="dash-metrics-bar">
+            <div class="metric-chip">
+              <span class="m-val">{{ c.chapters.length }}</span>
+              <span class="m-lbl">Chapitres</span>
+            </div>
+            <div class="metric-chip">
+              <span class="m-val">{{ getAllQuizzes().length }}</span>
+              <span class="m-lbl">Quiz Actifs</span>
+            </div>
+            <div class="metric-chip">
+              <span class="m-val">{{ c.assignedClassNames.length }}</span>
+              <span class="m-lbl">Classes</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- QUIZZES GRID -->
+        <div class="quizzes-grid">
+          @for (q of getAllQuizzes(); track q.id) {
+            <div class="quiz-management-card card">
+              <div class="quiz-card-top">
+                <span class="badge" [ngClass]="q.type === 'FINAL' ? 'badge-primary' : 'badge-navy'">
+                  {{ q.type === 'FINAL' ? '🏆 Examen Final' : ('⚡ Chapitre ' + q.chapterOrder) }}
+                </span>
+                <span class="quiz-count-pill">{{ q.questionsCount }} questions</span>
+              </div>
+
+              <h3 class="quiz-card-title">{{ q.title }}</h3>
+              @if (q.chapterTitle) {
+                <p class="quiz-card-rel">Lié au module : <em>{{ q.chapterTitle }}</em></p>
+              }
+
+              <!-- SAMPLE QUESTIONS PREVIEW -->
+              <div class="sample-questions-box">
+                <span class="sample-title">Aperçu des questions types :</span>
+                <ul class="samples-list">
+                  @for (sample of q.sampleQuestions; track sample.q) {
+                    <li>
+                      <strong>{{ sample.q }}</strong>
+                      <span>{{ sample.a }}</span>
+                    </li>
+                  }
+                </ul>
+              </div>
+
+              <!-- CARD ACTIONS FOOTER -->
+              <div class="quiz-card-actions">
+                <button 
+                  type="button" 
+                  class="btn btn-secondary btn-sm" 
+                  (click)="launchQuizItemLive(q)">
+                  <app-icon name="play" [size]="13" color="#FFFFFF"></app-icon>
+                  <span>Lancer en Live</span>
+                </button>
+                <button 
+                  type="button" 
+                  class="btn btn-outline btn-sm"
+                  (click)="previewQuizModal = q">
+                  <app-icon name="eye" [size]="13"></app-icon>
+                  <span>Détails</span>
+                </button>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    }
+
+    <!-- =========================================================================
+         MODALS: EDIT COURSE, DELETE COURSE, ADD/EDIT CHAPTER, ASSIGN CLASSES
+         ========================================================================= -->
+
+    <!-- MODAL 1: EDIT COURSE -->
+    @if (showEditCourseModal) {
+      <div class="modal-backdrop animate-fade-in" (click)="showEditCourseModal = false">
+        <div class="modal-box card" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <h3 class="modal-title">Modifier les informations du cours</h3>
+            <button class="close-btn" (click)="showEditCourseModal = false">✕</button>
+          </div>
+          <div class="modal-form-body">
+            <div class="form-group">
+              <label class="form-label">Titre du cours</label>
+              <input type="text" [(ngModel)]="editTitle" class="input-field">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Description générale</label>
+              <textarea [(ngModel)]="editDescription" rows="3" class="input-field input-textarea"></textarea>
+            </div>
+            <div class="form-row-2">
+              <div class="form-group">
+                <label class="form-label">Catégorie</label>
+                <input type="text" [(ngModel)]="editCategory" class="input-field">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Durée estimée (heures)</label>
+                <input type="number" [(ngModel)]="editEstimatedHours" min="1" max="100" class="input-field">
+              </div>
+            </div>
+
+            <!-- SECTION CERTIFICAT DE RÉUSSITE -->
+            <div class="cert-edit-container">
+              <label class="toggle-cert-checkbox-label">
+                <input type="checkbox" [(ngModel)]="editHasCertificate">
+                <div class="label-text-box">
+                  <strong>Délivrer un certificat de réussite officiel pour ce cours</strong>
+                  <span class="body-small text-muted">Délivré automatiquement aux étudiants obtenant la note requise à l'examen.</span>
+                </div>
+              </label>
+
+              @if (editHasCertificate) {
+                <div class="cert-edit-panel animate-fade-in">
+                  <div class="form-row-2">
+                    <div class="form-group">
+                      <label class="form-label">Score minimum requis (%)</label>
+                      <input type="number" [(ngModel)]="editCertificateMinScore" min="50" max="100" class="input-field">
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Type de modèle de diplôme</label>
+                      <select [(ngModel)]="editCertificateTemplateType" class="input-field">
+                        <option value="DEFAULT">Modèle officiel QuizzBoard (Défaut)</option>
+                        <option value="CUSTOM">Modèle personnalisé (Uploadé)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  @if (editCertificateTemplateType === 'CUSTOM') {
+                    <div class="custom-edit-upload-box">
+                      @if (!editCertificateCustomTemplateUrl) {
+                        <label class="dropzone-mini-label">
+                          <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" (change)="onEditCertificateFileSelected($event)" class="visually-hidden">
+                          <app-icon name="upload" [size]="18" color="var(--color-navy)"></app-icon>
+                          <span style="font-size: 12.5px; font-weight: 600;">Téléverser la maquette de votre certificat (PNG, JPG, SVG)</span>
+                        </label>
+                      } @else {
+                        <div class="custom-cert-loaded-row">
+                          <img [src]="editCertificateCustomTemplateUrl" class="mini-cert-thumb" alt="Aperçu">
+                          <div class="meta-txt">
+                            <strong>{{ editUploadedCertFileName || 'Modele_Certificat_Actuel.png' }}</strong>
+                            <span class="body-small" style="color: #16A34A;">✓ Maquette personnalisée associée au cours</span>
+                          </div>
+                          <button type="button" class="btn btn-outline btn-xs" (click)="showCertPreviewModal = true">Aperçu</button>
+                          <button type="button" class="btn btn-outline btn-xs btn-danger-custom" (click)="removeEditCustomCertificateTemplate()">Changer</button>
+                        </div>
+                      }
+                    </div>
+                  } @else {
+                    <div class="default-template-callout">
+                      <app-icon name="check-circle" [size]="14" color="var(--color-success)"></app-icon>
+                      <span class="body-small">Modèle officiel QuizzBoard Academy avec signature, sceau et code d'authenticité.</span>
+                      <button type="button" class="btn btn-outline btn-xs" style="margin-left: auto;" (click)="showCertPreviewModal = true">Aperçu</button>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline btn-sm" (click)="showEditCourseModal = false">Annuler</button>
+            <button type="button" class="btn btn-primary btn-sm" (click)="saveCourseChanges()">Enregistrer les modifications</button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- MODAL 2: DELETE COURSE -->
+    @if (showDeleteCourseModal) {
+      <div class="modal-backdrop animate-fade-in" (click)="showDeleteCourseModal = false">
+        <div class="modal-box modal-danger card" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <h3 class="modal-title" style="color: #DC2626;">Supprimer définitivement ce cours</h3>
+            <button class="close-btn" (click)="showDeleteCourseModal = false">✕</button>
+          </div>
+          <div class="modal-form-body">
+            <p class="danger-msg">
+              Êtes-vous certain de vouloir supprimer le cours <strong>"{{ c.title }}"</strong> ?
+            </p>
+            <p class="danger-sub">
+              Cette action est irréversible. Les {{ c.chapters.length }} chapitres ainsi que les quiz associés ne seront plus accessibles aux classes assignées.
+            </p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline btn-sm" (click)="showDeleteCourseModal = false">Annuler</button>
+            <button type="button" class="btn btn-danger-action btn-sm" (click)="confirmDeleteCourse()">Confirmer la suppression</button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- MODAL 3: ADD / EDIT CHAPTER -->
+    @if (showChapterModal) {
+      <div class="modal-backdrop animate-fade-in" (click)="showChapterModal = false">
+        <div class="modal-box card modal-lg" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <h3 class="modal-title">{{ editingChapterIndex !== null ? 'Modifier le Chapitre' : 'Ajouter un nouveau Chapitre' }}</h3>
+            <button class="close-btn" (click)="showChapterModal = false">✕</button>
+          </div>
+          <div class="modal-form-body">
+            <div class="form-row-2">
+              <div class="form-group" style="flex: 2;">
+                <label class="form-label">Titre du chapitre</label>
+                <input type="text" [(ngModel)]="chapterTitle" class="input-field">
+              </div>
+              <div class="form-group" style="flex: 1;">
+                <label class="form-label">Temps de lecture (min)</label>
+                <input type="number" [(ngModel)]="chapterEstimatedMinutes" min="5" max="180" class="input-field">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Résumé / Objectifs clés</label>
+              <input type="text" [(ngModel)]="chapterSummary" class="input-field">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Contenu pédagogique (Texte & Markdown)</label>
+              <textarea [(ngModel)]="chapterContent" rows="7" class="input-field input-textarea" style="font-family: monospace; font-size: 12.5px;"></textarea>
+            </div>
+
+            <div class="quiz-config-section">
+              <label class="toggle-quiz-label">
+                <input type="checkbox" [(ngModel)]="chapterHasQuiz">
+                <strong>Intégrer un quiz d'évaluation pour ce chapitre</strong>
+              </label>
+
+              @if (chapterHasQuiz) {
+                <div class="form-row-2" style="margin-top: 10px;">
+                  <div class="form-group" style="flex: 2;">
+                    <label class="form-label">Titre du quiz</label>
+                    <input type="text" [(ngModel)]="chapterQuizTitle" class="input-field">
+                  </div>
+                  <div class="form-group" style="flex: 1;">
+                    <label class="form-label">Nombre de questions</label>
+                    <input type="number" [(ngModel)]="chapterQuizCount" min="2" max="20" class="input-field">
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline btn-sm" (click)="showChapterModal = false">Annuler</button>
+            <button type="button" class="btn btn-primary btn-sm" (click)="saveChapter()">Enregistrer le chapitre</button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- MODAL 4: ASSIGN COURSE TO CLASSES -->
+    @if (showAssignModal) {
+      <div class="modal-backdrop animate-fade-in" (click)="showAssignModal = false">
+        <div class="modal-box card" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <div>
+              <h3 class="modal-title">Assigner aux Classes & Promotions</h3>
+              <p class="body-small">{{ c.title }}</p>
+            </div>
+            <button class="close-btn" (click)="showAssignModal = false">✕</button>
+          </div>
+
+          <div class="classes-list-box">
+            @for (cls of availableClasses(); track cls.id) {
+              <label class="class-select-item" [class.selected]="isClassAssigned(c, cls.id)">
+                <input 
+                  type="checkbox" 
+                  [checked]="isClassAssigned(c, cls.id)" 
+                  (change)="toggleAssignClass(c, cls.id, cls.name, $event)">
+                <div class="item-info">
+                  <strong>{{ cls.name }}</strong>
+                  <span>{{ cls.level }} • {{ cls.studentsCount }} étudiants</span>
+                </div>
+              </label>
+            }
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="btn btn-primary btn-sm" style="width: 100%;" (click)="showAssignModal = false">
+              Fermer & Appliquer
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- MODAL 5: PREVIEW QUIZ DETAILS -->
+    @if (previewQuizModal; as qz) {
+      <div class="modal-backdrop animate-fade-in" (click)="previewQuizModal = null">
+        <div class="modal-box card" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <div>
+              <h3 class="modal-title">{{ qz.title }}</h3>
+              <p class="body-small">{{ qz.questionsCount }} questions • Niveau {{ qz.difficulty }}</p>
+            </div>
+            <button class="close-btn" (click)="previewQuizModal = null">✕</button>
+          </div>
+
+          <div class="modal-form-body">
+            <span class="form-label">Questions types de ce quiz :</span>
+            <div class="sample-preview-list">
+              @for (s of qz.sampleQuestions; track s.q) {
+                <div class="sample-card">
+                  <div class="sample-q">{{ s.q }}</div>
+                  <div class="sample-a">{{ s.a }}</div>
+                </div>
+              }
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline btn-sm" (click)="previewQuizModal = null">Fermer</button>
+            <button type="button" class="btn btn-secondary btn-sm" (click)="launchQuizItemLive(qz); previewQuizModal = null">
+              <app-icon name="play" [size]="13" color="#FFFFFF"></app-icon>
+              <span>Lancer en Live</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+  } @else {
+    <div class="not-found-card card">
+      <h2 class="h2">Cours introuvable</h2>
+      <p class="body-small">Le cours demandé n'existe pas ou a été supprimé.</p>
+      <a routerLink="/app/courses" class="btn btn-primary" style="margin-top: 12px;">Retour à mes cours</a>
+    </div>
+  }
+</div>
+
+<!-- =========================================================================
+     MODAL DE PRÉVISUALISATION DU CERTIFICAT DU COURS (PLEIN ÉCRAN)
+     ========================================================================= -->
+@if (showCertPreviewModal && course(); as currentC) {
+  <div class="modal-backdrop animate-fade-in" (click)="showCertPreviewModal = false">
+    <div class="cert-preview-card card" (click)="$event.stopPropagation()">
+      <div class="cert-preview-head">
+        <div class="head-left">
+          <app-icon name="award" [size]="20" color="var(--color-navy)"></app-icon>
+          <h3 class="h3" style="margin: 0;">
+            Aperçu : {{ (editCertificateTemplateType || currentC.certificateTemplateType) === 'CUSTOM' ? 'Modèle Personnalisé' : 'Modèle Officiel QuizzBoard (Standard)' }}
+          </h3>
+        </div>
+        <button class="close-btn" (click)="showCertPreviewModal = false">✕</button>
+      </div>
+
+      <div class="cert-preview-body">
+        @if ((editCertificateTemplateType || currentC.certificateTemplateType) === 'CUSTOM' && (editCertificateCustomTemplateUrl || currentC.certificateCustomTemplateUrl); as customUrl) {
+          <div class="custom-diploma-wrapper">
+            <img [src]="customUrl" alt="Maquette personnalisée" class="custom-cert-full">
+            <div class="custom-overlay-hint">
+              <span>✓ Maquette personnalisée du formateur. Les informations (Nom de l'élève, note obtenue, date, code d'authenticité) seront incrustées lors de la délivrance.</span>
+            </div>
+          </div>
+        } @else {
+          <!-- MODÈLE STANDARD QUIZZBOARD -->
+          <div class="cert-diploma-wrapper">
+            <div class="cert-inner-frame">
+              <div class="diploma-header">
+                <div class="diploma-seal">
+                  <app-icon name="award" [size]="30" color="var(--color-navy)"></app-icon>
+                </div>
+                <div class="diploma-label">CERTIFICAT OFFICIEL DE RÉUSSITE</div>
+                <span class="org-sub">DÉLIVRÉ PAR QUIZZBOARD ACADEMY</span>
+              </div>
+
+              <div class="diploma-body">
+                <p class="awarded-txt">Cette attestation de réussite académique est décernée à :</p>
+                <h2 class="student-name">Prénom & Nom de l'Apprenant</h2>
+                <p class="completion-txt">Pour avoir validé avec brio le parcours de formation :</p>
+                <h3 class="exam-title">{{ currentC.title }}</h3>
+
+                <div class="diploma-badges-row">
+                  <div class="badge-item">
+                    <span class="b-lbl">SCORE REQUIS</span>
+                    <strong class="b-val">≥ {{ editCertificateMinScore || currentC.certificateMinimumScore || 80 }}%</strong>
+                  </div>
+                  <div class="badge-item">
+                    <span class="b-lbl">MENTION</span>
+                    <strong class="b-val">Excellence</strong>
+                  </div>
+                  <div class="badge-item">
+                    <span class="b-lbl">STATUT</span>
+                    <strong class="b-val" style="color: #16A34A;">Certifié</strong>
+                  </div>
+                  <div class="badge-item">
+                    <span class="b-lbl">AUTHENTICITÉ</span>
+                    <strong class="b-val code-mono">QB-CERT-DEMO-2026</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div class="diploma-footer">
+                <div class="signature-block">
+                  <span class="signature-script">{{ currentC.creatorName }}</span>
+                  <span class="signature-role">Directeur Pédagogique du Cours</span>
+                </div>
+
+                <div class="security-seal-block">
+                  <span class="verified-tag">
+                    <app-icon name="check" [size]="12" color="#16A34A"></app-icon>
+                    Sceau Officiel Vérifiable
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        }
+      </div>
+
+      <div class="cert-preview-foot">
+        <button type="button" class="btn btn-primary btn-sm" (click)="showCertPreviewModal = false">
+          Fermer l'Aperçu
+        </button>
+      </div>
+    </div>
+  </div>
+}
