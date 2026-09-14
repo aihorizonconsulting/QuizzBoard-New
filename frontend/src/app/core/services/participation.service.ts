@@ -1,6 +1,7 @@
 import { Injectable, signal, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Participation, Certificate } from '../models/participation.model';
+import { AuthService } from './auth.service';
 import { environment } from '../../../environments/environment';
 
 @Injectable({
@@ -8,6 +9,7 @@ import { environment } from '../../../environments/environment';
 })
 export class ParticipationService {
   private http = inject(HttpClient);
+  private authService = inject(AuthService);
   private participations = signal<Participation[]>([]);
   private certificates = signal<Certificate[]>([]);
 
@@ -16,9 +18,14 @@ export class ParticipationService {
   }
 
   loadBackendData(): void {
-    this.http.get<Participation[]>(`${environment.apiUrl}/participations/my`).subscribe({
-      next: (data) => {
-        this.participations.set(data || []);
+    if (!this.authService.isAuthenticated()) {
+      this.participations.set([]);
+      return;
+    }
+    this.http.get<any>(`${environment.apiUrl}/participations/my`).subscribe({
+      next: (res) => {
+        const data = res?.data || res;
+        this.participations.set(Array.isArray(data) ? data : []);
       },
       error: () => {
         this.participations.set([]);

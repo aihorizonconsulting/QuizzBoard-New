@@ -98,8 +98,12 @@ public class ParticipationController {
     public ResponseEntity<ApiResponse<List<Participation>>> getMyParticipations(
             @AuthenticationPrincipal UserPrincipal currentUser,
             HttpServletRequest request) {
-        String userId = currentUser != null ? currentUser.getId() : "anonymous";
-        List<Participation> list = participationService.getParticipationsByUser(userId);
+        if (currentUser == null) {
+            return ResponseEntity.ok(
+                    ApiResponse.ok(List.of(), "Utilisateur non authentifié.", List.of(), request.getRequestURI())
+            );
+        }
+        List<Participation> list = participationService.getParticipationsByUser(currentUser.getId());
         List<LinkDto> links = List.of(
                 LinkDto.of("self", request.getRequestURI(), "GET")
         );
