@@ -51,6 +51,7 @@ services:
       - path: .env
         required: false
     environment:
+      - SERVER_PORT=8080
       - DB_HOST=postgres-dev
       - DB_PORT=5432
       - DB_NAME=${DB_NAME:-quizzboard_dev_db}
@@ -60,7 +61,7 @@ services:
       - REDIS_PORT=6379
       - CORS_ORIGINS=${CORS_ORIGINS:-https://dev.quizzboard.com,http://dev.quizzboard.com,http://localhost:4201,http://127.0.0.1:4201}
     ports:
-      - "127.0.0.1:${SERVER_PORT:-8081}:8080"
+      - "127.0.0.1:8081:8080"
     volumes:
       - ./backend/uploads:/app/uploads
     depends_on:
@@ -69,7 +70,9 @@ services:
       redis-dev:
         condition: service_started
     networks:
-      - quizzboard-dev-network
+      quizzboard-dev-network:
+        aliases:
+          - backend
 
   # ============================================================================
   # 4. FRONTEND ANGULAR NGINX SPA (DEV - dev.quizzboard.com)

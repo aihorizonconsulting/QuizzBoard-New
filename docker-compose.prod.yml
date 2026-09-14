@@ -51,6 +51,7 @@ services:
       - path: .env
         required: false
     environment:
+      - SERVER_PORT=8080
       - DB_HOST=postgres-prod
       - DB_PORT=5432
       - DB_NAME=${DB_NAME:-quizzboard_prod_db}
@@ -60,7 +61,7 @@ services:
       - REDIS_PORT=6379
       - CORS_ORIGINS=${CORS_ORIGINS:-https://quizzboard.com,https://www.quizzboard.com}
     ports:
-      - "127.0.0.1:${SERVER_PORT:-8080}:8080"
+      - "127.0.0.1:8080:8080"
     volumes:
       - ./backend/uploads:/app/uploads
     depends_on:
@@ -69,7 +70,9 @@ services:
       redis-prod:
         condition: service_started
     networks:
-      - quizzboard-prod-network
+      quizzboard-prod-network:
+        aliases:
+          - backend
 
   # ============================================================================
   # 4. FRONTEND ANGULAR NGINX SPA (PRODUCTION - quizzboard.com)
