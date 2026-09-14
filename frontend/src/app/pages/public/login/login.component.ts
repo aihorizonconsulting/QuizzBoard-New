@@ -1,4 +1,4 @@
-import { Component, inject, ChangeDetectorRef } from '@angular/core';
+import { Component, inject, ChangeDetectorRef, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -59,15 +59,17 @@ declare const google: any;
             <p class="body-small" style="margin-bottom: 20px;">Accédez à votre espace formateur ou élève.</p>
 
             <!-- Google button -->
-            <button type="button" class="btn-google" [disabled]="isGoogleLoading || isLoading" (click)="loginWithGoogle()">
-              @if (isGoogleLoading) {
-                <span class="btn-spinner"></span>
-                <span>Authentification Google...</span>
-              } @else {
-                <app-icon name="google" [size]="18"></app-icon>
-                <span>Continuer avec Google</span>
-              }
-            </button>
+            <div id="googleBtnWrapper" style="display: flex; justify-content: center; width: 100%; min-height: 44px; margin-bottom: 8px;">
+              <button type="button" class="btn-google" [disabled]="isGoogleLoading || isLoading" (click)="loginWithGoogle()">
+                @if (isGoogleLoading) {
+                  <span class="btn-spinner"></span>
+                  <span>Authentification Google...</span>
+                } @else {
+                  <app-icon name="google" [size]="18"></app-icon>
+                  <span>Continuer avec Google</span>
+                }
+              </button>
+            </div>
 
             <div class="divider">
               <span>ou avec email</span>
@@ -342,7 +344,7 @@ declare const google: any;
     }
   `]
 })
-export class LoginComponent {
+export class LoginComponent implements AfterViewInit {
   private authService = inject(AuthService);
   private router = inject(Router);
   private cdr = inject(ChangeDetectorRef);
@@ -354,6 +356,10 @@ export class LoginComponent {
   fieldErrors: Record<string, string> = {};
   isLoading = false;
   isGoogleLoading = false;
+
+  ngAfterViewInit() {
+    this.renderGoogleButton();
+  }
 
   clearFieldError(field: string) {
     if (this.fieldErrors[field]) {
@@ -396,6 +402,36 @@ export class LoginComponent {
     } catch (e) {
       console.warn('Google Auth init warning:', e);
     }
+  }
+
+  private renderGoogleButton() {
+    let attempts = 0;
+    const interval = setInterval(() => {
+      attempts++;
+      if (typeof google !== 'undefined' && google.accounts?.id) {
+        clearInterval(interval);
+        this.initGoogleAuth();
+        const container = document.getElementById('googleBtnWrapper');
+        if (container) {
+          try {
+            google.accounts.id.renderButton(container, {
+              theme: 'outline',
+              size: 'large',
+              type: 'standard',
+              text: 'continue_with',
+              shape: 'rectangular',
+              logo_alignment: 'left',
+              width: 320
+            });
+          } catch (err) {
+            console.warn('Google renderButton warning:', err);
+          }
+        }
+      }
+      if (attempts > 25) {
+        clearInterval(interval);
+      }
+    }, 200);
   }
 
   loginWithGoogle() {
