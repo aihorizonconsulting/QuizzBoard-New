@@ -160,6 +160,22 @@ public class SmtpEmailService {
             int totalPlayers,
             boolean certificateEligible,
             String certificateCode) {
+        sendQuizCompletedEmail(toEmail, participantName, quizTitle, percentage, score, maxScore, rank, totalPlayers, certificateEligible, certificateCode, null);
+    }
+
+    @Async
+    public void sendQuizCompletedEmail(
+            String toEmail,
+            String participantName,
+            String quizTitle,
+            double percentage,
+            int score,
+            int maxScore,
+            int rank,
+            int totalPlayers,
+            boolean certificateEligible,
+            String certificateCode,
+            String className) {
         if (toEmail == null || toEmail.isBlank()) {
             return;
         }
@@ -170,7 +186,12 @@ public class SmtpEmailService {
 
             helper.setFrom(fromEmail);
             helper.setTo(toEmail);
-            helper.setSubject("Vos Résultats au Quiz : " + quizTitle + " 🎯 (Rang #" + rank + ")");
+
+            boolean isClassQuiz = className != null && !className.isBlank();
+            String subjectText = isClassQuiz
+                    ? String.format("Vos Résultats au Quiz : %s 🎯 (Rang #%d/%d - Classe %s)", quizTitle, rank, totalPlayers, className)
+                    : String.format("Vos Résultats au Quiz : %s 🎯 (Rang #%d/%d)", quizTitle, rank, totalPlayers);
+            helper.setSubject(subjectText);
 
             boolean passed = percentage >= 70.0;
             String badgeColor = passed ? "#16A34A" : "#EA580C";
@@ -178,12 +199,22 @@ public class SmtpEmailService {
             String statusText = passed ? "FÉLICITATIONS ! QUIZ RÉUSSI" : "QUIZ TERMINÉ";
 
             String rankBannerText;
-            if (rank == 1) {
-                rankBannerText = "🥇 1ère Place — Champion de l'Arène !";
-            } else if (rank <= 3) {
-                rankBannerText = String.format("🥈 Podium d'Honneur (Rang #%d sur %d) !", rank, totalPlayers);
+            if (isClassQuiz) {
+                if (rank == 1) {
+                    rankBannerText = String.format("🥇 1ère Place — Major de la classe %s !", className);
+                } else if (rank <= 3) {
+                    rankBannerText = String.format("🥈 Podium de la classe (Rang #%d sur %d élèves dans %s) !", rank, totalPlayers, className);
+                } else {
+                    rankBannerText = String.format("🎯 Vous êtes classé #%d sur %d élèves dans la classe %s !", rank, totalPlayers, className);
+                }
             } else {
-                rankBannerText = String.format("🎯 Vous êtes classé #%d sur %d participants !", rank, totalPlayers);
+                if (rank == 1) {
+                    rankBannerText = "🥇 1ère Place — Champion du Quiz (Classement Général) !";
+                } else if (rank <= 3) {
+                    rankBannerText = String.format("🥈 Podium d'Honneur (Rang #%d sur %d participants) !", rank, totalPlayers);
+                } else {
+                    rankBannerText = String.format("🎯 Vous êtes classé #%d sur %d participants !", rank, totalPlayers);
+                }
             }
 
             String certificateHtml = "";

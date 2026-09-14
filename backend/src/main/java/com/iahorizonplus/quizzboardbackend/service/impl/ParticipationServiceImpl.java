@@ -84,14 +84,19 @@ public class ParticipationServiceImpl implements ParticipationService {
             }
         }
 
-        // Calcul précis du rang dans le classement du quiz
+        // Calcul précis du rang : par classe si le quiz est joué dans une classe, sinon classement général
         int rank = 1;
         int totalPlayers = 1;
         try {
-            List<Participation> allQuizParticipations = participationRepository.findByQuizIdOrderByScoreDesc(quiz.getId());
-            totalPlayers = Math.max(1, allQuizParticipations.size());
-            for (int i = 0; i < allQuizParticipations.size(); i++) {
-                if (allQuizParticipations.get(i).getId().equals(saved.getId())) {
+            List<Participation> rankingList;
+            if (saved.getClassId() != null && !saved.getClassId().isBlank()) {
+                rankingList = participationRepository.findByQuizIdAndClassIdOrderByScoreDesc(quiz.getId(), saved.getClassId());
+            } else {
+                rankingList = participationRepository.findByQuizIdOrderByScoreDesc(quiz.getId());
+            }
+            totalPlayers = Math.max(1, rankingList.size());
+            for (int i = 0; i < rankingList.size(); i++) {
+                if (rankingList.get(i).getId().equals(saved.getId())) {
                     rank = i + 1;
                     break;
                 }
@@ -100,7 +105,7 @@ public class ParticipationServiceImpl implements ParticipationService {
             log.warn("Impossible de calculer le rang du participant: {}", e.getMessage());
         }
 
-        // Envoi automatique d'email avec les résultats du quiz et le classement
+        // Envoi automatique d'email avec les résultats du quiz et le classement (classe ou général)
         if (saved.getParticipantEmail() != null && !saved.getParticipantEmail().isBlank()) {
             try {
                 smtpEmailService.sendQuizCompletedEmail(
@@ -113,7 +118,8 @@ public class ParticipationServiceImpl implements ParticipationService {
                         rank,
                         totalPlayers,
                         saved.isCertificateEligible(),
-                        certCode
+                        certCode,
+                        saved.getClassName()
                 );
             } catch (Exception e) {
                 log.warn("Échec du déclenchement de l'email de résultat de quiz: {}", e.getMessage());

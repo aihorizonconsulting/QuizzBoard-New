@@ -622,7 +622,12 @@ import { InvitationService } from '../../../core/services/invitation.service';
 
       <!-- QUIZ MODAL PLAYER -->
       @if (activeTestQuiz) {
-        <app-quiz-modal-player [quiz]="activeTestQuiz" (closed)="activeTestQuiz = null"></app-quiz-modal-player>
+        <app-quiz-modal-player 
+          [quiz]="activeTestQuiz" 
+          [classId]="selectedClass?.id" 
+          [className]="selectedClass?.name" 
+          (closed)="activeTestQuiz = null">
+        </app-quiz-modal-player>
       }
 
       <!-- MODAL CREATE CLASS -->

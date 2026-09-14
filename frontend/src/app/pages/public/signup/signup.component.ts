@@ -640,10 +640,12 @@ export class SignupComponent implements AfterViewInit {
             this.isGoogleLoading = true;
             this.cdr.markForCheck();
 
-            this.authService.loginWithGoogle(response.credential).subscribe({
+            this.authService.loginWithGoogle(response.credential, this.selectedRole).subscribe({
               next: (authRes: any) => {
                 this.isGoogleLoading = false;
-                const target = authRes.user.role === 'ADMIN' ? '/admin/dashboard' : '/app/dashboard';
+                const target = authRes.user?.role === 'LEARNER'
+                  ? '/app/learner/dashboard'
+                  : (authRes.user?.role === 'ADMIN' ? '/admin/dashboard' : '/app/dashboard');
                 this.router.navigate([target]);
               },
               error: (err: any) => {

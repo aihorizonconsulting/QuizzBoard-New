@@ -96,7 +96,7 @@ class ParticipationServiceTest {
         assertThat(sampleQuiz.getAverageScorePercent()).isEqualTo(80.0);
         verify(quizRepository).save(sampleQuiz);
 
-        // Vérification de l'envoi d'email avec rang
+        // Vérification de l'envoi d'email avec rang (mode public / className null)
         verify(smtpEmailService).sendQuizCompletedEmail(
                 eq("khadija@quizzboard.com"),
                 eq("Khadija Ba"),
@@ -107,7 +107,8 @@ class ParticipationServiceTest {
                 eq(1),
                 eq(1),
                 eq(true),
-                eq("QB-CERT-9988")
+                eq("QB-CERT-9988"),
+                isNull()
         );
     }
 
@@ -145,6 +146,7 @@ class ParticipationServiceTest {
                 eq(1),
                 eq(1),
                 eq(false),
+                isNull(),
                 isNull()
         );
     }
@@ -157,5 +159,43 @@ class ParticipationServiceTest {
 
         assertThatThrownBy(() -> participationService.submitParticipation(participation, List.of()))
                 .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("Soumission Participation dans une classe : Calcul du rang au sein de la classe")
+    void submitParticipation_WithClassId_CalculatesRankWithinClass() {
+        Participation p1 = Participation.builder().id("p1").score(100).build();
+        Participation p2 = Participation.builder()
+                .id("p2")
+                .quizId("quiz-100")
+                .classId("class-science-1")
+                .className("Terminale Scientifique")
+                .participantName("Moussa Diop")
+                .participantEmail("moussa@quizzboard.com")
+                .score(85)
+                .build();
+
+        when(quizRepository.findById("quiz-100")).thenReturn(Optional.of(sampleQuiz));
+        when(participationRepository.save(any(Participation.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(participationRepository.findByQuizIdAndClassIdOrderByScoreDesc("quiz-100", "class-science-1"))
+                .thenReturn(List.of(p1, p2));
+
+        Participation result = participationService.submitParticipation(p2, List.of());
+
+        assertThat(result).isNotNull();
+        // Vérification de l'appel email avec rang 2 sur 2 et nom de classe
+        verify(smtpEmailService).sendQuizCompletedEmail(
+                eq("moussa@quizzboard.com"),
+                eq("Moussa Diop"),
+                eq("Evaluation Spring Boot"),
+                anyDouble(),
+                anyInt(),
+                anyInt(),
+                eq(2),
+                eq(2),
+                anyBoolean(),
+                any(),
+                eq("Terminale Scientifique")
+        );
     }
 }

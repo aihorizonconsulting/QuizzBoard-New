@@ -115,7 +115,13 @@ import { IconComponent } from '../icon/icon.component';
               </div>
 
               <h2 class="h1" style="color: var(--color-navy); margin-bottom: 6px;">Quiz Terminé !</h2>
-              <p class="body-small">Voici votre score pour : <strong>{{ quiz.title }}</strong></p>
+              <p class="body-small" style="margin-bottom: 8px;">Voici votre score pour : <strong>{{ quiz.title }}</strong></p>
+
+              @if (className) {
+                <div class="class-context-tag" style="display: inline-flex; align-items: center; gap: 6px; background: #EEF2FF; border: 1px solid #C7D2FE; color: #3730A3; font-size: 12px; font-weight: 700; padding: 4px 12px; border-radius: 999px; margin-bottom: 14px;">
+                  <span>📚 Évaluation au sein de la classe : <strong>{{ className }}</strong></span>
+                </div>
+              }
 
               <div class="score-display-pill">
                 <span class="score-pct">{{ scorePercentage }}%</span>
@@ -127,14 +133,14 @@ import { IconComponent } from '../icon/icon.component';
                 @if (emailSentSuccess) {
                   <div class="email-status-badge success">
                     <app-icon name="check-circle" [size]="15" color="#16A34A"></app-icon>
-                    <span>Votre rapport complet avec score et rang a été envoyé à <strong>{{ manualResultEmail || 'votre adresse email' }}</strong> ! 🎯</span>
+                    <span>Votre rapport complet avec score et rang {{ className ? 'au sein de la classe ' + className : 'au classement général' }} a été envoyé à <strong>{{ manualResultEmail || 'votre adresse email' }}</strong> ! 🎯</span>
                   </div>
                 } @else {
                   <div class="email-send-form">
                     <input 
                       type="email" 
                       [(ngModel)]="manualResultEmail" 
-                      placeholder="Votre email pour recevoir vos résultats & rang..." 
+                      [placeholder]="className ? 'Votre email pour recevoir vos résultats & rang de classe...' : 'Votre email pour recevoir vos résultats & rang...'" 
                       class="email-inline-input">
                     <button type="button" class="btn btn-sm btn-primary" (click)="sendReportToEmail()" [disabled]="!manualResultEmail.trim()">
                       <app-icon name="mail" [size]="13" color="var(--color-navy)"></app-icon>
@@ -533,6 +539,8 @@ import { IconComponent } from '../icon/icon.component';
 })
 export class QuizModalPlayerComponent implements OnInit, OnDestroy, OnChanges {
   @Input({ required: true }) quiz!: Quiz;
+  @Input() classId?: string;
+  @Input() className?: string;
   @Output() closed = new EventEmitter<void>();
 
   public authService = inject(AuthService);
@@ -614,6 +622,8 @@ export class QuizModalPlayerComponent implements OnInit, OnDestroy, OnChanges {
     this.partService.saveParticipation({
       quizId: this.quiz.id,
       quizTitle: this.quiz.title,
+      classId: this.classId,
+      className: this.className,
       participantName,
       participantEmail: this.manualResultEmail.trim(),
       score: this.totalScore,
@@ -745,6 +755,8 @@ export class QuizModalPlayerComponent implements OnInit, OnDestroy, OnChanges {
     this.partService.saveParticipation({
       quizId: this.quiz.id,
       quizTitle: this.quiz.title,
+      classId: this.classId,
+      className: this.className,
       participantName,
       participantEmail,
       score: this.totalScore,

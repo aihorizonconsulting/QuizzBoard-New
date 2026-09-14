@@ -476,6 +476,8 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
     @if (activeTestQuiz) {
       <app-quiz-modal-player 
         [quiz]="activeTestQuiz" 
+        [classId]="selectedClass?.id"
+        [className]="selectedClass?.name"
         (closed)="activeTestQuiz = null">
       </app-quiz-modal-player>
     }

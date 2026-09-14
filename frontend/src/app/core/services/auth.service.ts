@@ -5,10 +5,11 @@ import { User, UserRole, SubscriptionTier } from '../models/user.model';
 import { environment } from '../../../environments/environment';
 
 export interface AuthResponse {
-  token: string;
+  token?: string;
   refreshToken?: string;
   tokenType?: string;
-  user: User;
+  user?: User;
+  requiresRoleSelection?: boolean;
 }
 
 export interface SignupRequest {
@@ -102,15 +103,18 @@ export class AuthService {
   }
 
   /**
-   * Connexion via Google OAuth2
+   * Connexion via Google OAuth2 (avec rôle optionnel pour première inscription)
    */
-  loginWithGoogle(idToken: string): Observable<AuthResponse> {
-    return this.http.post<AuthResponse>(`${environment.apiUrl}/auth/google`, {
-      idToken,
-      role: 'CREATOR'
-    }).pipe(
+  loginWithGoogle(idToken: string, role?: UserRole): Observable<AuthResponse> {
+    const payload: { idToken: string; role?: UserRole } = { idToken };
+    if (role) {
+      payload.role = role;
+    }
+    return this.http.post<AuthResponse>(`${environment.apiUrl}/auth/google`, payload).pipe(
       tap(response => {
-        this.setSession(response.token, response.user);
+        if (!response.requiresRoleSelection && response.token && response.user) {
+          this.setSession(response.token, response.user);
+        }
       })
     );
   }

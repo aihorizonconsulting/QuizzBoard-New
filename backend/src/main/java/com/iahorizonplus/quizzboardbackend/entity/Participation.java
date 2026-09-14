@@ -27,6 +27,9 @@ public class Participation {
     private String quizTitle;
     private String userId;
 
+    private String classId;
+    private String className;
+
     @Column(nullable = false)
     private String participantName;
 

@@ -11,6 +11,8 @@ export interface Participation {
   quizId: string;
   quizTitle: string;
   userId?: string;
+  classId?: string;
+  className?: string;
   participantName: string;
   participantEmail?: string;
   score: number;

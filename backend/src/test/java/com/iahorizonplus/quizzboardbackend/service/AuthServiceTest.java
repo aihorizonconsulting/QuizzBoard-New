@@ -149,4 +149,18 @@ class AuthServiceTest {
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("mot de passe saisi est incorrect");
     }
+
+    @Test
+    @DisplayName("Google Auth: Délègue à GoogleAuthService")
+    void loginWithGoogle_DelegatesToGoogleAuthService() {
+        com.iahorizonplus.quizzboardbackend.dto.request.GoogleAuthRequest request =
+                new com.iahorizonplus.quizzboardbackend.dto.request.GoogleAuthRequest("token-123", UserRole.LEARNER);
+        AuthResponse expected = new AuthResponse("jwt", "refresh", sampleUserDto);
+        when(googleAuthService.authenticateWithGoogle(request)).thenReturn(expected);
+
+        AuthResponse actual = authService.loginWithGoogle(request);
+
+        assertThat(actual).isEqualTo(expected);
+        verify(googleAuthService).authenticateWithGoogle(request);
+    }
 }

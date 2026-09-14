@@ -10,6 +10,7 @@ import java.util.List;
 public interface ParticipationRepository extends JpaRepository<Participation, String> {
     List<Participation> findByUserIdOrderByCompletedAtDesc(String userId);
     List<Participation> findByQuizIdOrderByScoreDesc(String quizId);
+    List<Participation> findByQuizIdAndClassIdOrderByScoreDesc(String quizId, String classId);
     List<Participation> findByQuizIdIn(List<String> quizIds);
     long countByQuizIdIn(List<String> quizIds);
 }
