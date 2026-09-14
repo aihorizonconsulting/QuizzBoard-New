@@ -86,7 +86,9 @@ export class AuthService {
       password
     }).pipe(
       tap(response => {
-        this.setSession(response.token, response.user);
+        if (response.token && response.user) {
+          this.setSession(response.token, response.user);
+        }
       })
     );
   }
@@ -97,7 +99,9 @@ export class AuthService {
   signup(request: SignupRequest): Observable<AuthResponse> {
     return this.http.post<AuthResponse>(`${environment.apiUrl}/auth/signup`, request).pipe(
       tap(response => {
-        this.setSession(response.token, response.user);
+        if (response.token && response.user) {
+          this.setSession(response.token, response.user);
+        }
       })
     );
   }
@@ -133,7 +137,8 @@ export class AuthService {
   /**
    * Initialise la session avec le jeton JWT et le profil utilisateur
    */
-  setSession(token: string, user: User): void {
+  setSession(token?: string, user?: User | null): void {
+    if (!token || !user) return;
     if (typeof window !== 'undefined' && window.localStorage) {
       localStorage.setItem(this.TOKEN_KEY, token);
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(user));
