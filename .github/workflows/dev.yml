@@ -29,8 +29,8 @@ jobs:
             
             echo "📥 Récupération des dernières modifications..."
             git fetch origin develop
-            git checkout develop
-            git pull origin develop
+            git checkout -f develop
+            git reset --hard origin/develop
             
             echo "🐳 Lancement et reconstruction des conteneurs DEV..."
             docker compose -f docker-compose.dev.yml up -d --build

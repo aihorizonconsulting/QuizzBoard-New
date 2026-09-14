@@ -29,8 +29,8 @@ jobs:
             
             echo "📥 Récupération des dernières modifications sur main..."
             git fetch origin main
-            git checkout main
-            git pull origin main
+            git checkout -f main
+            git reset --hard origin/main
             
             echo "🐳 Lancement et reconstruction des conteneurs PRODUCTION..."
             docker compose -f docker-compose.prod.yml up -d --build
