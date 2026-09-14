@@ -381,12 +381,12 @@ export class LoginComponent {
             this.cdr.markForCheck();
 
             this.authService.loginWithGoogle(response.credential).subscribe({
-              next: (authRes) => {
+              next: (authRes: any) => {
                 this.isGoogleLoading = false;
                 const target = authRes.user.role === 'ADMIN' ? '/admin/dashboard' : '/app/dashboard';
                 this.router.navigate([target]);
               },
-              error: (err) => {
+              error: (err: any) => {
                 this.isGoogleLoading = false;
                 this.errorMessage = err?.error?.message || 'Échec de l\'authentification avec Google.';
                 this.cdr.markForCheck();
@@ -432,7 +432,7 @@ export class LoginComponent {
     this.cdr.markForCheck();
 
     this.authService.login(this.email, this.password).subscribe({
-      next: (res) => {
+      next: (res: any) => {
         this.isLoading = false;
         this.cdr.markForCheck();
         const role = res.user?.role;

@@ -646,12 +646,12 @@ export class SignupComponent {
             this.cdr.markForCheck();
 
             this.authService.loginWithGoogle(response.credential).subscribe({
-              next: (authRes) => {
+              next: (authRes: any) => {
                 this.isGoogleLoading = false;
                 const target = authRes.user.role === 'ADMIN' ? '/admin/dashboard' : '/app/dashboard';
                 this.router.navigate([target]);
               },
-              error: (err) => {
+              error: (err: any) => {
                 this.isGoogleLoading = false;
                 this.errorMessage = err?.error?.message || 'Échec de l\'inscription avec Google.';
                 this.cdr.markForCheck();
@@ -715,7 +715,7 @@ export class SignupComponent {
       password: this.password,
       role: this.selectedRole
     }).subscribe({
-      next: (res) => {
+      next: (res: any) => {
         this.isLoading = false;
         this.cdr.markForCheck();
         if (this.selectedRole === 'CREATOR') {
@@ -724,7 +724,7 @@ export class SignupComponent {
           this.router.navigate(['/app/learner/dashboard']);
         }
       },
-      error: (err) => {
+      error: (err: any) => {
         this.isLoading = false;
         // Extraction automatique des erreurs ciblées par champ depuis la base de données / backend
         this.fieldErrors = extractFieldErrors(err);
