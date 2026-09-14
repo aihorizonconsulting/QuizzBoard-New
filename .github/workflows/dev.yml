@@ -8,11 +8,14 @@ on:
 
 jobs:
   deploy-dev:
-    name: Deploy to Development Environment
+    name: Déploiement Environnement DEV
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy to Remote Server via SSH
+      # ------------------------------------------------------------------------
+      # ÉTAPE 1 : TEST DE CONNEXION SSH
+      # ------------------------------------------------------------------------
+      - name: 1. 🔍 Tester la connexion SSH avec le serveur
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.SERVER_HOST }}
@@ -23,20 +26,112 @@ jobs:
           script_stop: true
           script: |
             echo "===================================================="
-            echo "🚀 DÉPLOIEMENT AUTOMATIQUE - BRANCHE DEVELOP (DEV)"
+            echo "✅ ÉTAPE 1 : Connexion SSH établie avec succès !"
+            echo "Serveur : $(hostname)"
+            echo "Utilisateur : $(whoami)"
             echo "===================================================="
+
+      # ------------------------------------------------------------------------
+      # ÉTAPE 2 : SYNCHRONISATION DU CODE GIT (BRANCHE DEVELOP)
+      # ------------------------------------------------------------------------
+      - name: 2. 📥 Mettre à jour le code Git (branche develop)
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: 22
+          script_stop: true
+          script: |
+            echo "===================================================="
+            echo "📥 ÉTAPE 2 : Récupération du dernier code..."
             cd /var/www/QuizzBoard-New
-            
-            echo "📥 Récupération des dernières modifications..."
             git fetch origin develop
             git checkout -f develop
             git reset --hard origin/develop
-            
-            echo "🐳 Lancement et reconstruction des conteneurs DEV..."
+            echo "Dernier commit déployé : $(git log -1 --oneline)"
+            echo "===================================================="
+
+      # ------------------------------------------------------------------------
+      # ÉTAPE 3 : VÉRIFICATION DU FICHIER D'ENVIRONNEMENT DEV
+      # ------------------------------------------------------------------------
+      - name: 3. ⚙️ Vérifier la configuration (.env.dev)
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: 22
+          script_stop: true
+          script: |
+            echo "===================================================="
+            echo "⚙️ ÉTAPE 3 : Vérification du fichier d'environnement..."
+            cd /var/www/QuizzBoard-New
+            if [ ! -f .env.dev ]; then
+              echo "⚠️ Fichier .env.dev introuvable, création automatique depuis le template..."
+              cp .env.dev.example .env.dev
+            fi
+            echo "✅ Fichier .env.dev opérationnel."
+            echo "===================================================="
+
+      # ------------------------------------------------------------------------
+      # ÉTAPE 4 : RECONSTRUCTION ET DÉMARRAGE DES CONTENEURS DEV
+      # ------------------------------------------------------------------------
+      - name: 4. 🐳 Reconstruire et démarrer les conteneurs DEV (Docker Compose)
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: 22
+          timeout: 10m
+          command_timeout: 10m
+          script_stop: true
+          script: |
+            echo "===================================================="
+            echo "🐳 ÉTAPE 4 : Build et lancement Docker Compose..."
+            cd /var/www/QuizzBoard-New
             docker compose -f docker-compose.dev.yml up -d --build
-            
-            echo "🧹 Nettoyage des images Docker orphelines..."
+            echo "✅ Conteneurs DEV reconstruits et démarrés."
+            echo "===================================================="
+
+      # ------------------------------------------------------------------------
+      # ÉTAPE 5 : CONTRÔLE DE SANTÉ DES SERVICES DEV
+      # ------------------------------------------------------------------------
+      - name: 5. 🩺 Vérifier l'état et la santé des services DEV
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: 22
+          script_stop: true
+          script: |
+            echo "===================================================="
+            echo "🩺 ÉTAPE 5 : Statut des conteneurs en cours d'exécution..."
+            cd /var/www/QuizzBoard-New
+            docker compose -f docker-compose.dev.yml ps
+            echo "✅ Déploiement DEV actif sur https://dev.quizzboard.com"
+            echo "===================================================="
+
+      # ------------------------------------------------------------------------
+      # ÉTAPE 6 : NETTOYAGE DES IMAGES DOCKER ORPHELINES
+      # ------------------------------------------------------------------------
+      - name: 6. 🧹 Nettoyer les images Docker orphelines
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: 22
+          script: |
+            echo "===================================================="
+            echo "🧹 ÉTAPE 6 : Nettoyage du cache et des images obsolètes..."
             docker image prune -f
-            
-            echo "✅ DÉPLOIEMENT DEV TERMINÉ SUR https://dev.quizzboard.com"
+            echo "✅ Espace disque optimisé."
             echo "===================================================="

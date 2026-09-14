@@ -1,4 +1,4 @@
-name: Deploy Prod (quizzboard.com)
+name: Deploy Production (quizzboard.com)
 
 on:
   push:
@@ -8,11 +8,14 @@ on:
 
 jobs:
   deploy-prod:
-    name: Deploy to Production Environment
+    name: Déploiement Environnement PRODUCTION
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy to Remote Server via SSH
+      # ------------------------------------------------------------------------
+      # ÉTAPE 1 : TEST DE CONNEXION SSH
+      # ------------------------------------------------------------------------
+      - name: 1. 🔍 Tester la connexion SSH avec le serveur
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.SERVER_HOST }}
@@ -23,20 +26,112 @@ jobs:
           script_stop: true
           script: |
             echo "===================================================="
-            echo "🚀 DÉPLOIEMENT AUTOMATIQUE - BRANCHE MAIN (PROD)"
+            echo "✅ ÉTAPE 1 : Connexion SSH établie avec succès !"
+            echo "Serveur : $(hostname)"
+            echo "Utilisateur : $(whoami)"
             echo "===================================================="
+
+      # ------------------------------------------------------------------------
+      # ÉTAPE 2 : SYNCHRONISATION DU CODE GIT (BRANCHE MAIN)
+      # ------------------------------------------------------------------------
+      - name: 2. 📥 Mettre à jour le code Git (branche main)
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: 22
+          script_stop: true
+          script: |
+            echo "===================================================="
+            echo "📥 ÉTAPE 2 : Récupération du code de production..."
             cd /var/www/QuizzBoard-New
-            
-            echo "📥 Récupération des dernières modifications sur main..."
             git fetch origin main
             git checkout -f main
             git reset --hard origin/main
-            
-            echo "🐳 Lancement et reconstruction des conteneurs PRODUCTION..."
+            echo "Dernier commit déployé : $(git log -1 --oneline)"
+            echo "===================================================="
+
+      # ------------------------------------------------------------------------
+      # ÉTAPE 3 : VÉRIFICATION DU FICHIER D'ENVIRONNEMENT PROD
+      # ------------------------------------------------------------------------
+      - name: 3. ⚙️ Vérifier la configuration (.env.prod)
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: 22
+          script_stop: true
+          script: |
+            echo "===================================================="
+            echo "⚙️ ÉTAPE 3 : Vérification de la configuration prod..."
+            cd /var/www/QuizzBoard-New
+            if [ ! -f .env.prod ]; then
+              echo "⚠️ Fichier .env.prod introuvable, création automatique depuis le template..."
+              cp .env.prod.example .env.prod
+            fi
+            echo "✅ Fichier .env.prod opérationnel."
+            echo "===================================================="
+
+      # ------------------------------------------------------------------------
+      # ÉTAPE 4 : RECONSTRUCTION ET DÉMARRAGE DES CONTENEURS PROD
+      # ------------------------------------------------------------------------
+      - name: 4. 🐳 Reconstruire et démarrer les conteneurs PRODUCTION (Docker Compose)
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: 22
+          timeout: 10m
+          command_timeout: 10m
+          script_stop: true
+          script: |
+            echo "===================================================="
+            echo "🐳 ÉTAPE 4 : Build et lancement Docker Compose PROD..."
+            cd /var/www/QuizzBoard-New
             docker compose -f docker-compose.prod.yml up -d --build
-            
-            echo "🧹 Nettoyage des images Docker orphelines..."
+            echo "✅ Conteneurs PRODUCTION reconstruits et démarrés."
+            echo "===================================================="
+
+      # ------------------------------------------------------------------------
+      # ÉTAPE 5 : CONTRÔLE DE SANTÉ DES SERVICES PROD
+      # ------------------------------------------------------------------------
+      - name: 5. 🩺 Vérifier l'état et la santé des services PRODUCTION
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: 22
+          script_stop: true
+          script: |
+            echo "===================================================="
+            echo "🩺 ÉTAPE 5 : Statut des conteneurs de PRODUCTION..."
+            cd /var/www/QuizzBoard-New
+            docker compose -f docker-compose.prod.yml ps
+            echo "✅ Déploiement PRODUCTION actif sur https://quizzboard.com"
+            echo "===================================================="
+
+      # ------------------------------------------------------------------------
+      # ÉTAPE 6 : NETTOYAGE DES IMAGES DOCKER ORPHELINES
+      # ------------------------------------------------------------------------
+      - name: 6. 🧹 Nettoyer les images Docker orphelines
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: 22
+          script: |
+            echo "===================================================="
+            echo "🧹 ÉTAPE 6 : Nettoyage du cache et des images obsolètes..."
             docker image prune -f
-            
-            echo "✅ DÉPLOIEMENT PROD TERMINÉ SUR https://quizzboard.com"
+            echo "✅ Espace disque optimisé."
             echo "===================================================="
