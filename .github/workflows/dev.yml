@@ -94,7 +94,7 @@ jobs:
             echo "===================================================="
             echo "🐳 ÉTAPE 4 : Build et lancement Docker Compose..."
             cd /var/www/QuizzBoard-New
-            docker compose --env-file .env.dev -f docker-compose.dev.yml up -d --build
+            docker compose -f docker-compose.dev.yml up -d --build
             echo "✅ Conteneurs DEV reconstruits et démarrés."
             echo "===================================================="
 
@@ -114,7 +114,10 @@ jobs:
             echo "===================================================="
             echo "🩺 ÉTAPE 5 : Statut des conteneurs en cours d'exécution..."
             cd /var/www/QuizzBoard-New
+            sleep 10
             docker compose -f docker-compose.dev.yml ps
+            echo "--- Derniers logs backend-dev ---"
+            docker compose -f docker-compose.dev.yml logs --tail=40 backend-dev
             echo "✅ Déploiement DEV actif sur https://dev.quizzboard.com"
             echo "===================================================="
 
