@@ -94,7 +94,7 @@ jobs:
             echo "===================================================="
             echo "🐳 ÉTAPE 4 : Build et lancement Docker Compose..."
             cd /var/www/QuizzBoard-New
-            docker compose -f docker-compose.dev.yml up -d --build
+            docker compose --env-file .env.dev -f docker-compose.dev.yml up -d --build
             echo "✅ Conteneurs DEV reconstruits et démarrés."
             echo "===================================================="
 

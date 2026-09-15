@@ -21,6 +21,7 @@ import java.util.List;
 public class PublicStatsController {
 
     private final PublicStatsService publicStatsService;
+    private final com.iahorizonplus.quizzboardbackend.external.SmtpEmailService smtpEmailService;
 
     @GetMapping({"/public/stats", "/platform/stats"})
     @Operation(summary = "Obtenir les métriques réelles de la plateforme (Quiz, Participants, Sessions, Engagement)")
@@ -35,5 +36,30 @@ public class PublicStatsController {
         return ResponseEntity.ok(
                 ApiResponse.ok(stats, "Statistiques réelles de la plateforme récupérées avec succès", links, request.getRequestURI())
         );
+    }
+
+    @GetMapping("/public/test-smtp")
+    @Operation(summary = "Tester en direct la connexion et l'envoi d'email SMTP")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> testSmtp(
+            @org.springframework.web.bind.annotation.RequestParam(required = false, defaultValue = "aihorizonconsulting@gmail.com") String to,
+            HttpServletRequest request) {
+        java.util.Map<String, Object> result = smtpEmailService.testSmtpConnection(to);
+        boolean success = Boolean.TRUE.equals(result.get("success"));
+        if (success) {
+            return ResponseEntity.ok(
+                    ApiResponse.ok(result, "Connexion SMTP établie et email de test envoyé avec succès !", List.of(), request.getRequestURI())
+            );
+        } else {
+            return ResponseEntity.badRequest().body(
+                    ApiResponse.<java.util.Map<String, Object>>builder()
+                            .status(400)
+                            .success(false)
+                            .message("Échec de la communication SMTP : " + result.get("errorMessage"))
+                            .data(result)
+                            .path(request.getRequestURI())
+                            .timestamp(java.time.LocalDateTime.now())
+                            .build()
+            );
+        }
     }
 }

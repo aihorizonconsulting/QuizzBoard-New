@@ -10,12 +10,24 @@ import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.util.HashMap;
+import java.util.Map;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class SmtpEmailService {
 
     private final JavaMailSender mailSender;
+
+    @Value("${spring.mail.host:smtp.gmail.com}")
+    private String smtpHost;
+
+    @Value("${spring.mail.port:587}")
+    private int smtpPort;
+
+    @Value("${spring.mail.username:}")
+    private String smtpUsername;
 
     @Value("${app.mail.from:QuizzBoard Support <no-reply@quizzboard.com>}")
     private String fromEmail;
@@ -635,5 +647,58 @@ public class SmtpEmailService {
         } catch (Exception e) {
             log.warn("Erreur envoi email paiement réussi : {}", e.getMessage());
         }
+    }
+
+    /**
+     * Test synchrone de connexion et d'envoi SMTP (Diagnostic live)
+     */
+    public Map<String, Object> testSmtpConnection(String toEmail) {
+        Map<String, Object> report = new HashMap<>();
+        report.put("smtpHost", smtpHost);
+        report.put("smtpPort", smtpPort);
+        report.put("smtpUsernameConfigured", smtpUsername != null && !smtpUsername.isBlank() ? smtpUsername : "NON_DEFINI");
+        report.put("fromEmail", fromEmail);
+        report.put("recipient", toEmail);
+
+        try {
+            log.info("Lancement test SMTP vers {} via {}:{} avec compte {}", toEmail, smtpHost, smtpPort, smtpUsername);
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(fromEmail);
+            helper.setTo(toEmail);
+            helper.setSubject("Test SMTP QuizzBoard Réussi ! 🚀");
+            helper.setText("""
+                <!DOCTYPE html>
+                <html>
+                <body style="font-family: Arial, sans-serif; background-color: #F8FAFC; padding: 30px;">
+                    <div style="max-width: 550px; margin: auto; background: white; padding: 25px; border-radius: 10px; border: 1px solid #E2E8F0;">
+                        <h2 style="color: #16A34A; margin-top: 0;">Connexion SMTP Opérationnelle ! ✅</h2>
+                        <p style="color: #334155; font-size: 14px; line-height: 1.6;">
+                            Ce message confirme que votre serveur QuizzBoard déployé sous Docker peut communiquer directement avec le serveur SMTP <strong>%s:%d</strong> avec le compte <strong>%s</strong>.
+                        </p>
+                        <hr style="border: none; border-top: 1px solid #E2E8F0; margin: 20px 0;">
+                        <p style="color: #64748B; font-size: 12px; margin-bottom: 0;">
+                            QuizzBoard • Diagnostic d'Infrastructure Email
+                        </p>
+                    </div>
+                </body>
+                </html>
+            """.formatted(smtpHost, smtpPort, smtpUsername), true);
+
+            mailSender.send(message);
+            report.put("success", true);
+            report.put("status", "Email envoyé avec succès et délivré au serveur SMTP");
+            log.info("Test SMTP réussi avec succès vers {}", toEmail);
+        } catch (Exception e) {
+            report.put("success", false);
+            report.put("errorType", e.getClass().getName());
+            report.put("errorMessage", e.getMessage());
+            if (e.getCause() != null) {
+                report.put("causeMessage", e.getCause().getMessage());
+            }
+            log.error("Échec du test SMTP vers {} : {}", toEmail, e.getMessage(), e);
+        }
+
+        return report;
     }
 }
