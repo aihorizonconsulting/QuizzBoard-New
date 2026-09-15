@@ -62,4 +62,30 @@ public class PublicStatsController {
             );
         }
     }
+
+    @GetMapping("/public/test-quiz-email")
+    @Operation(summary = "Tester en direct l'envoi de l'email de résultat de quiz")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> testQuizEmail(
+            @org.springframework.web.bind.annotation.RequestParam(required = false, defaultValue = "aihorizonconsulting@gmail.com") String to,
+            HttpServletRequest request) {
+        java.util.Map<String, Object> result = smtpEmailService.testQuizCompletedEmailDirect(to);
+        boolean success = Boolean.TRUE.equals(result.get("success"));
+        if (success) {
+            return ResponseEntity.ok(
+                    ApiResponse.ok(result, "Email de résultat de quiz envoyé avec succès !", List.of(), request.getRequestURI())
+            );
+        } else {
+            return ResponseEntity.badRequest().body(
+                    ApiResponse.<java.util.Map<String, Object>>builder()
+                            .status(400)
+                            .success(false)
+                            .message("Échec de l'envoi d'email de quiz : " + result.get("errorMessage"))
+                            .data(result)
+                            .path(request.getRequestURI())
+                            .timestamp(java.time.LocalDateTime.now())
+                            .build()
+            );
+        }
+    }
 }
+

@@ -111,4 +111,21 @@ public class ParticipationController {
                 ApiResponse.ok(list, "Historique de vos participations récupéré avec succès.", links, request.getRequestURI())
         );
     }
+
+    @PostMapping("/{id}/send-email")
+    @Operation(summary = "Envoyer ou renvoyer le rapport de résultats et rang par email pour une participation")
+    public ResponseEntity<ApiResponse<Boolean>> sendParticipationEmail(
+            @PathVariable String id,
+            @RequestParam String email,
+            HttpServletRequest request) {
+        boolean sent = participationService.sendParticipationEmail(id, email);
+        List<LinkDto> links = List.of(
+                LinkDto.of("self", request.getRequestURI(), "POST"),
+                LinkDto.of("participation", "/api/v1/participations/" + id, "GET")
+        );
+        return ResponseEntity.ok(
+                ApiResponse.ok(sent, "Rapport de résultats transmis avec succès à " + email, links, request.getRequestURI())
+        );
+    }
 }
+

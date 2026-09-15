@@ -132,20 +132,40 @@ import { IconComponent } from '../icon/icon.component';
               <div class="email-score-card animate-fade-in">
                 @if (emailSentSuccess) {
                   <div class="email-status-badge success">
-                    <app-icon name="check-circle" [size]="15" color="#16A34A"></app-icon>
-                    <span>Votre rapport complet avec score et rang {{ className ? 'au sein de la classe ' + className : 'au classement général' }} a été envoyé à <strong>{{ manualResultEmail || 'votre adresse email' }}</strong> ! 🎯</span>
+                    <app-icon name="check-circle" [size]="18" color="#16A34A"></app-icon>
+                    <div>
+                      <strong style="display: block; color: #15803D;">Rapport envoyé avec succès ! 🎯</strong>
+                      <span style="font-size: 12px; color: #166534;">
+                        Votre synthèse détaillée avec rang {{ className ? 'dans la classe ' + className : 'au classement général' }} a été transmise à <strong>{{ manualResultEmail }}</strong>.
+                      </span>
+                    </div>
                   </div>
                 } @else {
-                  <div class="email-send-form">
-                    <input 
-                      type="email" 
-                      [(ngModel)]="manualResultEmail" 
-                      [placeholder]="className ? 'Votre email pour recevoir vos résultats & rang de classe...' : 'Votre email pour recevoir vos résultats & rang...'" 
-                      class="email-inline-input">
-                    <button type="button" class="btn btn-sm btn-primary" (click)="sendReportToEmail()" [disabled]="!manualResultEmail.trim()">
-                      <app-icon name="mail" [size]="13" color="var(--color-navy)"></app-icon>
-                      <span>M'envoyer</span>
-                    </button>
+                  <div class="email-send-form-box">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                      <app-icon name="mail" [size]="16" color="var(--color-orange)"></app-icon>
+                      <strong style="font-size: 13px; color: var(--color-navy);">Recevoir mes résultats & rang par email ✉️</strong>
+                    </div>
+                    <div class="email-send-form">
+                      <input 
+                        type="email" 
+                        [(ngModel)]="manualResultEmail" 
+                        (keydown.enter)="sendReportToEmail()"
+                        [placeholder]="className ? 'Votre email pour vos résultats de classe...' : 'Votre adresse email...'" 
+                        class="email-inline-input"
+                        [disabled]="isSendingEmail">
+                      <button type="button" class="btn btn-sm btn-primary" (click)="sendReportToEmail()" [disabled]="!manualResultEmail.trim() || isSendingEmail">
+                        @if (isSendingEmail) {
+                          <span>Envoi...</span>
+                        } @else {
+                          <app-icon name="mail" [size]="13" color="var(--color-navy)"></app-icon>
+                          <span>M'envoyer</span>
+                        }
+                      </button>
+                    </div>
+                    @if (emailErrorMessage) {
+                      <div style="color: #DC2626; font-size: 11px; margin-top: 4px;">{{ emailErrorMessage }}</div>
+                    }
                   </div>
                 }
               </div>
@@ -561,6 +581,9 @@ export class QuizModalPlayerComponent implements OnInit, OnDestroy, OnChanges {
 
   manualResultEmail = '';
   emailSentSuccess = false;
+  isSendingEmail = false;
+  emailErrorMessage = '';
+  savedParticipationId: string | null = null;
 
   timeLeft = 20;
   private timerInterval: any = null;
@@ -613,29 +636,54 @@ export class QuizModalPlayerComponent implements OnInit, OnDestroy, OnChanges {
     this.closed.emit();
   }
 
-  sendReportToEmail() {
-    if (!this.manualResultEmail.trim() || !this.manualResultEmail.includes('@')) return;
-    const user = this.authService.currentUser();
-    const guest = this.playerModalService.guestParticipant();
-    const participantName = user ? `${user.prenom} ${user.nom}` : (guest?.nickname || 'Participant Invité');
-    const totalTimeSpent = this.recordedAnswers.reduce((acc, a) => acc + a.timeSpentSeconds, 0);
+  async sendReportToEmail() {
+    const email = this.manualResultEmail.trim();
+    if (!email || !email.includes('@')) return;
 
-    this.partService.saveParticipation({
-      quizId: this.quiz.id,
-      quizTitle: this.quiz.title,
-      classId: this.classId,
-      className: this.className,
-      participantName,
-      participantEmail: this.manualResultEmail.trim(),
-      score: this.totalScore,
-      maxScore: this.maxTotalScore,
-      percentage: this.scorePercentage,
-      timeTotalSeconds: totalTimeSpent || 60,
-      status: 'COMPLETED',
-      answers: this.recordedAnswers
-    });
-    this.emailSentSuccess = true;
+    this.isSendingEmail = true;
+    this.emailErrorMessage = '';
     this.cdr.markForCheck();
+
+    try {
+      if (this.savedParticipationId && !this.savedParticipationId.startsWith('part-')) {
+        const ok = await this.partService.sendResultEmail(this.savedParticipationId, email);
+        if (ok) {
+          this.emailSentSuccess = true;
+          this.cdr.markForCheck();
+          return;
+        }
+      }
+
+      const user = this.authService.currentUser();
+      const guest = this.playerModalService.guestParticipant();
+      const participantName = user ? `${user.prenom} ${user.nom}` : (guest?.nickname || 'Participant Invité');
+      const totalTimeSpent = this.recordedAnswers.reduce((acc, a) => acc + a.timeSpentSeconds, 0);
+
+      const saved = await this.partService.saveParticipationAsync({
+        quizId: this.quiz.id,
+        quizTitle: this.quiz.title,
+        classId: this.classId,
+        className: this.className,
+        participantName,
+        participantEmail: email,
+        score: this.totalScore,
+        maxScore: this.maxTotalScore,
+        percentage: this.scorePercentage,
+        timeTotalSeconds: totalTimeSpent || 60,
+        status: 'COMPLETED',
+        answers: this.recordedAnswers
+      });
+      if (saved && saved.id) {
+        this.savedParticipationId = saved.id;
+      }
+      this.emailSentSuccess = true;
+    } catch (err) {
+      console.error('Erreur envoi email résultat:', err);
+      this.emailErrorMessage = 'Impossible d\'envoyer l\'email pour le moment. Veuillez réessayer.';
+    } finally {
+      this.isSendingEmail = false;
+      this.cdr.markForCheck();
+    }
   }
 
   startQuestionTimer() {
@@ -736,7 +784,7 @@ export class QuizModalPlayerComponent implements OnInit, OnDestroy, OnChanges {
     this.cdr.markForCheck();
   }
 
-  finishQuiz() {
+  async finishQuiz() {
     this.isFinished = true;
     this.clearAllTimers();
     this.maxTotalScore = this.totalQuestions * 100;
@@ -753,7 +801,7 @@ export class QuizModalPlayerComponent implements OnInit, OnDestroy, OnChanges {
       this.manualResultEmail = participantEmail;
     }
 
-    this.partService.saveParticipation({
+    const saved = await this.partService.saveParticipationAsync({
       quizId: this.quiz.id,
       quizTitle: this.quiz.title,
       classId: this.classId,
@@ -767,6 +815,9 @@ export class QuizModalPlayerComponent implements OnInit, OnDestroy, OnChanges {
       status: 'COMPLETED',
       answers: this.recordedAnswers
     });
+    if (saved && saved.id) {
+      this.savedParticipationId = saved.id;
+    }
     this.cdr.markForCheck();
   }
 
@@ -776,7 +827,11 @@ export class QuizModalPlayerComponent implements OnInit, OnDestroy, OnChanges {
     this.recordedAnswers = [];
     this.isFinished = false;
     this.emailSentSuccess = false;
+    this.isSendingEmail = false;
+    this.emailErrorMessage = '';
+    this.savedParticipationId = null;
     this.startQuestionTimer();
     this.cdr.markForCheck();
   }
 }
+

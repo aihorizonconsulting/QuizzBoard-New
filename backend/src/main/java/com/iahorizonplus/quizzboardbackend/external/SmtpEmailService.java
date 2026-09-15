@@ -32,8 +32,21 @@ public class SmtpEmailService {
     @Value("${app.mail.from:QuizzBoard Support <no-reply@quizzboard.com>}")
     private String fromEmail;
 
-    @Value("${app.mail.reset-password-url:http://localhost:4200/reinitialisation-mot-de-passe?token=}")
+    @Value("${app.url:https://dev.quizzboard.com}")
+    private String appBaseUrl;
+
+    @Value("${app.mail.reset-password-url:https://dev.quizzboard.com/reinitialisation-mot-de-passe?token=}")
     private String resetPasswordBaseUrl;
+
+    private String resolveFromEmail() {
+        if (fromEmail != null && !fromEmail.isBlank() && !fromEmail.contains("no-reply@quizzboard.com")) {
+            return fromEmail;
+        }
+        if (smtpUsername != null && !smtpUsername.isBlank()) {
+            return "QuizzBoard <" + smtpUsername.trim() + ">";
+        }
+        return fromEmail;
+    }
 
     @Async
     public void sendPasswordResetEmail(String toEmail, String userName, String token) {
@@ -41,7 +54,7 @@ public class SmtpEmailService {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
-            helper.setFrom(fromEmail);
+            helper.setFrom(resolveFromEmail());
             helper.setTo(toEmail);
             helper.setSubject("QuizzBoard - Réinitialisation de votre mot de passe");
 
@@ -128,7 +141,7 @@ public class SmtpEmailService {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
-            helper.setFrom(fromEmail);
+            helper.setFrom(resolveFromEmail());
             helper.setTo(toEmail);
             helper.setSubject("Bienvenue sur QuizzBoard ! 🎉");
 
@@ -196,7 +209,7 @@ public class SmtpEmailService {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
-            helper.setFrom(fromEmail);
+            helper.setFrom(resolveFromEmail());
             helper.setTo(toEmail);
 
             boolean isClassQuiz = className != null && !className.isBlank();
@@ -238,11 +251,11 @@ public class SmtpEmailService {
                         <p style="color: #78350F; font-size: 13px; margin: 0 0 14px 0;">
                             Code de vérification : <strong>%s</strong>
                         </p>
-                        <a href="http://localhost:4200/app/learner/certificates" style="background-color: #0F172A; color: #FFFFFF; text-decoration: none; padding: 10px 22px; border-radius: 6px; font-weight: 700; font-size: 13px; display: inline-block;">
+                        <a href="%s/app/learner/certificates" style="background-color: #0F172A; color: #FFFFFF; text-decoration: none; padding: 10px 22px; border-radius: 6px; font-weight: 700; font-size: 13px; display: inline-block;">
                             Consulter mon certificat
                         </a>
                     </div>
-                """.formatted(certificateCode);
+                """.formatted(certificateCode, appBaseUrl);
             }
 
             String htmlContent = """
@@ -304,7 +317,7 @@ public class SmtpEmailService {
                                             <table width="100%%" border="0" cellspacing="0" cellpadding="0" style="margin-top: 28px;">
                                                 <tr>
                                                     <td align="center">
-                                                        <a href="http://localhost:4200/app/dashboard" style="background-color: #F97316; color: #FFFFFF; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">
+                                                        <a href="%s/app/dashboard" style="background-color: #F97316; color: #FFFFFF; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: 700; font-size: 14px; display: inline-block;">
                                                             Accéder à mon espace QuizzBoard
                                                         </a>
                                                     </td>
@@ -332,14 +345,15 @@ public class SmtpEmailService {
                     quizTitle, participantName,
                     percentage, score, maxScore,
                     rank, totalPlayers,
-                    certificateHtml
+                    certificateHtml,
+                    appBaseUrl
             );
 
             helper.setText(htmlContent, true);
             mailSender.send(message);
             log.info("Email de résultat de quiz envoyé avec succès à {} (Score: {}%, Rang: #{})", toEmail, percentage, rank);
         } catch (Exception e) {
-            log.warn("Notification de quiz par email non envoyée (erreur SMTP/réseau) : {}", e.getMessage());
+            log.error("Notification de quiz par email non envoyée à {} : {}", toEmail, e.getMessage(), e);
         }
     }
 
@@ -699,6 +713,28 @@ public class SmtpEmailService {
             log.error("Échec du test SMTP vers {} : {}", toEmail, e.getMessage(), e);
         }
 
+        return report;
+    }
+
+    /**
+     * Test direct synchrone de l'email de résultat de quiz
+     */
+    public Map<String, Object> testQuizCompletedEmailDirect(String toEmail) {
+        Map<String, Object> report = new HashMap<>();
+        report.put("smtpHost", smtpHost);
+        report.put("smtpPort", smtpPort);
+        report.put("fromUsed", resolveFromEmail());
+        report.put("recipient", toEmail);
+
+        try {
+            sendQuizCompletedEmail(toEmail, "Testeur QuizzBoard", "Quiz Démonstration IA & Certifications", 95.0, 190, 200, 1, 10, true, "QZ-DIAG-2026", null);
+            report.put("success", true);
+            report.put("status", "Email de résultat de quiz envoyé avec succès et délivré au serveur SMTP.");
+        } catch (Exception e) {
+            report.put("success", false);
+            report.put("errorMessage", e.getMessage());
+            log.error("Test direct d'email de quiz échoué pour {} : {}", toEmail, e.getMessage(), e);
+        }
         return report;
     }
 }

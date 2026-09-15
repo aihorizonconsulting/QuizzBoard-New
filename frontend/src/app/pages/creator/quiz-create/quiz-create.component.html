@@ -545,7 +545,7 @@
 
       <!-- QUESTIONS LIST -->
       <div class="questions-deck">
-        @for (q of questions; track q.id; let qIdx = $index) {
+        @for (q of questions; track q.id || qIdx; let qIdx = $index) {
           <div class="question-card card">
             <div class="q-header">
               <div class="q-meta-left">
@@ -578,7 +578,7 @@
 
             <!-- Choices Grid (Click directly to set correct answer) -->
             <div class="choices-grid">
-              @for (choice of q.choices; track choice.id; let cIdx = $index) {
+              @for (choice of q.choices; track choice.id || cIdx; let cIdx = $index) {
                 <div 
                   class="choice-item" 
                   [class.correct]="choice.isCorrect"
@@ -667,7 +667,7 @@
         <p class="course-desc">{{ crs.description }}</p>
 
         <div class="chapters-pills-row">
-          @for (ch of crs.chapters; track ch.id; let idx = $index) {
+          @for (ch of crs.chapters; track ch.id || idx; let idx = $index) {
             <button 
               type="button" 
               class="ch-pill-btn" 

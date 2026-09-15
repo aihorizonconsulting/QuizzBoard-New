@@ -22,6 +22,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -81,23 +82,24 @@ public class AiServiceImpl implements AiService {
 
             if (type == QuestionType.TRUE_FALSE) {
                 questionText = String.format("Dans le cadre de \"%s\", l'application des bonnes pratiques garantit-elle une performance optimale ?", request.prompt());
-                choices.add(Choice.builder().text("Vrai (Recommandé par les standards pédagogiques)").isCorrect(true).order(1).build());
-                choices.add(Choice.builder().text("Faux").isCorrect(false).order(2).build());
+                choices.add(Choice.builder().id(UUID.randomUUID().toString()).text("Vrai (Recommandé par les standards pédagogiques)").isCorrect(true).order(1).build());
+                choices.add(Choice.builder().id(UUID.randomUUID().toString()).text("Faux").isCorrect(false).order(2).build());
             } else if (type == QuestionType.MULTIPLE_CHOICE) {
                 questionText = String.format("Quels sont les piliers essentiels à maîtriser concernant \"%s\" ? (Sélection multiple)", request.prompt());
-                choices.add(Choice.builder().text("Pilier méthodologique et rigueur d'application").isCorrect(true).order(1).build());
-                choices.add(Choice.builder().text("Analyse continue des métriques et résultats").isCorrect(true).order(2).build());
-                choices.add(Choice.builder().text("Ignorer les étapes de validation préliminaires").isCorrect(false).order(3).build());
-                choices.add(Choice.builder().text("Adoption des standards de l'industrie").isCorrect(true).order(4).build());
+                choices.add(Choice.builder().id(UUID.randomUUID().toString()).text("Pilier méthodologique et rigueur d'application").isCorrect(true).order(1).build());
+                choices.add(Choice.builder().id(UUID.randomUUID().toString()).text("Analyse continue des métriques et résultats").isCorrect(true).order(2).build());
+                choices.add(Choice.builder().id(UUID.randomUUID().toString()).text("Ignorer les étapes de validation préliminaires").isCorrect(false).order(3).build());
+                choices.add(Choice.builder().id(UUID.randomUUID().toString()).text("Adoption des standards de l'industrie").isCorrect(true).order(4).build());
             } else {
                 questionText = String.format("Quel est le principe directeur fondamental régissant \"%s\" ?", request.prompt());
-                choices.add(Choice.builder().text("Option A : Fondement vérifié et conforme aux normes").isCorrect(true).order(1).build());
-                choices.add(Choice.builder().text("Option B : Approche heuristique incomplète").isCorrect(false).order(2).build());
-                choices.add(Choice.builder().text("Option C : Distracteur courant dans la littérature").isCorrect(false).order(3).build());
-                choices.add(Choice.builder().text("Option D : Hypothèse non validée").isCorrect(false).order(4).build());
+                choices.add(Choice.builder().id(UUID.randomUUID().toString()).text("Option A : Fondement vérifié et conforme aux normes").isCorrect(true).order(1).build());
+                choices.add(Choice.builder().id(UUID.randomUUID().toString()).text("Option B : Approche heuristique incomplète").isCorrect(false).order(2).build());
+                choices.add(Choice.builder().id(UUID.randomUUID().toString()).text("Option C : Distracteur courant dans la littérature").isCorrect(false).order(3).build());
+                choices.add(Choice.builder().id(UUID.randomUUID().toString()).text("Option D : Hypothèse non validée").isCorrect(false).order(4).build());
             }
 
             Question q = Question.builder()
+                    .id(UUID.randomUUID().toString())
                     .text(questionText)
                     .type(type)
                     .timeLimitSeconds(20)
@@ -245,6 +247,7 @@ public class AiServiceImpl implements AiService {
                             } catch (Exception ignored) {}
 
                             Question q = Question.builder()
+                                    .id(UUID.randomUUID().toString())
                                     .text(qNode.path("text").asText("Question sans titre"))
                                     .type(type)
                                     .timeLimitSeconds(qNode.path("timeLimitSeconds").asInt(20))
@@ -259,6 +262,7 @@ public class AiServiceImpl implements AiService {
                                 int choiceOrder = 1;
                                 for (JsonNode cNode : choicesArray) {
                                     Choice c = Choice.builder()
+                                            .id(UUID.randomUUID().toString())
                                             .text(cNode.path("text").asText())
                                             .isCorrect(cNode.path("isCorrect").asBoolean(false))
                                             .order(choiceOrder++)

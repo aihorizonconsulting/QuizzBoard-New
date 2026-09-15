@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, ViewChild, ElementRef } from '@angular/core';
+import { Component, OnInit, inject, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -31,6 +31,7 @@ export class QuizCreateComponent implements OnInit {
   private fileUploadService = inject(FileUploadService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
+  private cdr = inject(ChangeDetectorRef);
 
   @ViewChild('fileInput') fileInputRef!: ElementRef<HTMLInputElement>;
   @ViewChild('coverImageInput') coverImageInputRef!: ElementRef<HTMLInputElement>;
@@ -294,26 +295,41 @@ export class QuizCreateComponent implements OnInit {
         ? `${this.promptText} (Support de cours: ${this.attachedFile.name})` 
         : this.promptText;
 
-      setTimeout(() => {
-        this.courseService.generateCourseWithAi({
-          topic: fullPrompt,
-          chaptersCount: this.courseChaptersCount,
-          withChapterQuizzes: this.courseWithChapterQuizzes,
-          withFinalQuiz: this.courseWithFinalQuiz,
-          level: this.difficulty,
-          category: this.quizCategory,
-          targetClassId: this.selectedTargetClassId || undefined,
-          targetClassName: this.selectedTargetClassName || undefined,
-          hasCertificate: this.courseHasCertificate,
-          certificateTemplateType: this.courseCertificateTemplateType,
-          certificateCustomTemplateUrl: this.courseCertificateCustomTemplateUrl || undefined,
-          certificateMinimumScore: this.courseCertificateMinScore
-        }).then((createdCourse) => {
-          this.generatedCourse = createdCourse;
-          this.activeCourseChapterTab = 0;
-          this.thinkingProgress = 100;
+      setTimeout(async () => {
+        try {
+          const createdCourse = await this.courseService.generateCourseWithAi({
+            topic: fullPrompt,
+            chaptersCount: this.courseChaptersCount,
+            withChapterQuizzes: this.courseWithChapterQuizzes,
+            withFinalQuiz: this.courseWithFinalQuiz,
+            level: this.difficulty,
+            category: this.quizCategory,
+            targetClassId: this.selectedTargetClassId || undefined,
+            targetClassName: this.selectedTargetClassName || undefined,
+            hasCertificate: this.courseHasCertificate,
+            certificateTemplateType: this.courseCertificateTemplateType,
+            certificateCustomTemplateUrl: this.courseCertificateCustomTemplateUrl || undefined,
+            certificateMinimumScore: this.courseCertificateMinScore
+          });
+          if (createdCourse) {
+            if (createdCourse.chapters) {
+              createdCourse.chapters = createdCourse.chapters.map((ch, idx) => ({
+                ...ch,
+                id: ch.id || `gen-ch-${Date.now()}-${idx + 1}`,
+                order: ch.order || (idx + 1)
+              }));
+            }
+            this.generatedCourse = createdCourse;
+            this.activeCourseChapterTab = 0;
+            this.thinkingProgress = 100;
+          }
+        } catch (err) {
+          console.error('Erreur génération cours IA:', err);
+          this.fieldErrors['prompt'] = 'Une erreur est survenue lors de la génération du cours. Veuillez réessayer.';
+        } finally {
           this.isGenerating = false;
-        });
+          this.cdr.markForCheck();
+        }
       }, 1500);
 
     } else {
@@ -334,14 +350,34 @@ export class QuizCreateComponent implements OnInit {
         ? `${this.promptText} (Support de cours: ${this.attachedFile.name})` 
         : this.promptText;
 
-      setTimeout(() => {
-        this.quizService.generateQuizWithAiPrompt(fullPrompt, this.questionsCount).then((res) => {
-          this.questions = res.map((q, idx) => ({
-            ...q,
-            timeLimitSeconds: this.timePerQuestion,
-            points: 100,
-            order: idx + 1
-          }));
+      setTimeout(async () => {
+        try {
+          const res = await this.quizService.generateQuizWithAiPrompt(fullPrompt, this.questionsCount);
+          const rawQuestions = Array.isArray(res) ? res : [];
+          this.questions = rawQuestions.map((q, idx) => {
+            const qId = q.id || `ai-q-${Date.now()}-${idx + 1}`;
+            const choices = (q.choices || []).map((c: any, cIdx: number) => ({
+              ...c,
+              id: c.id || `c-ai-${Date.now()}-${idx + 1}-${cIdx + 1}`,
+              text: c.text || `Option ${cIdx + 1}`,
+              isCorrect: c.isCorrect === true || c.correct === true,
+              order: c.order || (cIdx + 1)
+            }));
+            if (choices.length > 0 && !choices.some(c => c.isCorrect)) {
+              choices[0].isCorrect = true;
+            }
+            return {
+              ...q,
+              id: qId,
+              text: q.text || `Question ${idx + 1}`,
+              type: q.type || 'SINGLE_CHOICE',
+              timeLimitSeconds: this.timePerQuestion || 20,
+              points: 100,
+              explanation: q.explanation || `Explication pédagogique pour la question ${idx + 1}.`,
+              order: idx + 1,
+              choices
+            };
+          });
 
           const words = this.promptText.split(' ').slice(0, 6).join(' ');
           this.quizTitle = `Quiz : ${words || 'Évaluation Interactive'}`;
@@ -350,11 +386,17 @@ export class QuizCreateComponent implements OnInit {
           }
 
           this.thinkingProgress = 100;
+        } catch (err) {
+          console.error('Erreur génération quiz IA:', err);
+          this.fieldErrors['prompt'] = 'Une erreur est survenue lors de la génération du quiz. Veuillez réessayer.';
+        } finally {
           this.isGenerating = false;
-        });
+          this.cdr.markForCheck();
+        }
       }, 1400);
     }
   }
+
 
   addExtraQuestions(count: number = 1) {
     const qty = Math.max(1, count || 1);

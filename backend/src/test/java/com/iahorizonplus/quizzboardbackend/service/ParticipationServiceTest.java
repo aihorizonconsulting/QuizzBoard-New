@@ -198,4 +198,41 @@ class ParticipationServiceTest {
                 eq("Terminale Scientifique")
         );
     }
+
+    @Test
+    @DisplayName("Envoi direct d'email pour une participation existante : mise à jour de l'email et envoi SMTP")
+    void sendParticipationEmail_Success() {
+        Participation p = Participation.builder()
+                .id("part-public-1")
+                .quizId("quiz-100")
+                .participantName("Joueur Public")
+                .score(90)
+                .maxScore(100)
+                .percentage(90.0)
+                .build();
+
+        when(participationRepository.findById("part-public-1")).thenReturn(Optional.of(p));
+        when(quizRepository.findById("quiz-100")).thenReturn(Optional.of(sampleQuiz));
+        when(participationRepository.save(any(Participation.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(participationRepository.findByQuizIdOrderByScoreDesc("quiz-100")).thenReturn(List.of(p));
+
+        boolean sent = participationService.sendParticipationEmail("part-public-1", "public.player@example.com");
+
+        assertThat(sent).isTrue();
+        assertThat(p.getParticipantEmail()).isEqualTo("public.player@example.com");
+        verify(smtpEmailService).sendQuizCompletedEmail(
+                eq("public.player@example.com"),
+                eq("Joueur Public"),
+                eq("Evaluation Spring Boot"),
+                eq(90.0),
+                eq(90),
+                eq(100),
+                eq(1),
+                eq(1),
+                eq(false),
+                isNull(),
+                isNull()
+        );
+    }
 }
+

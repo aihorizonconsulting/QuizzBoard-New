@@ -152,4 +152,66 @@ public class ParticipationServiceImpl implements ParticipationService {
         return participationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Participation non trouvée avec l'id: " + id));
     }
+
+    @Override
+    @Transactional
+    public boolean sendParticipationEmail(String participationId, String email) {
+        if (email == null || email.isBlank()) {
+            return false;
+        }
+        Participation participation = getParticipationById(participationId);
+        participation.setParticipantEmail(email.trim());
+        participationRepository.save(participation);
+
+        Quiz quiz = quizRepository.findById(participation.getQuizId()).orElse(null);
+        String quizTitle = quiz != null ? quiz.getTitle() : participation.getQuizTitle();
+
+        // Calcul précis du rang
+        int rank = 1;
+        int totalPlayers = 1;
+        try {
+            List<Participation> rankingList;
+            if (participation.getClassId() != null && !participation.getClassId().isBlank()) {
+                rankingList = participationRepository.findByQuizIdAndClassIdOrderByScoreDesc(participation.getQuizId(), participation.getClassId());
+            } else {
+                rankingList = participationRepository.findByQuizIdOrderByScoreDesc(participation.getQuizId());
+            }
+            totalPlayers = Math.max(1, rankingList.size());
+            for (int i = 0; i < rankingList.size(); i++) {
+                if (participation.getId() != null && participation.getId().equals(rankingList.get(i).getId())) {
+                    rank = i + 1;
+                    break;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Erreur calcul rang pour envoi email participation : {}", e.getMessage());
+        }
+
+        String certCode = null;
+        if (participation.getCertificateId() != null) {
+            try {
+                Certificate cert = certificateService.getCertificateById(participation.getCertificateId());
+                if (cert != null) {
+                    certCode = cert.getVerificationCode();
+                }
+            } catch (Exception ignored) {}
+        }
+
+        smtpEmailService.sendQuizCompletedEmail(
+                email.trim(),
+                participation.getParticipantName() != null ? participation.getParticipantName() : "Apprenant",
+                quizTitle,
+                participation.getPercentage(),
+                participation.getScore(),
+                participation.getMaxScore(),
+                rank,
+                totalPlayers,
+                participation.isCertificateEligible(),
+                certCode,
+                participation.getClassName()
+        );
+        log.info("Email de résultat de quiz déclenché avec succès pour la participation {} vers {}", participationId, email);
+        return true;
+    }
 }
+

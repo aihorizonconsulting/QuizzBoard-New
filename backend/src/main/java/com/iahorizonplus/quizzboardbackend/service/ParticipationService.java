@@ -10,4 +10,5 @@ public interface ParticipationService {
     List<Participation> getParticipationsByQuiz(String quizId);
     List<Participation> getParticipationsByUser(String userId);
     Participation getParticipationById(String id);
+    boolean sendParticipationEmail(String participationId, String email);
 }

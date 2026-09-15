@@ -1,6 +1,7 @@
 package com.iahorizonplus.quizzboardbackend.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -21,6 +22,7 @@ public class Choice {
     private String text;
 
     @Column(nullable = false)
+    @JsonProperty("isCorrect")
     private boolean isCorrect;
 
     @Column(name = "order_index")
@@ -30,4 +32,20 @@ public class Choice {
     @JoinColumn(name = "question_id")
     @JsonIgnore
     private Question question;
+
+    @JsonProperty("isCorrect")
+    public boolean isCorrect() {
+        return isCorrect;
+    }
+
+    @JsonProperty("isCorrect")
+    public void setCorrect(boolean isCorrect) {
+        this.isCorrect = isCorrect;
+    }
+
+    @JsonProperty("correct")
+    public void setCorrectLegacy(boolean correct) {
+        this.isCorrect = correct;
+    }
 }
+

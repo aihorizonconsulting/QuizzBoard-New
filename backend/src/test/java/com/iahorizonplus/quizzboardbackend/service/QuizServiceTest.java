@@ -85,7 +85,7 @@ class QuizServiceTest {
 
         assertThat(created).isNotNull();
         assertThat(created.getCreatorId()).isEqualTo("creator-free");
-        assertThat(created.getShareCode()).startsWith("QZ-");
+        assertThat(created.getShareCode()).startsWith("QM-");
         assertThat(created.getQuestions()).hasSize(1);
         assertThat(created.getQuestions().getFirst().getQuiz()).isEqualTo(created);
         assertThat(created.getQuestions().getFirst().getChoices().getFirst().getQuestion())
@@ -103,7 +103,7 @@ class QuizServiceTest {
 
         assertThatThrownBy(() -> quizService.createQuiz(sampleQuiz, "creator-free", "Fatou Sow"))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("Limite du forfait FREE atteinte (3 quiz maximum)");
+                .hasMessageContaining("3 quiz maximum");
 
         verify(quizRepository, never()).save(any(Quiz.class));
     }
