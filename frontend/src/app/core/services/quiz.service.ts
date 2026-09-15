@@ -22,10 +22,11 @@ export class QuizService {
   async loadBackendQuizzes(): Promise<void> {
     this.isLoading.set(true);
     try {
-      const serverQuizzes = await firstValueFrom(
-        this.http.get<any[]>(`${environment.apiUrl}/quizzes`)
+      const res = await firstValueFrom(
+        this.http.get<any>(`${environment.apiUrl}/quizzes`)
       );
-      this.quizzes.set(serverQuizzes || []);
+      const serverQuizzes = res?.data || res;
+      this.quizzes.set(Array.isArray(serverQuizzes) ? serverQuizzes : []);
     } catch {
       this.quizzes.set([]);
     } finally {
@@ -186,10 +187,21 @@ export class QuizService {
 
     this.quizzes.update(list => [newQuiz, ...list]);
 
-    this.http.post<any>(`${environment.apiUrl}/quizzes`, newQuiz).subscribe({
-      next: (saved) => {
+    const payload = {
+      ...quiz,
+      id: undefined,
+      questions: quiz.questions?.map(q => ({
+        ...q,
+        id: undefined,
+        choices: q.choices?.map(c => ({ ...c, id: undefined }))
+      }))
+    };
+
+    this.http.post<any>(`${environment.apiUrl}/quizzes`, payload).subscribe({
+      next: (res) => {
+        const saved = res?.data || res;
         if (saved && saved.id) {
-          this.quizzes.update(list => list.map(q => q.id === newQuiz.id ? { ...q, id: saved.id, shareCode: saved.shareCode } : q));
+          this.quizzes.update(list => list.map(q => q.id === newQuiz.id ? { ...saved } : q));
         }
       },
       error: (err) => console.warn('Sauvegarde quiz backend (fallback local actif):', err)
@@ -217,15 +229,16 @@ export class QuizService {
   // Real AI Quiz Generation via Spring Boot Backend with Local Fallback
   async generateQuizWithAiPrompt(prompt: string, count: number = 5): Promise<Question[]> {
     try {
-      const questions = await firstValueFrom(
-        this.http.post<Question[]>(`${environment.apiUrl}/ai/generate-quiz`, {
+      const resp = await firstValueFrom(
+        this.http.post<any>(`${environment.apiUrl}/ai/generate-quiz`, {
           prompt,
           count,
           difficulty: 'MEDIUM'
         })
       );
-      if (questions && questions.length > 0) {
-        return questions;
+      const list = resp?.data || resp;
+      if (Array.isArray(list) && list.length > 0) {
+        return list;
       }
     } catch (err) {
       console.warn('Appel AI backend échoué, bascule sur fallback local:', err);

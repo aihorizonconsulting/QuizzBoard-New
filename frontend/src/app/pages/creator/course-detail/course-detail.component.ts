@@ -76,6 +76,10 @@ export class CourseDetailComponent implements OnInit {
       const found = this.courseService.getCourseById(id);
       if (found) {
         this.course.set(found);
+      } else {
+        this.courseService.fetchCourseById(id).then(c => {
+          if (c) this.course.set(c);
+        });
       }
     }
   }

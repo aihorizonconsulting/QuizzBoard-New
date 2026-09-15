@@ -81,6 +81,21 @@ public class QuizController {
             @Valid @RequestBody Quiz quiz,
             @AuthenticationPrincipal UserPrincipal currentUser,
             HttpServletRequest request) {
+        // Assainir les IDs générés côté client pour permettre à Hibernate UUID de générer des identifiants valides
+        quiz.setId(null);
+        if (quiz.getQuestions() != null) {
+            for (com.iahorizonplus.quizzboardbackend.entity.Question q : quiz.getQuestions()) {
+                q.setId(null);
+                q.setQuiz(quiz);
+                if (q.getChoices() != null) {
+                    for (com.iahorizonplus.quizzboardbackend.entity.Choice c : q.getChoices()) {
+                        c.setId(null);
+                        c.setQuestion(q);
+                    }
+                }
+            }
+        }
+
         String creatorId = currentUser != null ? currentUser.getId() : "anonymous";
         String creatorName = currentUser != null ? currentUser.getName() : "Anonyme";
         Quiz created = quizService.createQuiz(quiz, creatorId, creatorName);

@@ -47,14 +47,26 @@ public class CourseServiceImpl implements CourseService {
     @Override
     @Transactional
     public Course createCourse(Course course, String creatorId, String creatorName) {
-        User creator = userRepository.findById(creatorId)
-                .orElseThrow(() -> new ResourceNotFoundException("Créateur non trouvé"));
+        User creator = null;
+        if (creatorId != null) {
+            creator = userRepository.findById(creatorId)
+                    .or(() -> userRepository.findByEmail(creatorId))
+                    .orElse(null);
+        }
 
-        course.setCreatorId(creatorId);
-        course.setCreatorName(creatorName != null ? creatorName : creator.getName());
+        if (creator != null) {
+            course.setCreatorId(creator.getId());
+            course.setCreatorName(creatorName != null ? creatorName : creator.getName());
+        } else {
+            course.setCreatorId(creatorId != null ? creatorId : "system");
+            course.setCreatorName(creatorName != null ? creatorName : "Formateur");
+        }
+
+        course.setId(null);
 
         if (course.getChapters() != null) {
             for (CourseChapter chap : course.getChapters()) {
+                chap.setId(null);
                 chap.setCourse(course);
             }
         }

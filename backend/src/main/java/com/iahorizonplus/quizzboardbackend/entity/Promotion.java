@@ -26,6 +26,7 @@ public class Promotion {
     @Column(nullable = false, length = 150)
     private String name; // ex: "Promotion 7"
 
+    @Column(name = "promo_year")
     private String year; // ex: "2025 - 2026"
     private Integer startYear;
     private Integer endYear;

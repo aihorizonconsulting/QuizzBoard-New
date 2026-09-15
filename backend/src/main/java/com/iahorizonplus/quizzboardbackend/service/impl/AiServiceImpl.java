@@ -50,10 +50,10 @@ public class AiServiceImpl implements AiService {
                 LocalDateTime startOfMonth = LocalDateTime.now().withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0).withNano(0);
                 long monthlyUsage = courseRepository.countByCreatorIdAndCreatedAtAfter(creator.getId(), startOfMonth);
 
-                if (creator.getSubscriptionTier() == SubscriptionTier.FREE && monthlyUsage >= 5) {
+                if (creator.getRole() != UserRole.ADMIN && creator.getSubscriptionTier() == SubscriptionTier.FREE && monthlyUsage >= 5) {
                     throw new BadRequestException("quota",
                             "Quota mensuel IA épuisé pour le forfait DÉCOUVERTE (5 générations/mois). Passez au forfait STARTER pour 100 générations par mois !");
-                } else if (creator.getSubscriptionTier() == SubscriptionTier.STARTER && monthlyUsage >= 100) {
+                } else if (creator.getRole() != UserRole.ADMIN && creator.getSubscriptionTier() == SubscriptionTier.STARTER && monthlyUsage >= 100) {
                     throw new BadRequestException("quota",
                             "Quota mensuel IA épuisé pour le forfait STARTER (100 générations/mois). Contactez-nous pour un accès PREMIUM.");
                 }

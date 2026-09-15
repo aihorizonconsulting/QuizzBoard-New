@@ -55,30 +55,44 @@ public class QuizServiceImpl implements QuizService {
     @Override
     @Transactional
     public Quiz createQuiz(Quiz quiz, String creatorId, String creatorName) {
-        // Enforce FREE vs STARTER limit
-        User creator = userRepository.findById(creatorId)
-                .orElseThrow(() -> new ResourceNotFoundException("Créateur non trouvé"));
-
-        if (creator.getSubscriptionTier() == SubscriptionTier.FREE) {
-            long existingCount = quizRepository.findByCreatorIdOrderByCreatedAtDesc(creatorId).size();
-            if (existingCount >= 3) {
-                throw new IllegalStateException("Limite du forfait FREE atteinte (3 quiz maximum). Passez au forfait STARTER pour des quiz illimités !");
-            }
+        // Recherche du créateur par ID ou par Email avec fallback
+        User creator = null;
+        if (creatorId != null) {
+            creator = userRepository.findById(creatorId)
+                    .or(() -> userRepository.findByEmail(creatorId))
+                    .orElse(null);
         }
 
-        quiz.setCreatorId(creatorId);
-        quiz.setCreatorName(creatorName != null ? creatorName : creator.getName());
+        if (creator != null) {
+            quiz.setCreatorId(creator.getId());
+            quiz.setCreatorName(creatorName != null ? creatorName : creator.getName());
+
+            // Enforce FREE limit (3 max), les ADMINS et abonnements payants sont exemptés
+            if (creator.getRole() != UserRole.ADMIN && creator.getSubscriptionTier() == SubscriptionTier.FREE) {
+                long existingCount = quizRepository.findByCreatorIdOrderByCreatedAtDesc(creator.getId()).size();
+                if (existingCount >= 3) {
+                    throw new IllegalStateException("Limite du forfait DÉCOUVERTE atteinte (3 quiz maximum). Passez au forfait STARTER pour des quiz illimités !");
+                }
+            }
+        } else {
+            quiz.setCreatorId(creatorId != null ? creatorId : "system");
+            quiz.setCreatorName(creatorName != null ? creatorName : "Formateur");
+        }
+
+        quiz.setId(null);
 
         if (quiz.getShareCode() == null || quiz.getShareCode().trim().isEmpty()) {
-            quiz.setShareCode("QZ-" + (1000 + new SecureRandom().nextInt(9000)));
+            quiz.setShareCode("QM-" + (1000 + new SecureRandom().nextInt(9000)));
         }
 
         // Link questions and choices
         if (quiz.getQuestions() != null) {
             for (Question q : quiz.getQuestions()) {
+                q.setId(null);
                 q.setQuiz(quiz);
                 if (q.getChoices() != null) {
                     for (Choice c : q.getChoices()) {
+                        c.setId(null);
                         c.setQuestion(q);
                     }
                 }

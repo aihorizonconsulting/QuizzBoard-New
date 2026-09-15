@@ -64,6 +64,15 @@ public class CourseController {
             @Valid @RequestBody Course course,
             @AuthenticationPrincipal UserPrincipal currentUser,
             HttpServletRequest request) {
+        // Assainir les IDs générés côté client
+        course.setId(null);
+        if (course.getChapters() != null) {
+            for (com.iahorizonplus.quizzboardbackend.entity.CourseChapter ch : course.getChapters()) {
+                ch.setId(null);
+                ch.setCourse(course);
+            }
+        }
+
         String creatorId = currentUser != null ? currentUser.getId() : "anonymous";
         String creatorName = currentUser != null ? currentUser.getName() : "Anonyme";
         Course created = courseService.createCourse(course, creatorId, creatorName);
