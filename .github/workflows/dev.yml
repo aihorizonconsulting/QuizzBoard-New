@@ -18,11 +18,11 @@ jobs:
       - name: 1. 🔍 Tester la connexion SSH avec le serveur
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.SERVER_HOST }}
+          host: dev.quizzboard.com
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           password: ${{ secrets.SERVER_PASSWORD }}
-          port: 22
+          port: ${{ secrets.DEV_SERVER_PORT || 22 }}
           script_stop: true
           script: |
             echo "===================================================="
@@ -37,11 +37,11 @@ jobs:
       - name: 2. 📥 Mettre à jour le code Git (branche develop)
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.SERVER_HOST }}
+          host: dev.quizzboard.com
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           password: ${{ secrets.SERVER_PASSWORD }}
-          port: 22
+          port: ${{ secrets.DEV_SERVER_PORT || 22 }}
           script_stop: true
           script: |
             echo "===================================================="
@@ -59,11 +59,11 @@ jobs:
       - name: 3. ⚙️ Vérifier la configuration (.env.dev)
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.SERVER_HOST }}
+          host: dev.quizzboard.com
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           password: ${{ secrets.SERVER_PASSWORD }}
-          port: 22
+          port: ${{ secrets.DEV_SERVER_PORT || 22 }}
           script_stop: true
           script: |
             echo "===================================================="
@@ -82,11 +82,11 @@ jobs:
       - name: 4. 🐳 Reconstruire et démarrer les conteneurs DEV (Docker Compose)
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.SERVER_HOST }}
+          host: dev.quizzboard.com
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           password: ${{ secrets.SERVER_PASSWORD }}
-          port: 22
+          port: ${{ secrets.DEV_SERVER_PORT || 22 }}
           timeout: 10m
           command_timeout: 10m
           script_stop: true
@@ -104,11 +104,11 @@ jobs:
       - name: 5. 🩺 Vérifier l'état et la santé des services DEV
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.SERVER_HOST }}
+          host: dev.quizzboard.com
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           password: ${{ secrets.SERVER_PASSWORD }}
-          port: 22
+          port: ${{ secrets.DEV_SERVER_PORT || 22 }}
           script_stop: true
           script: |
             echo "===================================================="
@@ -127,11 +127,11 @@ jobs:
       - name: 6. 🧹 Nettoyer les images Docker orphelines
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.SERVER_HOST }}
+          host: dev.quizzboard.com
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           password: ${{ secrets.SERVER_PASSWORD }}
-          port: 22
+          port: ${{ secrets.DEV_SERVER_PORT || 22 }}
           script: |
             echo "===================================================="
             echo "🧹 ÉTAPE 6 : Nettoyage du cache et des images obsolètes..."
