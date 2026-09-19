@@ -29,6 +29,12 @@ public class SmtpEmailService {
     @Value("${spring.mail.username:}")
     private String smtpUsername;
 
+    @Value("${spring.mail.password:}")
+    private String smtpPassword;
+
+    @Value("${app.mail.enabled:true}")
+    private boolean mailEnabled;
+
     @Value("${app.mail.from:QuizzBoard Support <no-reply@quizzboard.com>}")
     private String fromEmail;
 
@@ -46,6 +52,14 @@ public class SmtpEmailService {
             return "QuizzBoard <" + smtpUsername.trim() + ">";
         }
         return fromEmail;
+    }
+
+    public boolean isDeliveryEnabled() {
+        return mailEnabled
+                && smtpUsername != null
+                && !smtpUsername.isBlank()
+                && smtpPassword != null
+                && !smtpPassword.isBlank();
     }
 
     @Async

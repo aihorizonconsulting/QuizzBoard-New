@@ -1,15 +1,16 @@
-import { Component, inject, signal, computed } from '@angular/core';
+import { Component, inject, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AdminService } from '../../../core/services/admin.service';
 import { ConfirmDialogService } from '../../../core/services/confirm-dialog.service';
 import { User, UserRole, SubscriptionTier } from '../../../core/models/user.model';
 import { IconComponent } from '../../../shared/components/icon/icon.component';
+import { PaginationComponent } from '../../../shared/components/pagination/pagination.component';
 
 @Component({
   selector: 'app-admin-users',
   standalone: true,
-  imports: [CommonModule, FormsModule, IconComponent],
+  imports: [CommonModule, FormsModule, IconComponent, PaginationComponent],
   template: `
     <div class="admin-users-page animate-fade-in">
       <!-- HEADER -->
@@ -56,10 +57,11 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
           <input 
             type="text" 
             [(ngModel)]="searchQuery" 
+            (ngModelChange)="resetPage()"
             placeholder="Rechercher par nom, prénom, email ou université..." 
             class="search-input">
           @if (searchQuery) {
-            <button type="button" class="btn-clear" (click)="searchQuery = ''">✕</button>
+            <button type="button" class="btn-clear" (click)="searchQuery = ''; resetPage()">✕</button>
           }
         </div>
 
@@ -72,28 +74,28 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
                 type="button" 
                 class="filter-pill" 
                 [class.active]="selectedRole === 'ALL'" 
-                (click)="selectedRole = 'ALL'">
+                (click)="setRoleFilter('ALL')">
                 Tous
               </button>
               <button 
                 type="button" 
                 class="filter-pill" 
                 [class.active]="selectedRole === 'CREATOR'" 
-                (click)="selectedRole = 'CREATOR'">
+                (click)="setRoleFilter('CREATOR')">
                 Formateurs
               </button>
               <button 
                 type="button" 
                 class="filter-pill" 
                 [class.active]="selectedRole === 'LEARNER'" 
-                (click)="selectedRole = 'LEARNER'">
+                (click)="setRoleFilter('LEARNER')">
                 Apprenants
               </button>
               <button 
                 type="button" 
                 class="filter-pill" 
                 [class.active]="selectedRole === 'ADMIN'" 
-                (click)="selectedRole = 'ADMIN'">
+                (click)="setRoleFilter('ADMIN')">
                 Admins
               </button>
             </div>
@@ -107,21 +109,21 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
                 type="button" 
                 class="filter-pill" 
                 [class.active]="selectedTier === 'ALL'" 
-                (click)="selectedTier = 'ALL'">
+                (click)="setTierFilter('ALL')">
                 Tous
               </button>
               <button 
                 type="button" 
                 class="filter-pill" 
                 [class.active]="selectedTier === 'STARTER'" 
-                (click)="selectedTier = 'STARTER'">
+                (click)="setTierFilter('STARTER')">
                 STARTER
               </button>
               <button 
                 type="button" 
                 class="filter-pill" 
                 [class.active]="selectedTier === 'FREE'" 
-                (click)="selectedTier = 'FREE'">
+                (click)="setTierFilter('FREE')">
                 FREE
               </button>
             </div>
@@ -145,7 +147,7 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
             </tr>
           </thead>
           <tbody>
-            @for (user of filteredUsers(); track user.id) {
+            @for (user of paginatedUsers(); track user.id) {
               <tr [class.is-suspended]="user.status === 'SUSPENDED'">
                 <td>
                   <div class="user-cell">
@@ -248,6 +250,13 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
           </tbody>
         </table>
       </div>
+
+      <app-pagination
+        [currentPage]="currentPage"
+        [pageSize]="pageSize"
+        [totalItems]="filteredUsers().length"
+        (pageChange)="currentPage = $event">
+      </app-pagination>
 
       <!-- MODAL CRÉATION UTILISATEUR -->
       @if (showCreateModal) {
@@ -789,6 +798,8 @@ export class AdminUsersComponent {
   searchQuery = '';
   selectedRole = 'ALL';
   selectedTier = 'ALL';
+  currentPage = 1;
+  pageSize = 10;
 
   showCreateModal = false;
   newUserData: Partial<User> = {
@@ -802,7 +813,7 @@ export class AdminUsersComponent {
   learnersCount = computed(() => this.users().filter(u => u.role === 'LEARNER').length);
   suspendedCount = computed(() => this.users().filter(u => u.status === 'SUSPENDED').length);
 
-  filteredUsers = computed(() => {
+  filteredUsers(): User[] {
     return this.users().filter(user => {
       // Search
       const q = this.searchQuery.toLowerCase().trim();
@@ -820,7 +831,31 @@ export class AdminUsersComponent {
 
       return matchSearch && matchRole && matchTier;
     });
-  });
+  }
+
+  paginatedUsers(): User[] {
+    const list = this.filteredUsers();
+    const maxPage = Math.max(1, Math.ceil(list.length / this.pageSize));
+    if (this.currentPage > maxPage) {
+      this.currentPage = maxPage;
+    }
+    const start = (this.currentPage - 1) * this.pageSize;
+    return list.slice(start, start + this.pageSize);
+  }
+
+  resetPage(): void {
+    this.currentPage = 1;
+  }
+
+  setRoleFilter(role: string): void {
+    this.selectedRole = role;
+    this.resetPage();
+  }
+
+  setTierFilter(tier: string): void {
+    this.selectedTier = tier;
+    this.resetPage();
+  }
 
   async confirmSwitchTier(user: User) {
     const nextTier: SubscriptionTier = user.subscriptionTier === 'STARTER' ? 'FREE' : 'STARTER';

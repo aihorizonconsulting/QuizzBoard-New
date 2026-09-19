@@ -87,9 +87,9 @@ class QuizServiceTest {
         assertThat(created.getCreatorId()).isEqualTo("creator-free");
         assertThat(created.getShareCode()).startsWith("QM-");
         assertThat(created.getQuestions()).hasSize(1);
-        assertThat(created.getQuestions().getFirst().getQuiz()).isEqualTo(created);
-        assertThat(created.getQuestions().getFirst().getChoices().getFirst().getQuestion())
-                .isEqualTo(created.getQuestions().getFirst());
+        assertThat(created.getQuestions().get(0).getQuiz()).isEqualTo(created);
+        assertThat(created.getQuestions().get(0).getChoices().get(0).getQuestion())
+                .isEqualTo(created.getQuestions().get(0));
 
         verify(quizRepository).save(sampleQuiz);
     }

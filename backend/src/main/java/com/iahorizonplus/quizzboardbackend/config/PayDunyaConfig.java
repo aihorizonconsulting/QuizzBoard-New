@@ -14,7 +14,7 @@ public class PayDunyaConfig {
     private String publicKey = "";
     private String token = "";
     private String mode = "sandbox"; // "sandbox" or "live"
-    private String cancelUrl = "http://localhost:4200/app/pricing?status=cancelled";
+    private String cancelUrl = "http://localhost:4200/tarifs?status=cancelled";
     private String returnUrl = "http://localhost:4200/app/subscription/callback";
     private String callbackUrl = "http://localhost:8080/api/v1/payments/paydunya/ipn";
 

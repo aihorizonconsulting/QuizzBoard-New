@@ -58,7 +58,7 @@ class NotificationServiceTest {
         List<Notification> result = notificationService.getUserNotifications("usr-1");
 
         assertThat(result).hasSize(2);
-        assertThat(result.getFirst().getTitle()).isEqualTo("Nouveau Quiz");
+        assertThat(result.get(0).getTitle()).isEqualTo("Nouveau Quiz");
     }
 
     @Test

@@ -12,6 +12,7 @@ import { Course } from '../../../core/models/course.model';
 import { Certificate } from '../../../core/models/participation.model';
 import { ForumTopic } from '../../../core/models/community.model';
 import { IconComponent } from '../../../shared/components/icon/icon.component';
+import { PaginationComponent } from '../../../shared/components/pagination/pagination.component';
 
 interface AdminTopicItem extends ForumTopic {
   communityName: string;
@@ -21,7 +22,7 @@ interface AdminTopicItem extends ForumTopic {
 @Component({
   selector: 'app-admin-content',
   standalone: true,
-  imports: [CommonModule, FormsModule, IconComponent],
+  imports: [CommonModule, FormsModule, IconComponent, PaginationComponent],
   template: `
     <div class="admin-content-page animate-fade-in">
       <!-- HEADER -->
@@ -46,7 +47,7 @@ interface AdminTopicItem extends ForumTopic {
             type="button" 
             class="tab-btn" 
             [class.active]="activeTab === 'QUIZZES'" 
-            (click)="activeTab = 'QUIZZES'">
+            (click)="setActiveTab('QUIZZES')">
             <app-icon name="file-text" [size]="14"></app-icon>
             <span>Quiz ({{ quizzes().length }})</span>
           </button>
@@ -55,7 +56,7 @@ interface AdminTopicItem extends ForumTopic {
             type="button" 
             class="tab-btn" 
             [class.active]="activeTab === 'COURSES'" 
-            (click)="activeTab = 'COURSES'">
+            (click)="setActiveTab('COURSES')">
             <app-icon name="book-open" [size]="14"></app-icon>
             <span>Cours ({{ courses().length }})</span>
           </button>
@@ -64,7 +65,7 @@ interface AdminTopicItem extends ForumTopic {
             type="button" 
             class="tab-btn" 
             [class.active]="activeTab === 'FORUMS_HUB'" 
-            (click)="activeTab = 'FORUMS_HUB'">
+            (click)="setActiveTab('FORUMS_HUB')">
             <app-icon name="message-square" [size]="14"></app-icon>
             <span>Hub & Forums ({{ allForumTopics().length }})</span>
           </button>
@@ -73,7 +74,7 @@ interface AdminTopicItem extends ForumTopic {
             type="button" 
             class="tab-btn" 
             [class.active]="activeTab === 'CERTIFICATES'" 
-            (click)="activeTab = 'CERTIFICATES'">
+            (click)="setActiveTab('CERTIFICATES')">
             <app-icon name="award" [size]="14"></app-icon>
             <span>Certificats ({{ certificates().length }})</span>
           </button>
@@ -87,10 +88,11 @@ interface AdminTopicItem extends ForumTopic {
           <input 
             type="text" 
             [(ngModel)]="searchQuery" 
+            (ngModelChange)="resetPage()"
             [placeholder]="getSearchPlaceholder()" 
             class="search-input">
           @if (searchQuery) {
-            <button type="button" class="btn-clear" (click)="searchQuery = ''">✕</button>
+            <button type="button" class="btn-clear" (click)="searchQuery = ''; resetPage()">✕</button>
           }
         </div>
 
@@ -99,26 +101,26 @@ interface AdminTopicItem extends ForumTopic {
             <div class="filter-group">
               <span class="filter-lbl">Visibilité :</span>
               <div class="pill-group">
-                <button type="button" class="filter-pill" [class.active]="selectedVis === 'ALL'" (click)="selectedVis = 'ALL'">Tous</button>
-                <button type="button" class="filter-pill" [class.active]="selectedVis === 'PUBLIC'" (click)="selectedVis = 'PUBLIC'">Publics</button>
-                <button type="button" class="filter-pill" [class.active]="selectedVis === 'PRIVATE'" (click)="selectedVis = 'PRIVATE'">Privés</button>
+                <button type="button" class="filter-pill" [class.active]="selectedVis === 'ALL'" (click)="setVisibilityFilter('ALL')">Tous</button>
+                <button type="button" class="filter-pill" [class.active]="selectedVis === 'PUBLIC'" (click)="setVisibilityFilter('PUBLIC')">Publics</button>
+                <button type="button" class="filter-pill" [class.active]="selectedVis === 'PRIVATE'" (click)="setVisibilityFilter('PRIVATE')">Privés</button>
               </div>
             </div>
           } @else if (activeTab === 'FORUMS_HUB') {
             <div class="filter-group">
               <span class="filter-lbl">Statut Modération :</span>
               <div class="pill-group">
-                <button type="button" class="filter-pill" [class.active]="forumFilter === 'ALL'" (click)="forumFilter = 'ALL'">Tous les sujets</button>
-                <button type="button" class="filter-pill" [class.active]="forumFilter === 'REPORTED'" (click)="forumFilter = 'REPORTED'">⚠️ Signalés (1)</button>
+                <button type="button" class="filter-pill" [class.active]="forumFilter === 'ALL'" (click)="setForumFilter('ALL')">Tous les sujets</button>
+                <button type="button" class="filter-pill" [class.active]="forumFilter === 'REPORTED'" (click)="setForumFilter('REPORTED')">⚠️ Signalés (1)</button>
               </div>
             </div>
           } @else if (activeTab === 'CERTIFICATES') {
             <div class="filter-group">
               <span class="filter-lbl">Validité :</span>
               <div class="pill-group">
-                <button type="button" class="filter-pill" [class.active]="certFilter === 'ALL'" (click)="certFilter = 'ALL'">Tous</button>
-                <button type="button" class="filter-pill" [class.active]="certFilter === 'VALID'" (click)="certFilter = 'VALID'">✅ Valides</button>
-                <button type="button" class="filter-pill" [class.active]="certFilter === 'REVOKED'" (click)="certFilter = 'REVOKED'">❌ Révoqués</button>
+                <button type="button" class="filter-pill" [class.active]="certFilter === 'ALL'" (click)="setCertificateFilter('ALL')">Tous</button>
+                <button type="button" class="filter-pill" [class.active]="certFilter === 'VALID'" (click)="setCertificateFilter('VALID')">✅ Valides</button>
+                <button type="button" class="filter-pill" [class.active]="certFilter === 'REVOKED'" (click)="setCertificateFilter('REVOKED')">❌ Révoqués</button>
               </div>
             </div>
           }
@@ -142,7 +144,7 @@ interface AdminTopicItem extends ForumTopic {
               </tr>
             </thead>
             <tbody>
-              @for (quiz of filteredQuizzes(); track quiz.id) {
+              @for (quiz of paginatedQuizzes(); track quiz.id) {
                 <tr>
                   <td>
                     <div class="quiz-title-cell">
@@ -218,6 +220,7 @@ interface AdminTopicItem extends ForumTopic {
             </tbody>
           </table>
         </div>
+        <app-pagination [currentPage]="currentPage" [pageSize]="pageSize" [totalItems]="filteredQuizzes().length" (pageChange)="currentPage = $event"></app-pagination>
       }
 
       <!-- TAB 2: COURSES TABLE -->
@@ -236,7 +239,7 @@ interface AdminTopicItem extends ForumTopic {
               </tr>
             </thead>
             <tbody>
-              @for (course of filteredCourses(); track course.id) {
+              @for (course of paginatedCourses(); track course.id) {
                 <tr>
                   <td>
                     <div class="quiz-title-cell">
@@ -294,6 +297,7 @@ interface AdminTopicItem extends ForumTopic {
             </tbody>
           </table>
         </div>
+        <app-pagination [currentPage]="currentPage" [pageSize]="pageSize" [totalItems]="filteredCourses().length" (pageChange)="currentPage = $event"></app-pagination>
       }
 
       <!-- TAB 3: FORUMS & HUB COMMUNAUTAIRE TABLE -->
@@ -312,7 +316,7 @@ interface AdminTopicItem extends ForumTopic {
               </tr>
             </thead>
             <tbody>
-              @for (topic of filteredForumTopics(); track topic.id) {
+              @for (topic of paginatedForumTopics(); track topic.id) {
                 <tr [class.is-reported-row]="topic.isReported">
                   <td>
                     <div class="quiz-title-cell">
@@ -384,6 +388,7 @@ interface AdminTopicItem extends ForumTopic {
             </tbody>
           </table>
         </div>
+        <app-pagination [currentPage]="currentPage" [pageSize]="pageSize" [totalItems]="filteredForumTopics().length" (pageChange)="currentPage = $event"></app-pagination>
       }
 
       <!-- TAB 4: REGISTRE DES CERTIFICATS DÉLIVRÉS -->
@@ -403,7 +408,7 @@ interface AdminTopicItem extends ForumTopic {
               </tr>
             </thead>
             <tbody>
-              @for (cert of filteredCertificates(); track cert.id) {
+              @for (cert of paginatedCertificates(); track cert.id) {
                 <tr [class.is-revoked-row]="cert.status === 'REVOKED'">
                   <td>
                     <span class="cert-code-badge">{{ cert.verificationCode }}</span>
@@ -460,6 +465,7 @@ interface AdminTopicItem extends ForumTopic {
             </tbody>
           </table>
         </div>
+        <app-pagination [currentPage]="currentPage" [pageSize]="pageSize" [totalItems]="filteredCertificates().length" (pageChange)="currentPage = $event"></app-pagination>
       }
     </div>
   `,
@@ -818,6 +824,8 @@ export class AdminContentComponent {
   selectedVis = 'ALL';
   forumFilter = 'ALL';
   certFilter = 'ALL';
+  currentPage = 1;
+  pageSize = 10;
 
   // Extract all forum topics across communities with extra mock metadata
   allForumTopics = computed<AdminTopicItem[]>(() => {
@@ -850,7 +858,7 @@ export class AdminContentComponent {
     return list;
   });
 
-  filteredQuizzes = computed(() => {
+  filteredQuizzes(): Quiz[] {
     return this.quizzes().filter(q => {
       const matchSearch = !this.searchQuery ||
         q.title.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
@@ -859,17 +867,17 @@ export class AdminContentComponent {
       const matchVis = this.selectedVis === 'ALL' || q.visibility === this.selectedVis;
       return matchSearch && matchVis;
     });
-  });
+  }
 
-  filteredCourses = computed(() => {
+  filteredCourses(): Course[] {
     return this.courses().filter(c => {
       return !this.searchQuery ||
         c.title.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
         c.level.toLowerCase().includes(this.searchQuery.toLowerCase());
     });
-  });
+  }
 
-  filteredForumTopics = computed(() => {
+  filteredForumTopics(): AdminTopicItem[] {
     return this.allForumTopics().filter(t => {
       const matchSearch = !this.searchQuery ||
         t.title.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
@@ -878,9 +886,9 @@ export class AdminContentComponent {
       const matchFilter = this.forumFilter === 'ALL' || (this.forumFilter === 'REPORTED' && t.isReported);
       return matchSearch && matchFilter;
     });
-  });
+  }
 
-  filteredCertificates = computed(() => {
+  filteredCertificates(): Certificate[] {
     return this.certificates().filter(c => {
       const matchSearch = !this.searchQuery ||
         c.recipientName.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
@@ -892,7 +900,56 @@ export class AdminContentComponent {
         (this.certFilter === 'REVOKED' && c.status === 'REVOKED');
       return matchSearch && matchFilter;
     });
-  });
+  }
+
+  paginatedQuizzes(): Quiz[] {
+    return this.paginate(this.filteredQuizzes());
+  }
+
+  paginatedCourses(): Course[] {
+    return this.paginate(this.filteredCourses());
+  }
+
+  paginatedForumTopics(): AdminTopicItem[] {
+    return this.paginate(this.filteredForumTopics());
+  }
+
+  paginatedCertificates(): Certificate[] {
+    return this.paginate(this.filteredCertificates());
+  }
+
+  private paginate<T>(list: T[]): T[] {
+    const maxPage = Math.max(1, Math.ceil(list.length / this.pageSize));
+    if (this.currentPage > maxPage) {
+      this.currentPage = maxPage;
+    }
+    const start = (this.currentPage - 1) * this.pageSize;
+    return list.slice(start, start + this.pageSize);
+  }
+
+  resetPage(): void {
+    this.currentPage = 1;
+  }
+
+  setActiveTab(tab: 'QUIZZES' | 'COURSES' | 'FORUMS_HUB' | 'CERTIFICATES'): void {
+    this.activeTab = tab;
+    this.resetPage();
+  }
+
+  setVisibilityFilter(filter: string): void {
+    this.selectedVis = filter;
+    this.resetPage();
+  }
+
+  setForumFilter(filter: string): void {
+    this.forumFilter = filter;
+    this.resetPage();
+  }
+
+  setCertificateFilter(filter: string): void {
+    this.certFilter = filter;
+    this.resetPage();
+  }
 
   getSearchPlaceholder(): string {
     switch (this.activeTab) {

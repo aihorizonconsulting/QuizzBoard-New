@@ -1,15 +1,16 @@
-import { Component, inject, signal, computed } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AdminService } from '../../../core/services/admin.service';
 import { ConfirmDialogService } from '../../../core/services/confirm-dialog.service';
 import { TransactionRecord } from '../../../core/models/admin.model';
 import { IconComponent } from '../../../shared/components/icon/icon.component';
+import { PaginationComponent } from '../../../shared/components/pagination/pagination.component';
 
 @Component({
   selector: 'app-admin-finances',
   standalone: true,
-  imports: [CommonModule, FormsModule, IconComponent],
+  imports: [CommonModule, FormsModule, IconComponent, PaginationComponent],
   template: `
     <div class="admin-finances-page animate-fade-in">
       <!-- HEADER -->
@@ -112,30 +113,37 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
           <div class="tx-filters">
             <button 
               type="button" 
-              class="filter-pill" 
-              [class.active]="selectedMethod === 'ALL'" 
-              (click)="selectedMethod = 'ALL'">
+              class="filter-pill"
+              [class.active]="selectedMethod === 'ALL'"
+              (click)="setMethodFilter('ALL')">
               Toutes
             </button>
-            <button 
-              type="button" 
-              class="filter-pill" 
-              [class.active]="selectedMethod === 'WAVE'" 
-              (click)="selectedMethod = 'WAVE'">
+            <button
+              type="button"
+              class="filter-pill"
+              [class.active]="selectedMethod === 'PAYDUNYA'"
+              (click)="setMethodFilter('PAYDUNYA')">
+              PayDunya
+            </button>
+            <button
+              type="button"
+              class="filter-pill"
+              [class.active]="selectedMethod === 'WAVE'"
+              (click)="setMethodFilter('WAVE')">
               Wave
             </button>
-            <button 
-              type="button" 
-              class="filter-pill" 
-              [class.active]="selectedMethod === 'ORANGE_MONEY'" 
-              (click)="selectedMethod = 'ORANGE_MONEY'">
+            <button
+              type="button"
+              class="filter-pill"
+              [class.active]="selectedMethod === 'ORANGE_MONEY'"
+              (click)="setMethodFilter('ORANGE_MONEY')">
               Orange Money
             </button>
             <button 
               type="button" 
               class="filter-pill" 
               [class.active]="selectedMethod === 'STRIPE'" 
-              (click)="selectedMethod = 'STRIPE'">
+              (click)="setMethodFilter('STRIPE')">
               Stripe
             </button>
           </div>
@@ -155,7 +163,7 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
             </tr>
           </thead>
           <tbody>
-            @for (tx of filteredTransactions(); track tx.id) {
+            @for (tx of paginatedTransactions(); track tx.id) {
               <tr>
                 <td>
                   <span class="ref-badge">{{ tx.reference }}</span>
@@ -193,7 +201,7 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
                   }
                 </td>
 
-                <td class="date-cell">{{ tx.date }}</td>
+                <td class="date-cell">{{ tx.date || (tx.createdAt | date:'yyyy-MM-dd') }}</td>
 
                 <td style="text-align: right;">
                   <button type="button" class="btn btn-outline btn-xs" (click)="downloadReceipt(tx)">
@@ -206,6 +214,13 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
           </tbody>
         </table>
       </div>
+
+      <app-pagination
+        [currentPage]="currentPage"
+        [pageSize]="pageSize"
+        [totalItems]="filteredTransactions().length"
+        (pageChange)="currentPage = $event">
+      </app-pagination>
 
       <!-- MODAL ACCORDER LICENCE -->
       @if (showLicenseModal) {
@@ -598,6 +613,8 @@ export class AdminFinancesComponent {
   transactions = this.adminService.getTransactions();
 
   selectedMethod = 'ALL';
+  currentPage = 1;
+  pageSize = 10;
   showLicenseModal = false;
 
   licensePartner = '';
@@ -613,11 +630,26 @@ export class AdminFinancesComponent {
     }
   }
 
-  filteredTransactions = computed(() => {
+  filteredTransactions(): TransactionRecord[] {
     return this.transactions().filter(tx => {
       return this.selectedMethod === 'ALL' || tx.paymentMethod === this.selectedMethod;
     });
-  });
+  }
+
+  paginatedTransactions(): TransactionRecord[] {
+    const list = this.filteredTransactions();
+    const maxPage = Math.max(1, Math.ceil(list.length / this.pageSize));
+    if (this.currentPage > maxPage) {
+      this.currentPage = maxPage;
+    }
+    const start = (this.currentPage - 1) * this.pageSize;
+    return list.slice(start, start + this.pageSize);
+  }
+
+  setMethodFilter(method: string): void {
+    this.selectedMethod = method;
+    this.currentPage = 1;
+  }
 
   async downloadReceipt(tx: TransactionRecord) {
     const confirmed = await this.confirmService.confirm({

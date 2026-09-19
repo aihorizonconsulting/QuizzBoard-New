@@ -162,8 +162,12 @@ export class SubscriptionService {
 
       return true;
     } catch (err) {
-      console.warn('Erreur lors du paiement backend, bascule sur simulation locale:', err);
-      // Simulation locale de secours
+      console.warn('Erreur lors du paiement backend:', err);
+      if (!environment.enableSimulationPayment) {
+        return false;
+      }
+
+      // Simulation locale de secours en développement uniquement.
       const plan = this.plans().find(p => p.id === planId);
       if (plan) {
         this.authService.updateSubscription(planId);

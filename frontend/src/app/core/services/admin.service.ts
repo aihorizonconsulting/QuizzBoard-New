@@ -59,7 +59,8 @@ export class AdminService {
   loadAdminData(): void {
     // Stats
     this.http.get<any>(`${environment.apiUrl}/admin/stats`).subscribe({
-      next: (stats) => {
+      next: (response) => {
+        const stats = this.unwrap(response);
         if (stats) {
           this.metrics.update(m => ({
             ...m,
@@ -75,9 +76,10 @@ export class AdminService {
     });
 
     // Utilisateurs
-    this.http.get<User[]>(`${environment.apiUrl}/admin/users`).subscribe({
-      next: (data) => {
-        this.users.set(data || []);
+    this.http.get<User[] | { data: User[] }>(`${environment.apiUrl}/admin/users`).subscribe({
+      next: (response) => {
+        const data = this.unwrap<User[]>(response);
+        this.users.set(Array.isArray(data) ? data : []);
       },
       error: () => {
         this.users.set([]);
@@ -85,9 +87,10 @@ export class AdminService {
     });
 
     // Transactions
-    this.http.get<TransactionRecord[]>(`${environment.apiUrl}/admin/transactions`).subscribe({
-      next: (txs) => {
-        this.transactions.set(txs || []);
+    this.http.get<TransactionRecord[] | { data: TransactionRecord[] }>(`${environment.apiUrl}/admin/transactions`).subscribe({
+      next: (response) => {
+        const txs = this.unwrap<TransactionRecord[]>(response);
+        this.transactions.set(Array.isArray(txs) ? txs : []);
       },
       error: () => {
         this.transactions.set([]);
@@ -95,9 +98,10 @@ export class AdminService {
     });
 
     // Logs d'audit
-    this.http.get<AuditLog[]>(`${environment.apiUrl}/admin/audit-logs`).subscribe({
-      next: (logs) => {
-        this.auditLogs.set(logs || []);
+    this.http.get<AuditLog[] | { data: AuditLog[] }>(`${environment.apiUrl}/admin/audit-logs`).subscribe({
+      next: (response) => {
+        const logs = this.unwrap<AuditLog[]>(response);
+        this.auditLogs.set(Array.isArray(logs) ? logs : []);
       },
       error: () => {
         this.auditLogs.set([]);
@@ -106,7 +110,8 @@ export class AdminService {
 
     // Paramètres Plateforme
     this.http.get<PlatformSettings>(`${environment.apiUrl}/subscriptions/settings`).subscribe({
-      next: (settings) => {
+      next: (response) => {
+        const settings = this.unwrap<PlatformSettings>(response);
         if (settings) {
           this.settings.set(settings);
         }
@@ -254,5 +259,12 @@ export class AdminService {
       severity
     };
     this.auditLogs.update(logs => [newLog, ...logs]);
+  }
+
+  private unwrap<T>(response: T | { data: T }): T {
+    if (response && typeof response === 'object' && 'data' in response) {
+      return (response as { data: T }).data;
+    }
+    return response as T;
   }
 }

@@ -107,8 +107,8 @@ class InvitationServiceTest {
         List<InvitationResponse> responses = invitationService.createInvitations(inviterPrincipal, request);
 
         assertThat(responses).hasSize(1);
-        assertThat(responses.getFirst().targetEmail()).isEqualTo("eleve@quizzboard.com");
-        assertThat(responses.getFirst().resourceName()).isEqualTo("la Classe Classe Terminale S");
+        assertThat(responses.get(0).targetEmail()).isEqualTo("eleve@quizzboard.com");
+        assertThat(responses.get(0).resourceName()).isEqualTo("la Classe Classe Terminale S");
         verify(emailService).sendInvitationEmail(eq("eleve@quizzboard.com"), eq("Professeur Kone"), anyString(), eq("la Classe Classe Terminale S"), any(), eq("Bienvenue dans la classe !"));
     }
 

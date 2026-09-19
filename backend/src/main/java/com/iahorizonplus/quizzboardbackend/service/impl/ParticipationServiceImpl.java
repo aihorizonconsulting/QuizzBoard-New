@@ -159,6 +159,10 @@ public class ParticipationServiceImpl implements ParticipationService {
         if (email == null || email.isBlank()) {
             return false;
         }
+        if (!smtpEmailService.isDeliveryEnabled()) {
+            log.warn("Envoi email participation ignoré : SMTP non configuré ou désactivé.");
+            return false;
+        }
         Participation participation = getParticipationById(participationId);
         participation.setParticipantEmail(email.trim());
         participationRepository.save(participation);
@@ -214,4 +218,3 @@ public class ParticipationServiceImpl implements ParticipationService {
         return true;
     }
 }
-

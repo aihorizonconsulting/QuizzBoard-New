@@ -22,6 +22,7 @@
 # Uploads & Local runtime data
 **/uploads/*
 !**/uploads/.gitkeep
+backend/data/
 
 # IDEs & System files
 .idea/

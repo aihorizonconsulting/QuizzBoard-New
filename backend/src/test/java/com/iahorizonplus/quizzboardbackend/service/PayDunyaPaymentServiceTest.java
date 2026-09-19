@@ -18,6 +18,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -52,6 +53,7 @@ class PayDunyaPaymentServiceTest {
 
     @BeforeEach
     void setUp() {
+        ReflectionTestUtils.setField(payDunyaPaymentService, "simulationEnabled", true);
         transaction = TransactionRecord.builder()
                 .id("tx-1")
                 .reference("PD-12345")
@@ -59,6 +61,33 @@ class PayDunyaPaymentServiceTest {
                 .userEmail("client@quizzboard.com")
                 .status(PaymentStatus.INITIATED)
                 .build();
+    }
+
+    @Test
+    @DisplayName("Initiation PayDunya réelle : rejet si clés manquantes et simulation désactivée")
+    void createCheckout_MissingConfigAndSimulationDisabled_ThrowsBadRequestException() {
+        ReflectionTestUtils.setField(payDunyaPaymentService, "simulationEnabled", false);
+        when(transactionRepository.findByReference("PD-12345")).thenReturn(Optional.of(transaction));
+        when(payDunyaConfig.isConfigured()).thenReturn(false);
+
+        assertThatThrownBy(() -> payDunyaPaymentService.createCheckout("PD-12345", 9900.0, "client@quizzboard.com"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("PayDunya");
+
+        assertThat(transaction.getStatus()).isEqualTo(PaymentStatus.FAILED);
+        verify(transactionRepository).save(transaction);
+    }
+
+    @Test
+    @DisplayName("Confirmation PayDunya réelle : rejet des tokens mock si simulation désactivée")
+    void confirmInvoice_MockTokenAndSimulationDisabled_ThrowsBadRequestException() {
+        ReflectionTestUtils.setField(payDunyaPaymentService, "simulationEnabled", false);
+
+        assertThatThrownBy(() -> payDunyaPaymentService.confirmInvoice("mock-PD-12345"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("simulé");
+
+        verify(paymentSimulationService, never()).simulateSuccess(any());
     }
 
     @Test
