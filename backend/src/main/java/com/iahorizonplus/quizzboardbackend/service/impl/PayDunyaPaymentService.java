@@ -47,7 +47,7 @@ public class PayDunyaPaymentService {
         if (!payDunyaConfig.isConfigured()) {
             transaction.setStatus(PaymentStatus.FAILED);
             transactionRepository.save(transaction);
-            throw new BadRequestException("paydunya", "PayDunya n'est pas configuré sur le serveur. Impossible d'initier un paiement réel.");
+            throw new BadRequestException("paydunya", "PayDunya n'est pas configuré avec une Master Key réelle valide sur le serveur.");
         }
 
         try {
@@ -117,8 +117,13 @@ public class PayDunyaPaymentService {
                     );
                 } else {
                     log.error("PayDunya a retourné une erreur : {}", response.getBody());
+                    transaction.setStatus(PaymentStatus.FAILED);
+                    transactionRepository.save(transaction);
+                    throw new BadRequestException("paydunya", resolveGatewayErrorMessage(root));
                 }
             }
+        } catch (BadRequestException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Erreur lors de l'appel à l'API PayDunya : {}", e.getMessage(), e);
         }
@@ -126,6 +131,17 @@ public class PayDunyaPaymentService {
         transaction.setStatus(PaymentStatus.FAILED);
         transactionRepository.save(transaction);
         throw new BadRequestException("paydunya", "PayDunya n'a pas pu créer la facture. Aucun paiement simulé n'est autorisé sur cet environnement.");
+    }
+
+    private String resolveGatewayErrorMessage(JsonNode root) {
+        String gatewayMessage = root.path("response_text").asText("");
+        if (gatewayMessage.toLowerCase().contains("invalid masterkey")) {
+            return "PayDunya refuse la transaction : la variable PAYDUNYA_MASTER_KEY du serveur est invalide. Renseignez la vraie Master Key PayDunya, pas la clé publique.";
+        }
+        if (!gatewayMessage.isBlank()) {
+            return "PayDunya refuse la transaction : " + gatewayMessage;
+        }
+        return "PayDunya refuse la création de facture. Vérifiez les clés et le mode PayDunya.";
     }
 
     /**

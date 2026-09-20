@@ -27,6 +27,7 @@ public class PayDunyaConfig {
 
     public boolean isConfigured() {
         return masterKey != null && !masterKey.isBlank() && !masterKey.contains("placeholder") && !masterKey.contains("votre_")
+                && !masterKey.startsWith("live_public_") && !masterKey.startsWith("test_public_")
                 && privateKey != null && !privateKey.isBlank() && !privateKey.contains("votre_")
                 && token != null && !token.isBlank() && !token.contains("votre_");
     }

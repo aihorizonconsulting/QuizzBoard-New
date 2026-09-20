@@ -140,7 +140,7 @@ export class SubscriptionService {
       return false;
     } catch (err) {
       console.warn('Erreur lors du paiement backend:', err);
-      return false;
+      throw err;
     }
   }
 
