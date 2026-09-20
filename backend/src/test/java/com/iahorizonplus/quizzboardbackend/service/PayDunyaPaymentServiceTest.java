@@ -1,16 +1,13 @@
 package com.iahorizonplus.quizzboardbackend.service;
 
 import com.iahorizonplus.quizzboardbackend.config.PayDunyaConfig;
-import com.iahorizonplus.quizzboardbackend.dto.response.PaymentInitiateResponse;
-import com.iahorizonplus.quizzboardbackend.entity.Invoice;
-import com.iahorizonplus.quizzboardbackend.entity.PaymentMethod;
 import com.iahorizonplus.quizzboardbackend.entity.PaymentStatus;
 import com.iahorizonplus.quizzboardbackend.entity.TransactionRecord;
 import com.iahorizonplus.quizzboardbackend.exception.BadRequestException;
 import com.iahorizonplus.quizzboardbackend.external.SmtpEmailService;
 import com.iahorizonplus.quizzboardbackend.repository.TransactionRepository;
 import com.iahorizonplus.quizzboardbackend.service.impl.PayDunyaPaymentService;
-import com.iahorizonplus.quizzboardbackend.service.impl.PaymentSimulationService;
+import com.iahorizonplus.quizzboardbackend.service.impl.PaymentSettlementService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -18,7 +15,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -41,7 +37,7 @@ class PayDunyaPaymentServiceTest {
     private TransactionRepository transactionRepository;
 
     @Mock
-    private PaymentSimulationService paymentSimulationService;
+    private PaymentSettlementService paymentSettlementService;
 
     @Mock
     private SmtpEmailService emailService;
@@ -53,7 +49,6 @@ class PayDunyaPaymentServiceTest {
 
     @BeforeEach
     void setUp() {
-        ReflectionTestUtils.setField(payDunyaPaymentService, "simulationEnabled", true);
         transaction = TransactionRecord.builder()
                 .id("tx-1")
                 .reference("PD-12345")
@@ -64,9 +59,8 @@ class PayDunyaPaymentServiceTest {
     }
 
     @Test
-    @DisplayName("Initiation PayDunya réelle : rejet si clés manquantes et simulation désactivée")
-    void createCheckout_MissingConfigAndSimulationDisabled_ThrowsBadRequestException() {
-        ReflectionTestUtils.setField(payDunyaPaymentService, "simulationEnabled", false);
+    @DisplayName("Initiation PayDunya réelle : rejet si clés manquantes")
+    void createCheckout_MissingConfig_ThrowsBadRequestException() {
         when(transactionRepository.findByReference("PD-12345")).thenReturn(Optional.of(transaction));
         when(payDunyaConfig.isConfigured()).thenReturn(false);
 
@@ -79,53 +73,13 @@ class PayDunyaPaymentServiceTest {
     }
 
     @Test
-    @DisplayName("Confirmation PayDunya réelle : rejet des tokens mock si simulation désactivée")
-    void confirmInvoice_MockTokenAndSimulationDisabled_ThrowsBadRequestException() {
-        ReflectionTestUtils.setField(payDunyaPaymentService, "simulationEnabled", false);
-
+    @DisplayName("Confirmation PayDunya réelle : rejet des tokens mock")
+    void confirmInvoice_MockToken_ThrowsBadRequestException() {
         assertThatThrownBy(() -> payDunyaPaymentService.confirmInvoice("mock-PD-12345"))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("simulé");
 
-        verify(paymentSimulationService, never()).simulateSuccess(any());
-    }
-
-    @Test
-    @DisplayName("Initiation PayDunya (Mode Sandbox) : Génération de session avec token mock et checkoutUrl")
-    void createCheckout_SandboxMode_Success() {
-        when(transactionRepository.findByReference("PD-12345")).thenReturn(Optional.of(transaction));
-        when(payDunyaConfig.isConfigured()).thenReturn(false);
-        when(payDunyaConfig.getReturnUrl()).thenReturn("http://localhost:4200/app/subscription/callback");
-
-        PaymentInitiateResponse response = payDunyaPaymentService.createCheckout("PD-12345", 9900.0, "client@quizzboard.com");
-
-        assertThat(response).isNotNull();
-        assertThat(response.reference()).isEqualTo("PD-12345");
-        assertThat(response.paymentMethod()).isEqualTo(PaymentMethod.PAYDUNYA);
-        assertThat(response.checkoutUrl()).contains("token=mock-PD-12345");
-        assertThat(response.isSimulated()).isTrue();
-
-        verify(transactionRepository).save(transaction);
-        assertThat(transaction.getPaydunyaToken()).isEqualTo("mock-PD-12345");
-    }
-
-    @Test
-    @DisplayName("Confirmation PayDunya : Validation avec token mock simulant un succès")
-    void confirmInvoice_MockToken_Success() {
-        Invoice invoice = Invoice.builder()
-                .reference("PD-12345")
-                .amountFcfa(9900.0)
-                .status(PaymentStatus.PAID)
-                .build();
-
-        when(paymentSimulationService.simulateSuccess("PD-12345")).thenReturn(invoice);
-
-        Invoice confirmed = payDunyaPaymentService.confirmInvoice("mock-PD-12345");
-
-        assertThat(confirmed).isNotNull();
-        assertThat(confirmed.getReference()).isEqualTo("PD-12345");
-        assertThat(confirmed.getStatus()).isEqualTo(PaymentStatus.PAID);
-        verify(paymentSimulationService).simulateSuccess("PD-12345");
+        verify(paymentSettlementService, never()).settleSuccessfulPayment(any());
     }
 
     @Test
@@ -160,7 +114,7 @@ class PayDunyaPaymentServiceTest {
         boolean handled = payDunyaPaymentService.handleIpn(payload);
 
         assertThat(handled).isTrue();
-        verify(paymentSimulationService).simulateSuccess("PD-12345");
+        verify(paymentSettlementService).settleSuccessfulPayment("PD-12345");
     }
 
     @Test
@@ -179,6 +133,6 @@ class PayDunyaPaymentServiceTest {
         boolean handled = payDunyaPaymentService.handleIpn(payload);
 
         assertThat(handled).isFalse();
-        verify(paymentSimulationService, never()).simulateSuccess(any());
+        verify(paymentSettlementService, never()).settleSuccessfulPayment(any());
     }
 }

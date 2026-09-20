@@ -11,7 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class PaymentSimulationService {
+public class PaymentSettlementService {
 
     private final TransactionRepository transactionRepository;
     private final UserRepository userRepository;
@@ -20,8 +20,8 @@ public class PaymentSimulationService {
     private final AuditLogRepository auditLogRepository;
 
     @Transactional
-    public Invoice simulateSuccess(String reference) {
-        log.info("Simulation de succès de paiement pour la référence : {}", reference);
+    public Invoice settleSuccessfulPayment(String reference) {
+        log.info("Règlement confirmé pour la référence de paiement : {}", reference);
 
         TransactionRecord transaction = transactionRepository.findByReference(reference)
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction introuvable avec la référence : " + reference));

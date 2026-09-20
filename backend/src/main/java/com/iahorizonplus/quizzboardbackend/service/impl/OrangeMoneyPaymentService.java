@@ -2,6 +2,7 @@ package com.iahorizonplus.quizzboardbackend.service.impl;
 
 import com.iahorizonplus.quizzboardbackend.dto.response.PaymentInitiateResponse;
 import com.iahorizonplus.quizzboardbackend.entity.PaymentMethod;
+import com.iahorizonplus.quizzboardbackend.exception.BadRequestException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -20,20 +21,9 @@ public class OrangeMoneyPaymentService {
         log.info("Initialisation du paiement Orange Money WebPay pour {} (Tel: {}, Ref: {}, Montant: {} FCFA)", userEmail, phoneNumber, reference, amount);
 
         if (omClientId == null || omClientId.isBlank() || omClientId.contains("developer")) {
-            return new PaymentInitiateResponse(
-                    "om-tx-" + System.currentTimeMillis(),
-                    reference,
-                    PaymentMethod.ORANGE_MONEY,
-                    amount,
-                    "FCFA",
-                    "https://webpayment.orange-money.com/pay/mock/" + reference,
-                    "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=om-" + reference,
-                    true,
-                    "Paiement Orange Money initialisé (Composez le #144# ou validez sur le simulateur)."
-            );
+            throw new BadRequestException("orangeMoney", "Orange Money n'est pas configuré pour les paiements réels.");
         }
 
-        // Intégration API Orange Money WebPay (Production)
         String paymentUrl = "https://api.orange.com/orange-money-webpay/dev/v1/webpayment/" + reference;
         return new PaymentInitiateResponse(
                 "om-" + System.currentTimeMillis(),

@@ -13,7 +13,7 @@ export interface PaymentInitiateResponse {
   currency: string;
   checkoutUrl?: string;
   qrCodeUrl?: string;
-  isSimulated: boolean;
+  isSimulated?: boolean;
   message?: string;
 }
 
@@ -137,53 +137,10 @@ export class SubscriptionService {
         return true;
       }
 
-      // 2. Si mode simulation sans redirection
-      if (initRes.isSimulated || environment.enableSimulationPayment) {
-        const invoice = await firstValueFrom(
-          this.http.post<any>(`${environment.apiUrl}/payments/simulate/${initRes.reference}/success`, {})
-        );
-
-        this.authService.updateSubscription(planId);
-
-        const newInvoice: Invoice = {
-          id: invoice.id || initRes.reference,
-          date: new Date().toISOString().split('T')[0],
-          planName: invoice.planName || `Abonnement STARTER (Mensuel)`,
-          amountFcfa: invoice.amountFcfa || 9900,
-          amountUsd: invoice.amountUsd || 15,
-          paymentMethod: method,
-          status: 'PAID',
-          receiptUrl: '#'
-        };
-
-        this.invoices.update(list => [newInvoice, ...list]);
-        return true;
-      }
-
-      return true;
+      return false;
     } catch (err) {
       console.warn('Erreur lors du paiement backend:', err);
-      if (!environment.enableSimulationPayment) {
-        return false;
-      }
-
-      // Simulation locale de secours en développement uniquement.
-      const plan = this.plans().find(p => p.id === planId);
-      if (plan) {
-        this.authService.updateSubscription(planId);
-        const newInvoice: Invoice = {
-          id: 'INV-' + Date.now().toString().slice(-6),
-          date: new Date().toISOString().split('T')[0],
-          planName: `Abonnement ${plan.name} (Mensuel)`,
-          amountFcfa: plan.priceFcfa,
-          amountUsd: plan.priceUsd,
-          paymentMethod: method,
-          status: 'PAID',
-          receiptUrl: '#'
-        };
-        this.invoices.update(list => [newInvoice, ...list]);
-      }
-      return true;
+      return false;
     }
   }
 

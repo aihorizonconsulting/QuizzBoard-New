@@ -79,15 +79,12 @@ import { extractFieldErrors, getGeneralErrorMessage } from '../../../core/utils/
                     <span>{{ authService.isAuthenticated() ? 'Accéder à mon Espace (Gratuit)' : 'Commencer Gratuitement' }}</span>
                   </a>
                 } @else {
-                  <!-- Forfait Formateur Payant désactivé -->
                   <button 
                     type="button" 
-                    class="btn btn-outline btn-full" 
-                    disabled 
-                    style="opacity: 0.6; cursor: not-allowed; background: #F1F5F9; border-color: #CBD5E1; color: #64748B;"
-                    title="Forfait Formateur temporairement indisponible">
-                    <app-icon name="lock" [size]="15" color="#64748B"></app-icon>
-                    <span>Choisir {{ plan.name }} (Bientôt disponible)</span>
+                    class="btn btn-outline btn-full"
+                    (click)="openPaymentModal(plan)">
+                    <app-icon name="shield" [size]="15" color="var(--color-navy)"></app-icon>
+                    <span>Choisir {{ plan.name }}</span>
                   </button>
                 }
               </div>
@@ -111,7 +108,7 @@ import { extractFieldErrors, getGeneralErrorMessage } from '../../../core/utils/
         </div>
       </section>
 
-      <!-- PAYMENT MODAL (Simulating Wave, Orange Money, Stripe) -->
+      <!-- PAYMENT MODAL -->
       @if (selectedPlanForPayment) {
         <div class="modal-backdrop" (click)="selectedPlanForPayment = null">
           <div class="modal-card card" (click)="$event.stopPropagation()">
@@ -532,6 +529,8 @@ export class PricingComponent implements OnInit {
         const found = this.plans().find(p => p.id === targetPlan);
         if (found && found.id === 'FREE') {
           this.selectPlan(found);
+        } else if (found) {
+          this.openPaymentModal(found);
         }
       }
       this.cdr.markForCheck();
@@ -582,11 +581,14 @@ export class PricingComponent implements OnInit {
     this.cdr.markForCheck();
 
     this.subService.subscribeToPlan(this.selectedPlanForPayment.id, 'PAYDUNYA', this.paymentPhone)
-      .then(() => {
+      .then((started) => {
         this.isProcessing = false;
-        this.selectedPlanForPayment = null;
+        if (!started) {
+          this.generalError = 'Impossible de créer une session PayDunya réelle. Vérifiez la configuration de paiement et réessayez.';
+          this.cdr.markForCheck();
+          return;
+        }
         this.cdr.markForCheck();
-        this.router.navigate(['/app/subscription']);
       })
       .catch((err) => {
         this.isProcessing = false;

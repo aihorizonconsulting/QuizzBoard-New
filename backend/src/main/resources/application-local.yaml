@@ -40,7 +40,7 @@ app:
     from: ${MAIL_FROM:QuizzBoard Support <no-reply@quizzboard.com>}
     reset-password-url: ${RESET_PASSWORD_URL:http://localhost:4200/reinitialisation-mot-de-passe?token=}
   payment:
-    simulation-enabled: ${ENABLE_PAYMENT_SIMULATION:true}
+    simulation-enabled: ${ENABLE_PAYMENT_SIMULATION:false}
   ai:
     gemini:
       api-key: ${GEMINI_API_KEY:}

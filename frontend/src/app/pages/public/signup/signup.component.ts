@@ -216,12 +216,13 @@ declare const google: any;
                     <span class="plans-label">Formule Formateur :</span>
                   </div>
                   <div class="plans-selector-grid">
-                    <!-- Option 1: FREE -->
                     <div 
-                      class="plan-card-option is-active" 
+                      class="plan-card-option"
+                      [class.is-active]="selectedPlan === 'FREE'"
+                      (click)="selectedPlan = 'FREE'"
                       style="cursor: pointer;">
                       <div class="plan-option-top">
-                        <span class="radio-circle selected"></span>
+                        <span class="radio-circle" [class.selected]="selectedPlan === 'FREE'"></span>
                         <div class="plan-info">
                           <span class="plan-title">Formule Découverte</span>
                           <span class="plan-price-tag">0 FCFA <small>(Actif)</small></span>
@@ -230,20 +231,20 @@ declare const google: any;
                       <p class="plan-detail">Idéal pour démarrer : 3 quiz, 5 IA / mois, sessions live</p>
                     </div>
 
-                    <!-- Option 2: STARTER (DÉSACTIVÉ) -->
                     <div 
-                      class="plan-card-option is-starter disabled-option" 
-                      style="opacity: 0.55; cursor: not-allowed; pointer-events: none; background: #F8FAFC;"
-                      title="Ce forfait est temporairement indisponible">
-                      <div class="starter-badge" style="background: #94A3B8; color: #FFFFFF;">Bientôt disponible</div>
+                      class="plan-card-option is-starter"
+                      [class.is-active]="selectedPlan === 'STARTER'"
+                      (click)="selectedPlan = 'STARTER'"
+                      style="cursor: pointer;">
+                      <div class="starter-badge">Actif</div>
                       <div class="plan-option-top">
-                        <span class="radio-circle" style="border-color: #CBD5E1;"></span>
+                        <span class="radio-circle" [class.selected]="selectedPlan === 'STARTER'"></span>
                         <div class="plan-info">
-                          <span class="plan-title" style="color: #64748B;">Formule STARTER</span>
-                          <span class="plan-price-tag" style="color: #64748B;">9 900 FCFA <small>/mois</small></span>
+                          <span class="plan-title">Formule STARTER</span>
+                          <span class="plan-price-tag">9 900 FCFA <small>/mois</small></span>
                         </div>
                       </div>
-                      <p class="plan-detail">Forfait formateur payant bientôt disponible • Inscription en formule gratuite</p>
+                      <p class="plan-detail">Accès complet après paiement réel via PayDunya</p>
                     </div>
                   </div>
                 </div>
@@ -255,7 +256,7 @@ declare const google: any;
                   <span>Création de votre compte...</span>
                 } @else {
                   <app-icon name="sparkles" [size]="16" color="var(--color-navy)"></app-icon>
-                  <span>Créer mon Compte Gratuit</span>
+                  <span>{{ selectedRole === 'CREATOR' && selectedPlan === 'STARTER' ? 'Créer mon compte et payer' : 'Créer mon Compte Gratuit' }}</span>
                 }
               </button>
             </form>
@@ -752,7 +753,9 @@ export class SignupComponent implements AfterViewInit {
       next: (res: any) => {
         this.isLoading = false;
         this.cdr.markForCheck();
-        if (this.selectedRole === 'CREATOR') {
+        if (this.selectedRole === 'CREATOR' && this.selectedPlan === 'STARTER') {
+          this.router.navigate(['/tarifs'], { queryParams: { plan: 'STARTER' } });
+        } else if (this.selectedRole === 'CREATOR') {
           this.router.navigate(['/app/dashboard']);
         } else {
           this.router.navigate(['/app/learner/dashboard']);

@@ -42,7 +42,7 @@ QuizzBoard prend en charge l'API officielle de paiement **PayDunya** :
 
 - **Mode Dual :** `PAYDUNYA_MODE=test` (Sandbox) ou `PAYDUNYA_MODE=live` (Production).
 - **Sécurité IPN :** Vérification de l'empreinte **SHA-512** de la clé Master sur les webhooks instantanés (`/api/v1/payments/paydunya/ipn`).
-- **Mode Secours Local :** En environnement local sans clés renseignées, un simulateur sandbox automatique attribue le token `mock-{reference}` pour tester les parcours de souscription de bout en bout.
+- **Paiement réel obligatoire :** sans clés PayDunya valides, l'initiation de paiement échoue au lieu de simuler une souscription.
 
 ### Endpoints Paiement REST :
 - `POST /api/v1/payments/initiate` : Initie un paiement (PayDunya, Wave, Orange Money).
@@ -151,7 +151,7 @@ Notes locales :
 - La génération IA fonctionne avec un moteur intégré si Gemini n'est pas disponible.
 - Pour utiliser Gemini réellement, renseigner `GEMINI_API_KEY` et vérifier les crédits du projet Google AI Studio.
 - Les emails sont désactivés en profil `local` tant que `SMTP_ENABLED=true`, `SMTP_USERNAME` et `SMTP_PASSWORD` ne sont pas définis.
-- Les paiements restent en simulation tant que `ENABLE_PAYMENT_SIMULATION=true`.
+- Les paiements réels exigent `ENABLE_PAYMENT_SIMULATION=false` et des clés PayDunya valides.
 
 ---
 

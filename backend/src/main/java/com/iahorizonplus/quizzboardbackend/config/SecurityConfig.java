@@ -67,7 +67,7 @@ public class SecurityConfig {
                 .requestMatchers("/ws-live/**").permitAll()
                 .requestMatchers("/files/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/quizzes", "/quizzes/**", "/courses", "/courses/**", "/certificates", "/certificates/**", "/participations", "/participations/**", "/subscriptions/settings", "/payments/paydunya/confirm", "/invitations/verify/**", "/public/stats", "/platform/stats").permitAll()
-                .requestMatchers(HttpMethod.POST, "/participations", "/participations/**", "/payments/simulate/**", "/payments/callback", "/payments/paydunya/ipn", "/invitations/accept/**").permitAll()
+                .requestMatchers(HttpMethod.POST, "/participations", "/participations/**", "/payments/callback", "/payments/paydunya/ipn", "/invitations/accept/**").permitAll()
 
                 // 2. Endpoints Administrateurs
                 .requestMatchers("/admin/**").hasRole("ADMIN")

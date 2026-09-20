@@ -37,22 +37,9 @@ public class PaymentController {
         PaymentInitiateResponse result = paymentService.initiatePayment(email, request);
         List<LinkDto> links = List.of(
                 new LinkDto("self", "/api/v1/payments/initiate", "POST", "application/json"),
-                new LinkDto("invoices", "/api/v1/payments/invoices", "GET", "application/json"),
-                new LinkDto("simulate-success", "/api/v1/payments/simulate/" + result.reference() + "/success", "POST", "application/json")
+                new LinkDto("invoices", "/api/v1/payments/invoices", "GET", "application/json")
         );
         return new ResponseEntity<>(ApiResponse.created(result, "Transaction de paiement initiée", links, "/api/v1/payments/initiate"), HttpStatus.CREATED);
-    }
-
-    @PostMapping("/simulate/{reference}/success")
-    @Operation(summary = "Simuler la validation réussie d'un paiement en environnement local")
-    public ResponseEntity<ApiResponse<Invoice>> simulatePaymentSuccess(@PathVariable String reference) {
-        Invoice invoice = paymentService.simulatePaymentSuccess(reference);
-        List<LinkDto> links = List.of(
-                new LinkDto("self", "/api/v1/payments/simulate/" + reference + "/success", "POST", "application/json"),
-                new LinkDto("invoices", "/api/v1/payments/invoices", "GET", "application/json"),
-                new LinkDto("subscriptions", "/api/v1/subscriptions/current", "GET", "application/json")
-        );
-        return ResponseEntity.ok(ApiResponse.ok(invoice, "Paiement simulé avec succès", links, "/api/v1/payments/simulate/" + reference + "/success"));
     }
 
     @PostMapping("/callback")

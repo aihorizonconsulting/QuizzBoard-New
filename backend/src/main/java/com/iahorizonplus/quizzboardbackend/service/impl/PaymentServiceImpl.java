@@ -29,11 +29,8 @@ public class PaymentServiceImpl implements PaymentService {
     private final InvoiceRepository invoiceRepository;
     private final WavePaymentService wavePaymentService;
     private final OrangeMoneyPaymentService orangeMoneyPaymentService;
-    private final PaymentSimulationService paymentSimulationService;
+    private final PaymentSettlementService paymentSettlementService;
     private final PayDunyaPaymentService payDunyaPaymentService;
-
-    @Value("${app.payment.simulation-enabled:true}")
-    private boolean simulationEnabled;
 
     @Override
     @Transactional
@@ -92,18 +89,9 @@ public class PaymentServiceImpl implements PaymentService {
         } else if (request.paymentMethod() == PaymentMethod.ORANGE_MONEY) {
             return orangeMoneyPaymentService.createWebPayment(reference, amountFcfa, userEmail, request.phoneNumber());
         } else {
-            // Stripe par défaut
-            return new PaymentInitiateResponse(
-                    "stripe-" + System.currentTimeMillis(),
-                    reference,
-                    PaymentMethod.STRIPE,
-                    amountUsd,
-                    "USD",
-                    "https://checkout.stripe.com/mock/" + reference,
-                    null,
-                    simulationEnabled,
-                    "Session de paiement Stripe initialisée."
-            );
+            record.setStatus(PaymentStatus.FAILED);
+            transactionRepository.save(record);
+            throw new BadRequestException("paymentMethod", "Le paiement Stripe réel n'est pas encore configuré. Choisissez PayDunya.");
         }
     }
 
@@ -113,7 +101,7 @@ public class PaymentServiceImpl implements PaymentService {
         log.info("Réception d'un webhook/callback de paiement pour la référence : {}", callback.reference());
 
         if ("PAID".equalsIgnoreCase(callback.status()) || "SUCCESS".equalsIgnoreCase(callback.status())) {
-            return paymentSimulationService.simulateSuccess(callback.reference());
+            return paymentSettlementService.settleSuccessfulPayment(callback.reference());
         }
 
         TransactionRecord transaction = transactionRepository.findByReference(callback.reference())
@@ -122,11 +110,6 @@ public class PaymentServiceImpl implements PaymentService {
         transaction.setStatus(PaymentStatus.FAILED);
         transactionRepository.save(transaction);
         return null;
-    }
-
-    @Override
-    public Invoice simulatePaymentSuccess(String reference) {
-        return paymentSimulationService.simulateSuccess(reference);
     }
 
     @Override
