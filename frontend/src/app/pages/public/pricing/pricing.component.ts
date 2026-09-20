@@ -126,7 +126,7 @@ import { extractFieldErrors, getGeneralErrorMessage } from '../../../core/utils/
                   </span>
                 </div>
                 <div class="summary-row" style="font-size: 12px; color: var(--color-text-secondary);">
-                  <span>Renouvellement automatique • Résiliable à tout moment en 1 clic</span>
+                  <span>Paiement sécurisé par facture PayDunya • Activation après confirmation</span>
                 </div>
               </div>
 
@@ -144,7 +144,7 @@ import { extractFieldErrors, getGeneralErrorMessage } from '../../../core/utils/
                         <span>PayDunya Passerelle Globale</span>
                         <span class="badge badge-primary" style="font-size: 10px; padding: 2px 6px;">Sécurisé</span>
                       </div>
-                      <div class="pay-sub">Accepte Wave, Orange Money, Free Money et Carte Bancaire (Visa / Mastercard)</div>
+                      <div class="pay-sub">Les moyens disponibles sont affichés directement par PayDunya selon le pays et votre compte marchand.</div>
                     </div>
                   </div>
                   <input type="radio" checked readonly>
@@ -154,7 +154,7 @@ import { extractFieldErrors, getGeneralErrorMessage } from '../../../core/utils/
               <!-- Input fields with real-time field errors -->
               <div class="form-group" style="margin-top: 16px;">
                 <label class="section-lbl" style="display: block; margin-bottom: 6px;">
-                  Numéro de téléphone mobile (optionnel)
+                  Contact mobile (optionnel)
                 </label>
                 <input 
                   type="tel"
@@ -165,7 +165,7 @@ import { extractFieldErrors, getGeneralErrorMessage } from '../../../core/utils/
                   class="input-field"
                   style="width: 100%; padding: 10px 14px; border-radius: 8px; border: 1.5px solid var(--color-border); font-size: 14px; font-weight: 600;">
                 <span style="display: block; font-size: 12px; color: var(--color-text-secondary); margin-top: 4px;">
-                  Préremplit automatiquement votre contact sur le guichet sécurisé PayDunya.
+                  PayDunya peut redemander les informations obligatoires sur son guichet sécurisé.
                 </span>
                 @if (fieldErrors['phoneNumber']) {
                   <span class="field-error-msg animate-fade-in">

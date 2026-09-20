@@ -87,10 +87,9 @@ import { IconComponent } from '../../shared/components/icon/icon.component';
           <div class="footer-col">
             <h4>Paiement Sécurisé</h4>
             <div class="payment-methods">
-              <div class="pay-pill">Wave Mobile Money</div>
-              <div class="pay-pill">Orange Money</div>
-              <div class="pay-pill">Free Money</div>
-              <div class="pay-pill">Visa / Mastercard (Stripe)</div>
+              <div class="pay-pill">PayDunya Checkout</div>
+              <div class="pay-pill">Mobile Money selon pays</div>
+              <div class="pay-pill">Carte bancaire selon activation</div>
             </div>
             <div class="secu-note">
               <app-icon name="shield" [size]="14" color="#10B981"></app-icon>

@@ -1037,7 +1037,7 @@ export class LandingComponent implements OnInit {
     },
     {
       question: "Quels sont les moyens de paiement acceptés pour les forfaits ?",
-      answer: "Nous acceptons Wave Mobile Money, Orange Money, Free Money pour l'Afrique de l'Ouest, ainsi que les cartes bancaires internationales (Visa, Mastercard) via la passerelle sécurisée PayDunya."
+      answer: "Les paiements passent par le guichet sécurisé PayDunya. Les moyens affichés dépendent du pays sélectionné et des options activées sur le compte marchand PayDunya."
     },
     {
       question: "Combien d'élèves peuvent participer en même temps à une session Live ?",
