@@ -65,6 +65,7 @@ services:
       - REDIS_HOST=redis-prod
       - REDIS_PORT=6379
       - CORS_ORIGINS=${CORS_ORIGINS:-https://quizzboard.com,https://www.quizzboard.com}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-385748483146-1r3b7ab8tmhetu1t4pshvelc35lalabg.apps.googleusercontent.com}
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
