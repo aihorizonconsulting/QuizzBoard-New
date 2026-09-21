@@ -1,6 +1,7 @@
 import { Injectable, signal, inject } from '@angular/core';
 import { Quiz, LiveQuizSession, LiveSessionPlayer } from '../models/quiz.model';
 import { QuizPlayerModalService } from './quiz-player-modal.service';
+import { LiveSessionService } from './live-session.service';
 
 export interface WaitingParticipant {
   pin: string;
@@ -27,9 +28,11 @@ export interface LiveSyncMessage {
 })
 export class LiveSyncService {
   private quizPlayerModalService = inject(QuizPlayerModalService);
+  private liveSessionService = inject(LiveSessionService);
 
   private channel: BroadcastChannel | null = null;
   private messageListeners: ((msg: LiveSyncMessage) => void)[] = [];
+  private waitingPollTimer: any = null;
 
   // Waiting room state for participants waiting for the host to launch
   waitingParticipant = signal<WaitingParticipant | null>(null);
@@ -135,6 +138,7 @@ export class LiveSyncService {
           });
         }, 100);
       } else if (msg.type === 'SESSION_ENDED' || msg.type === 'GAME_STOPPED') {
+        this.stopWaitingPoll();
         this.waitingParticipant.set(null);
       }
     }
@@ -158,6 +162,8 @@ export class LiveSyncService {
       pin,
       payload: { player }
     });
+
+    this.startWaitingPoll();
   }
 
   leaveWaitingRoom(): void {
@@ -168,7 +174,43 @@ export class LiveSyncService {
         pin: current.pin,
         payload: { playerId: current.player.id }
       });
+      this.stopWaitingPoll();
       this.waitingParticipant.set(null);
+    }
+  }
+
+  private startWaitingPoll(): void {
+    this.stopWaitingPoll();
+    this.waitingPollTimer = setInterval(async () => {
+      const currentWaiting = this.waitingParticipant();
+      if (!currentWaiting) {
+        this.stopWaitingPoll();
+        return;
+      }
+
+      const backendLive = await this.liveSessionService.findBackendLiveSessionByPin(currentWaiting.pin);
+      if (!backendLive) return;
+
+      if (backendLive.status === 'IN_PROGRESS') {
+        this.stopWaitingPoll();
+        this.waitingParticipant.set(null);
+        setTimeout(() => {
+          this.quizPlayerModalService.open(currentWaiting.quiz, {
+            nickname: currentWaiting.player.nickname,
+            email: currentWaiting.player.email
+          });
+        }, 100);
+      } else if (backendLive.status === 'FINISHED') {
+        this.stopWaitingPoll();
+        this.waitingParticipant.set(null);
+      }
+    }, 2000);
+  }
+
+  private stopWaitingPoll(): void {
+    if (this.waitingPollTimer) {
+      clearInterval(this.waitingPollTimer);
+      this.waitingPollTimer = null;
     }
   }
 

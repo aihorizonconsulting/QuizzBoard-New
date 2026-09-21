@@ -41,6 +41,8 @@ public class User {
     @Builder.Default
     private SubscriptionTier subscriptionTier = SubscriptionTier.FREE;
 
+    private LocalDateTime subscriptionExpiresAt;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default

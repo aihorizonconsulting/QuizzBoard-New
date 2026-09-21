@@ -59,9 +59,12 @@ public class PaymentController {
             @RequestBody(required = false) PaymentInitiateRequest request,
             @AuthenticationPrincipal UserPrincipal currentUser) {
         String email = currentUser != null ? currentUser.getEmail() : "user@quizzboard.com";
+        String planId = request != null && request.planId() != null ? request.planId() : "STARTER";
+        double defaultFcfa = "LEARNER_PLUS".equalsIgnoreCase(planId) || "LEARNER_MONTHLY".equalsIgnoreCase(planId) ? 200.0 : 999.0;
+        double defaultUsd = "LEARNER_PLUS".equalsIgnoreCase(planId) || "LEARNER_MONTHLY".equalsIgnoreCase(planId) ? 0.5 : 2.0;
         PaymentInitiateRequest req = request != null
-                ? new PaymentInitiateRequest(PaymentMethod.PAYDUNYA, request.planId() != null ? request.planId() : "STARTER", request.amountFcfa() != null ? request.amountFcfa() : 9900.0, request.amountUsd(), "FCFA", request.phoneNumber())
-                : new PaymentInitiateRequest(PaymentMethod.PAYDUNYA, "STARTER", 9900.0, 15.0, "FCFA", null);
+                ? new PaymentInitiateRequest(PaymentMethod.PAYDUNYA, planId, request.amountFcfa() != null ? request.amountFcfa() : defaultFcfa, request.amountUsd() != null ? request.amountUsd() : defaultUsd, "FCFA", request.phoneNumber())
+                : new PaymentInitiateRequest(PaymentMethod.PAYDUNYA, "STARTER", defaultFcfa, defaultUsd, "FCFA", null);
         PaymentInitiateResponse result = paymentService.initiatePayment(email, req);
         List<LinkDto> links = List.of(
                 new LinkDto("self", "/api/v1/payments/paydunya/initiate", "POST", "application/json"),

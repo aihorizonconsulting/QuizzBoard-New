@@ -5,7 +5,7 @@ export interface PlanFeature {
 }
 
 export interface SubscriptionPlan {
-  id: 'FREE' | 'STARTER';
+  id: 'FREE' | 'STARTER' | 'LEARNER_PLUS';
   name: string;
   badge?: string;
   priceFcfa: number;

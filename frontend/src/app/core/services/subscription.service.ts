@@ -44,8 +44,8 @@ const DEFAULT_PLANS: SubscriptionPlan[] = [
     id: 'STARTER',
     name: 'Formateur Starter',
     badge: 'Recommandé',
-    priceFcfa: 9900,
-    priceUsd: 15,
+    priceFcfa: 999,
+    priceUsd: 2,
     period: 'Mois',
     description: 'Pour les enseignants et centres de formation exigeants cherchant une puissance illimitée.',
     maxActiveQuizzes: 9999,
@@ -61,6 +61,26 @@ const DEFAULT_PLANS: SubscriptionPlan[] = [
       { text: 'Support prioritaire 24/7 par WhatsApp/Email', included: true }
     ],
     isPopular: true
+  },
+  {
+    id: 'LEARNER_PLUS',
+    name: 'Apprenant Plus',
+    badge: 'Élève',
+    priceFcfa: 200,
+    priceUsd: 0.5,
+    period: 'Mois',
+    description: 'Accès mensuel aux corrections d’épreuves, forums et communautés d’examen.',
+    maxActiveQuizzes: 0,
+    maxParticipantsPerLive: 0,
+    maxCommunities: 9999,
+    aiGenerationsPerMonth: 0,
+    features: [
+      { text: 'Corrections BAC, BFEM et examens', included: true, highlight: true },
+      { text: 'Forums et communautés d’entraide', included: true, highlight: true },
+      { text: 'Accès renouvelable chaque mois', included: true },
+      { text: 'Création de quiz professeur', included: false }
+    ],
+    isPopular: false
   }
 ];
 
@@ -88,11 +108,12 @@ export class SubscriptionService {
 
   async loadInvoices(): Promise<void> {
     try {
-      const serverInvoices = await firstValueFrom(
-        this.http.get<any[]>(`${environment.apiUrl}/payments/invoices`)
+      const response = await firstValueFrom(
+        this.http.get<any>(`${environment.apiUrl}/payments/invoices`)
       );
+      const serverInvoices = response?.data || response;
       if (serverInvoices && serverInvoices.length > 0) {
-        const formatted: Invoice[] = serverInvoices.map(inv => ({
+        const formatted: Invoice[] = serverInvoices.map((inv: any) => ({
           id: inv.id || inv.reference,
           date: inv.createdAt ? inv.createdAt.split('T')[0] : new Date().toISOString().split('T')[0],
           planName: inv.planName,
@@ -112,7 +133,7 @@ export class SubscriptionService {
   }
 
   async subscribeToPlan(
-    planId: 'FREE' | 'STARTER',
+    planId: 'FREE' | 'STARTER' | 'LEARNER_PLUS',
     method: 'PAYDUNYA' | 'WAVE' | 'ORANGE_MONEY' | 'STRIPE',
     phoneNumber?: string
   ): Promise<boolean> {
@@ -123,13 +144,14 @@ export class SubscriptionService {
 
     try {
       // 1. Appeler l'endpoint backend d'initiation de paiement PayDunya / Wave / Orange Money
-      const initRes = await firstValueFrom(
-        this.http.post<PaymentInitiateResponse>(`${environment.apiUrl}/payments/initiate`, {
+      const response = await firstValueFrom(
+        this.http.post<any>(`${environment.apiUrl}/payments/initiate`, {
           paymentMethod: method,
           planId: planId,
           phoneNumber: phoneNumber
         })
       );
+      const initRes: PaymentInitiateResponse = response?.data || response;
 
       // Si URL de redirection PayDunya ou autre passerelle fournie
       if (initRes.checkoutUrl) {

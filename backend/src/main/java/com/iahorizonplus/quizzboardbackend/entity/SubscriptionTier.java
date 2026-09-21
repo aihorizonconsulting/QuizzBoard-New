@@ -2,5 +2,6 @@ package com.iahorizonplus.quizzboardbackend.entity;
 
 public enum SubscriptionTier {
     FREE,
-    STARTER
+    STARTER,
+    LEARNER_PLUS
 }

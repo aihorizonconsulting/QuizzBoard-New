@@ -19,6 +19,7 @@ public class UserMapper {
                 user.getEmail(),
                 user.getRole(),
                 user.getSubscriptionTier(),
+                user.getSubscriptionExpiresAt(),
                 user.getAuthProvider(),
                 user.getAvatarUrl(),
                 user.getOrganization(),

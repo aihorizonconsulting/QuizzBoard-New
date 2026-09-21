@@ -340,7 +340,7 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
                   <label>Formule / Forfait *</label>
                   <select [(ngModel)]="newUserData.subscriptionTier" name="subscriptionTier" class="input-field">
                     <option value="FREE">FREE (Gratuit 0 F)</option>
-                    <option value="STARTER">STARTER (9 900 F / mois)</option>
+                    <option value="STARTER">STARTER (999 F / mois)</option>
                   </select>
                 </div>
               </div>

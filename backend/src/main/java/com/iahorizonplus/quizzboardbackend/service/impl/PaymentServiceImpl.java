@@ -64,15 +64,16 @@ public class PaymentServiceImpl implements PaymentService {
 
         String reference = prefix + System.currentTimeMillis() + "-" + UUID.randomUUID().toString().substring(0, 4).toUpperCase();
 
-        Double amountFcfa = request.amountFcfa() != null ? request.amountFcfa() : 9900.0;
-        Double amountUsd = request.amountUsd() != null ? request.amountUsd() : 15.0;
+        String planId = request.planId() != null && !request.planId().isBlank() ? request.planId() : "STARTER";
+        Double amountFcfa = request.amountFcfa() != null ? request.amountFcfa() : defaultAmountFcfa(planId);
+        Double amountUsd = request.amountUsd() != null ? request.amountUsd() : defaultAmountUsd(planId);
 
         // Enregistrement initial de la transaction en attente
         TransactionRecord record = TransactionRecord.builder()
                 .userName(user.getPrenom() + " " + user.getNom())
                 .userEmail(user.getEmail())
                 .organization(user.getOrganization())
-                .plan("STARTER")
+                .plan(planId)
                 .amountFcfa(amountFcfa)
                 .amountUsd(amountUsd)
                 .paymentMethod(request.paymentMethod())
@@ -130,5 +131,13 @@ public class PaymentServiceImpl implements PaymentService {
         User user = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("Utilisateur introuvable : " + userEmail));
         return invoiceRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
+    }
+
+    private double defaultAmountFcfa(String planId) {
+        return "LEARNER_PLUS".equalsIgnoreCase(planId) || "LEARNER_MONTHLY".equalsIgnoreCase(planId) ? 200.0 : 999.0;
+    }
+
+    private double defaultAmountUsd(String planId) {
+        return "LEARNER_PLUS".equalsIgnoreCase(planId) || "LEARNER_MONTHLY".equalsIgnoreCase(planId) ? 0.5 : 2.0;
     }
 }

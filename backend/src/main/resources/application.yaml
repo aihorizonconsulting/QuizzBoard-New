@@ -113,6 +113,8 @@ app:
     cloud-name: ${CLOUDINARY_CLOUD_NAME:}
     api-key: ${CLOUDINARY_API_KEY:}
     api-secret: ${CLOUDINARY_API_SECRET:}
+  live:
+    session-ttl-hours: ${LIVE_SESSION_TTL_HOURS:6}
 
 # 5. Documentation OpenAPI / Swagger UI
 springdoc:

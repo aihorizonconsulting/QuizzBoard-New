@@ -232,11 +232,11 @@ import { ConfirmModalComponent } from '../../shared/components/confirm-modal/con
             </div>
 
             <!-- Profile Chip -->
-            <div class="profile-chip" title="Profil utilisateur">
+            <button type="button" class="profile-chip" title="Profil utilisateur" (click)="router.navigate(['/app/profile'])">
               <div class="avatar-icon-wrapper">
                 <app-icon name="user" [size]="18" color="var(--color-navy)"></app-icon>
               </div>
-            </div>
+            </button>
           </div>
         </header>
 
@@ -973,6 +973,13 @@ import { ConfirmModalComponent } from '../../shared/components/confirm-modal/con
       }
     }
 
+    .profile-chip {
+      border: 0;
+      padding: 0;
+      background: transparent;
+      cursor: pointer;
+    }
+
     @media (max-width: 768px) {
       .app-main { margin-left: 0; max-width: 100vw; }
       .app-topbar { left: 0; right: 0; padding: 0 12px; gap: 8px; }
@@ -1005,7 +1012,7 @@ export class AppLayoutComponent {
   public authService = inject(AuthService);
   public notificationService = inject(NotificationService);
   public promotionService = inject(PromotionService);
-  private router = inject(Router);
+  router = inject(Router);
 
   constructor() {
     this.router.events.pipe(

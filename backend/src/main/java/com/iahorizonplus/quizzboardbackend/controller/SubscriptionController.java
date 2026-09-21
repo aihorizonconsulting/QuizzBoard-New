@@ -78,7 +78,7 @@ public class SubscriptionController {
         try {
             tier = SubscriptionTier.valueOf(tierValue.trim().toUpperCase());
         } catch (IllegalArgumentException ex) {
-            throw new BadRequestException("tier", "Forfait invalide. Valeurs acceptées : FREE, STARTER.");
+            throw new BadRequestException("tier", "Forfait invalide. Valeurs acceptées : FREE, STARTER, LEARNER_PLUS.");
         }
 
         subscriptionService.upgradeUserTier(currentUser.getId(), tier);

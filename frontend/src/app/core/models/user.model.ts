@@ -1,5 +1,5 @@
 export type UserRole = 'CREATOR' | 'LEARNER' | 'ADMIN';
-export type SubscriptionTier = 'FREE' | 'STARTER';
+export type SubscriptionTier = 'FREE' | 'STARTER' | 'LEARNER_PLUS';
 
 export interface User {
   id: string;
@@ -9,6 +9,7 @@ export interface User {
   role: UserRole;
   avatarUrl?: string;
   subscriptionTier: SubscriptionTier;
+  subscriptionExpiresAt?: string;
   organization?: string;
   xpPoints: number;
   level: number;

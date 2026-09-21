@@ -1402,10 +1402,15 @@ export class LiveHostComponent implements OnInit, OnDestroy {
   isSendingEmails = false;
   emailsDispatched = false;
   private syncUnsubscribe: (() => void) | null = null;
+  private backendSessionId: string | null = null;
+  private livePollTimer: any = null;
 
   ngOnInit(): void {
     const sessionId = this.route.snapshot.paramMap.get('id');
     if (sessionId) {
+      this.backendSessionId = sessionId;
+      this.loadBackendSession(sessionId);
+
       const liveSessions = this.liveService.getLiveSessions()();
       const foundSession = liveSessions.find(s => s.id === sessionId);
       if (foundSession) {
@@ -1476,6 +1481,40 @@ export class LiveHostComponent implements OnInit, OnDestroy {
   private clearTimers(): void {
     if (this.countdownTimer) clearInterval(this.countdownTimer);
     if (this.questionTimerInterval) clearInterval(this.questionTimerInterval);
+    if (this.livePollTimer) clearInterval(this.livePollTimer);
+  }
+
+  private async loadBackendSession(sessionId: string): Promise<void> {
+    try {
+      const backend = await this.liveService.getBackendLiveSession(sessionId);
+      this.applyBackendSession(backend);
+      this.startLivePolling(sessionId);
+    } catch {
+      // Fallback local conservé pour les anciennes sessions créées avant l'API Live.
+    }
+  }
+
+  private startLivePolling(sessionId: string): void {
+    if (this.livePollTimer) clearInterval(this.livePollTimer);
+    this.livePollTimer = setInterval(async () => {
+      try {
+        const backend = await this.liveService.getBackendLiveSession(sessionId);
+        this.applyBackendSession(backend);
+        if (backend.status === 'FINISHED') {
+          clearInterval(this.livePollTimer);
+          this.livePollTimer = null;
+        }
+      } catch {}
+    }, 2000);
+  }
+
+  private applyBackendSession(backend: ReturnType<LiveSessionService['toLiveQuizSession']> | any): void {
+    const live = 'players' in backend && 'pin' in backend && !('manuallyStopped' in backend)
+      ? backend
+      : this.liveService.toLiveQuizSession(backend);
+    this.quizService.activeLiveSession.set(live);
+    this.liveSyncService.saveSessionState(live);
+    this.cdr.markForCheck();
   }
 
   onTimePerQuestionChange(seconds: number): void {
@@ -1500,7 +1539,7 @@ export class LiveHostComponent implements OnInit, OnDestroy {
 
   studentError = '';
 
-  addStudentSubmit(): void {
+  async addStudentSubmit(): Promise<void> {
     this.studentError = '';
     const val = this.studentInput.trim();
     if (!val) {
@@ -1511,18 +1550,26 @@ export class LiveHostComponent implements OnInit, OnDestroy {
       this.studentError = 'Format non reconnu. Entrez un email (nom@domaine.com) ou un matricule (ETU-...)';
       return;
     }
-    if (val.includes('@')) {
-      this.quizService.addPlayerToLive({ email: val });
-    } else {
-      this.quizService.addPlayerToLive({ matricule: val });
-    }
+    const player = val.includes('@') ? { email: val } : { matricule: val };
+    await this.addPlayer(player);
     this.liveSyncService.saveSessionState(this.session());
     this.studentInput = '';
   }
 
-  addQuickStudent(email: string, nickname: string, matricule: string): void {
-    this.quizService.addPlayerToLive({ email, nickname, matricule });
+  async addQuickStudent(email: string, nickname: string, matricule: string): Promise<void> {
+    await this.addPlayer({ email, nickname, matricule });
     this.liveSyncService.saveSessionState(this.session());
+  }
+
+  private async addPlayer(player: { nickname?: string; email?: string; matricule?: string }): Promise<void> {
+    if (this.backendSessionId) {
+      try {
+        const backend = await this.liveService.joinBackendLiveSession(this.backendSessionId, player);
+        this.applyBackendSession(backend);
+        return;
+      } catch {}
+    }
+    this.quizService.addPlayerToLive(player);
   }
 
   removeStudent(playerId: string): void {
@@ -1562,11 +1609,20 @@ export class LiveHostComponent implements OnInit, OnDestroy {
     }, 1000);
   }
 
-  private startSimultaneousGame(): void {
+  private async startSimultaneousGame(): Promise<void> {
     const cur = this.session();
     if (!cur) return;
 
-    this.quizService.startLiveGame();
+    if (this.backendSessionId) {
+      try {
+        const backend = await this.liveService.startBackendLiveSession(this.backendSessionId);
+        this.applyBackendSession(backend);
+      } catch {
+        this.quizService.startLiveGame();
+      }
+    } else {
+      this.quizService.startLiveGame();
+    }
 
     // DIFFUSION SIMULTANÉE : tous les apprenants ouvrent le pop-up de quiz instantanément
     this.liveSyncService.broadcast({
@@ -1597,8 +1653,17 @@ export class LiveHostComponent implements OnInit, OnDestroy {
     }, 1000);
   }
 
-  nextQuestion(): void {
-    this.quizService.nextLiveQuestion();
+  async nextQuestion(): Promise<void> {
+    if (this.backendSessionId) {
+      try {
+        const backend = await this.liveService.nextBackendLiveQuestion(this.backendSessionId);
+        this.applyBackendSession(backend);
+      } catch {
+        this.quizService.nextLiveQuestion();
+      }
+    } else {
+      this.quizService.nextLiveQuestion();
+    }
     const cur = this.session();
     if (cur && cur.status === 'IN_PROGRESS') {
       this.startQuestionCountdown();
@@ -1627,7 +1692,16 @@ export class LiveHostComponent implements OnInit, OnDestroy {
     });
     if (!ok) return;
     this.clearTimers();
-    this.quizService.stopLiveSessionManually();
+    if (this.backendSessionId) {
+      try {
+        const backend = await this.liveService.stopBackendLiveSession(this.backendSessionId);
+        this.applyBackendSession(backend);
+      } catch {
+        this.quizService.stopLiveSessionManually();
+      }
+    } else {
+      this.quizService.stopLiveSessionManually();
+    }
     const cur = this.session();
     if (cur) {
       this.dispatchLiveEndResults(cur);

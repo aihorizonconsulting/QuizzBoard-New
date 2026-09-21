@@ -241,7 +241,7 @@ declare const google: any;
                         <span class="radio-circle" [class.selected]="selectedPlan === 'STARTER'"></span>
                         <div class="plan-info">
                           <span class="plan-title">Formule STARTER</span>
-                          <span class="plan-price-tag">9 900 FCFA <small>/mois</small></span>
+                          <span class="plan-price-tag">999 FCFA <small>/mois</small></span>
                         </div>
                       </div>
                       <p class="plan-detail">Accès complet après paiement réel via PayDunya</p>

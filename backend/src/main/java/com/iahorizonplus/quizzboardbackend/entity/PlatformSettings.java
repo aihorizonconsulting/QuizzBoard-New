@@ -26,10 +26,10 @@ public class PlatformSettings {
     private int freeAiCreditsMonth = 5;
 
     @Builder.Default
-    private double starterPriceFcfa = 9900.0;
+    private double starterPriceFcfa = 999.0;
 
     @Builder.Default
-    private double starterPriceUsd = 15.0;
+    private double starterPriceUsd = 2.0;
 
     @Builder.Default
     private boolean isMaintenanceMode = false;
