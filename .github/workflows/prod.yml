@@ -87,8 +87,8 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           password: ${{ secrets.SERVER_PASSWORD }}
           port: 22
-          timeout: 10m
-          command_timeout: 10m
+          timeout: 30m
+          command_timeout: 30m
           script_stop: true
           script: |
             echo "===================================================="

@@ -81,9 +81,11 @@ import { extractFieldErrors, getGeneralErrorMessage } from '../../../core/utils/
                 } @else {
                   <button 
                     type="button" 
-                    class="btn btn-outline btn-full"
+                    class="btn btn-full plan-cta"
+                    [class.cta-starter]="plan.id === 'STARTER'"
+                    [class.cta-learner]="plan.id === 'LEARNER_PLUS'"
                     (click)="openPaymentModal(plan)">
-                    <app-icon name="shield" [size]="15" color="var(--color-navy)"></app-icon>
+                    <app-icon name="shield" [size]="15" color="#FFFFFF"></app-icon>
                     <span>Choisir {{ plan.name }}</span>
                   </button>
                 }
@@ -245,16 +247,16 @@ import { extractFieldErrors, getGeneralErrorMessage } from '../../../core/utils/
     }
 
     .pricing-cards-section {
-      max-width: 960px;
+      max-width: 1180px;
       margin: 40px auto 0 auto;
       padding: 0 24px;
     }
 
     .pricing-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-      gap: 32px;
-      max-width: 820px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 22px;
+      max-width: 1120px;
       margin: 0 auto;
       align-items: stretch;
     }
@@ -322,6 +324,32 @@ import { extractFieldErrors, getGeneralErrorMessage } from '../../../core/utils/
 
       .btn-full {
         width: 100%;
+      }
+
+      .plan-cta {
+        border: 0;
+        color: #FFFFFF;
+        box-shadow: var(--shadow-sm);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+
+        &.cta-starter {
+          background: #0F766E;
+        }
+
+        &.cta-starter:hover {
+          background: #115E59;
+        }
+
+        &.cta-learner {
+          background: #7C3AED;
+        }
+
+        &.cta-learner:hover {
+          background: #6D28D9;
+        }
       }
     }
 
@@ -493,6 +521,18 @@ import { extractFieldErrors, getGeneralErrorMessage } from '../../../core/utils/
       gap: 12px;
       padding-top: 16px;
       border-top: 1px solid var(--color-border);
+    }
+
+    @media (max-width: 1050px) {
+      .pricing-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 700px) {
+      .pricing-grid {
+        grid-template-columns: 1fr;
+      }
     }
   `]
 })

@@ -153,6 +153,17 @@ export class QuizService {
       }
       return null;
     } catch {
+      try {
+        const clean = input.trim().replace(/\s+/g, '');
+        const resp = await firstValueFrom(
+          this.http.get<any>(`${environment.apiUrl}/quizzes/${encodeURIComponent(clean)}`)
+        );
+        const quiz: Quiz = resp?.data || resp;
+        if (quiz && quiz.id) {
+          this.quizzes.update(list => list.some(q => q.id === quiz.id) ? list.map(q => q.id === quiz.id ? quiz : q) : [...list, quiz]);
+          return quiz;
+        }
+      } catch {}
       return null;
     }
   }
