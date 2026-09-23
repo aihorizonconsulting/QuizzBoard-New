@@ -35,3 +35,8 @@ Thumbs.db
 
 # Standalone git backups
 **/.git_*_backup/
+
+# Database dumps with production/user data
+backup.sql
+backup-new.sql
+*.dump
