@@ -80,16 +80,25 @@ import { IconComponent } from '../icon/icon.component';
             </div>
 
             <div class="form-group">
-              <label class="form-label">Votre Adresse Email <small style="color: var(--color-text-secondary); font-weight: normal;">(Pour recevoir votre score & rang)</small></label>
+              <label class="form-label">Votre Adresse Email * <small style="color: var(--color-text-secondary); font-weight: normal;">(Pour recevoir votre score & rang)</small></label>
               <div class="input-icon-wrap">
                 <app-icon name="mail" [size]="16" color="var(--color-text-secondary)" class="field-icon"></app-icon>
-                <input 
-                  type="email" 
-                  [(ngModel)]="email" 
-                  name="email" 
-                  placeholder="ex: fatou.sow@etudiant.univ.sn" 
-                  class="input-field">
+                <input
+                  type="email"
+                  [(ngModel)]="email"
+                  name="email"
+                  placeholder="ex: fatou.sow@etudiant.univ.sn"
+                  class="input-field"
+                  [class.input-error]="emailError"
+                  (input)="clearEmailError()"
+                  required>
               </div>
+              @if (emailError) {
+                <span class="field-error-msg">
+                  <app-icon name="alert" [size]="13" color="var(--color-danger)"></app-icon>
+                  <span>{{ emailError }}</span>
+                </span>
+              }
             </div>
 
             <button 
@@ -295,6 +304,7 @@ export class JoinModalComponent {
   isJoining = false;
   codeError = '';
   nicknameError = '';
+  emailError = '';
 
   private getDefaultNickname(): string {
     const user = this.authService.currentUser();
@@ -317,15 +327,21 @@ export class JoinModalComponent {
     this.nicknameError = '';
   }
 
+  clearEmailError() {
+    this.emailError = '';
+  }
+
   close() {
     this.codeError = '';
     this.nicknameError = '';
+    this.emailError = '';
     this.joinModalService.close();
   }
 
   async handleJoin() {
     this.codeError = '';
     this.nicknameError = '';
+    this.emailError = '';
 
     if (!this.code.trim()) {
       this.codeError = 'Veuillez renseigner le code PIN ou code de partage.';
@@ -333,8 +349,14 @@ export class JoinModalComponent {
     if (!this.nickname.trim()) {
       this.nicknameError = 'Veuillez renseigner votre nom ou pseudonyme.';
     }
+    // L'email est obligatoire : chaque participant reçoit son score et son rang par email
+    if (!this.email.trim()) {
+      this.emailError = 'Veuillez renseigner votre email pour recevoir vos résultats.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.email.trim())) {
+      this.emailError = 'Veuillez saisir une adresse email valide.';
+    }
 
-    if (this.codeError || this.nicknameError) return;
+    if (this.codeError || this.nicknameError || this.emailError) return;
 
     this.isJoining = true;
     try {
@@ -342,7 +364,7 @@ export class JoinModalComponent {
       if (backendLive) {
         const playerPayload = {
           nickname: this.nickname.trim(),
-          email: this.email.trim() || undefined
+          email: this.email.trim()
         };
         const joinedLive = await this.liveSessionService.joinBackendLiveSession(backendLive.id, playerPayload);
         const live = this.liveSessionService.toLiveQuizSession(joinedLive);
@@ -378,7 +400,7 @@ export class JoinModalComponent {
         const playerPayload = {
           id: 'p-' + Date.now(),
           nickname: this.nickname.trim(),
-          email: this.email.trim() || undefined
+          email: this.email.trim()
         };
 
         // Si le code correspond à une session Live active
@@ -398,7 +420,7 @@ export class JoinModalComponent {
         this.close();
         this.quizPlayerModalService.open(targetQuiz, {
           nickname: this.nickname.trim(),
-          email: this.email.trim() || undefined
+          email: this.email.trim()
         });
       } else {
         this.codeError = 'Code PIN ou code de quiz invalide. Aucun quiz actif correspondant.';

@@ -8,7 +8,6 @@ import { LiveQuizSession, LiveSessionPlayer } from '../../../core/models/quiz.mo
 import { IconComponent } from '../../../shared/components/icon/icon.component';
 import { ConfirmDialogService } from '../../../core/services/confirm-dialog.service';
 import { LiveSyncService } from '../../../core/services/live-sync.service';
-import { ParticipationService } from '../../../core/services/participation.service';
 
 @Component({
   selector: 'app-live-host',
@@ -388,13 +387,9 @@ import { ParticipationService } from '../../../core/services/participation.servi
                 <app-icon name="check-circle" [size]="22" color="#16A34A"></app-icon>
               </div>
               <div class="alert-texts">
-                <strong>Rapports de score et rang expédiés par email !</strong>
-                <span>Chaque participant connecté avec une adresse email a reçu son bilan officiel avec son score, son pourcentage et son classement (#Rang / {{ live.players.length }}).</span>
+                <strong>Résultats envoyés par email</strong>
+                <span>Chaque participant reçoit par email son score, son pourcentage et son classement dès qu'il termine le quiz.</span>
               </div>
-              <button type="button" class="btn btn-outline btn-sm resend-btn" (click)="resendRankEmails(live)" [disabled]="isSendingEmails">
-                <app-icon name="mail" [size]="14"></app-icon>
-                <span>{{ isSendingEmails ? 'Envoi en cours...' : 'Renvoyer les emails' }}</span>
-              </button>
             </div>
 
             <!-- 2. FULL PLAYERS RANKING TABLE (CLASSEMENT DE TOUS LES JOUEURS) -->
@@ -1345,18 +1340,6 @@ import { ParticipationService } from '../../../core/services/participation.servi
           line-height: 1.4;
         }
       }
-
-      .resend-btn {
-        flex-shrink: 0;
-        background: #FFFFFF;
-        border-color: #86EFAC;
-        color: #166534;
-        font-weight: 700;
-
-        &:hover:not(:disabled) {
-          background: #DCFCE7;
-        }
-      }
     }
 
     @media (max-width: 768px) {
@@ -1378,7 +1361,6 @@ export class LiveHostComponent implements OnInit, OnDestroy {
   private quizService = inject(QuizService);
   private liveService = inject(LiveSessionService);
   private liveSyncService = inject(LiveSyncService);
-  private partService = inject(ParticipationService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   public confirmService = inject(ConfirmDialogService);
@@ -1399,8 +1381,6 @@ export class LiveHostComponent implements OnInit, OnDestroy {
   private questionTimerInterval: any = null;
 
   // Email dispatch status
-  isSendingEmails = false;
-  emailsDispatched = false;
   private syncUnsubscribe: (() => void) | null = null;
   private backendSessionId: string | null = null;
   private livePollTimer: any = null;
@@ -1669,7 +1649,6 @@ export class LiveHostComponent implements OnInit, OnDestroy {
       this.startQuestionCountdown();
     } else if (cur && cur.status === 'FINISHED') {
       this.clearTimers();
-      this.dispatchLiveEndResults(cur);
       this.liveSyncService.broadcast({
         type: 'SESSION_ENDED',
         pin: cur.pin,
@@ -1684,7 +1663,7 @@ export class LiveHostComponent implements OnInit, OnDestroy {
   async stopLiveImmediately(): Promise<void> {
     const ok = await this.confirmService.confirm({
       title: 'Arrêter la session Live',
-      message: 'Êtes-vous sûr de vouloir arrêter le Live immédiatement ? Le classement final sera calculé avec les scores actuels et les emails envoyés.',
+      message: 'Êtes-vous sûr de vouloir arrêter le Live immédiatement ? Le classement final sera calculé avec les scores actuels.',
       confirmText: 'Arrêter le Live',
       cancelText: 'Continuer la session',
       variant: 'danger',
@@ -1704,7 +1683,6 @@ export class LiveHostComponent implements OnInit, OnDestroy {
     }
     const cur = this.session();
     if (cur) {
-      this.dispatchLiveEndResults(cur);
       this.liveSyncService.broadcast({
         type: 'SESSION_ENDED',
         pin: cur.pin,
@@ -1713,46 +1691,8 @@ export class LiveHostComponent implements OnInit, OnDestroy {
     }
   }
 
-  /**
-   * Envoi automatique par email des résultats détaillés avec score et rang (#Rang / Total)
-   * à tous les participants ayant fourni une adresse email
-   */
-  dispatchLiveEndResults(live: LiveQuizSession): void {
-    if (this.emailsDispatched) return;
-    this.isSendingEmails = true;
-
-    // Trier les apprenants par score décroissant pour obtenir leur rang précis
-    const sorted = [...live.players].sort((a, b) => b.score - a.score);
-    const maxScore = (live.totalQuestions || 5) * 100;
-
-    sorted.forEach((p, idx) => {
-      if (p.email && p.email.includes('@')) {
-        const pct = p.accuracyPercent || Math.round((p.score / maxScore) * 100);
-        this.partService.saveParticipation({
-          quizId: live.quizId,
-          quizTitle: live.quizTitle,
-          participantName: p.nickname,
-          participantEmail: p.email,
-          score: p.score,
-          maxScore,
-          percentage: pct,
-          timeTotalSeconds: Math.round((p.avgResponseTimeSeconds || 4) * (live.totalQuestions || 5)),
-          status: 'COMPLETED',
-          answers: []
-        });
-      }
-    });
-
-    this.emailsDispatched = true;
-    setTimeout(() => {
-      this.isSendingEmails = false;
-    }, 600);
-  }
-
-  resendRankEmails(live: LiveQuizSession): void {
-    this.emailsDispatched = false;
-    this.dispatchLiveEndResults(live);
-  }
+  // Les résultats par email sont envoyés côté joueur : à la fin du quiz, chaque participant
+  // soumet ses vraies réponses (POST /participations) et le backend lui envoie son bilan.
 
   getCurrentQuestionText(s: LiveQuizSession): string {
     return `Question ${s.currentQuestionIndex + 1} : Quelle est la meilleure stratégie pour garantir la scalabilité et la modularité d'une plateforme SaaS ?`;
