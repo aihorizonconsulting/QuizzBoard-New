@@ -256,22 +256,6 @@ public class SmtpEmailService {
                 }
             }
 
-            String certificateHtml = "";
-            if (certificateEligible && certificateCode != null) {
-                certificateHtml = """
-                    <div style="background-color: #FEF3C7; border: 1px solid #F59E0B; border-radius: 8px; padding: 20px; margin-top: 24px; text-align: center;">
-                        <span style="font-size: 24px;">🏆</span>
-                        <h3 style="color: #92400E; margin: 8px 0 4px 0; font-size: 17px; font-weight: 800;">Certificat Officiel Débloqué !</h3>
-                        <p style="color: #78350F; font-size: 13px; margin: 0 0 14px 0;">
-                            Code de vérification : <strong>%s</strong>
-                        </p>
-                        <a href="%s/app/learner/certificates" style="background-color: #0F172A; color: #FFFFFF; text-decoration: none; padding: 10px 22px; border-radius: 6px; font-weight: 700; font-size: 13px; display: inline-block;">
-                            Consulter mon certificat
-                        </a>
-                    </div>
-                """.formatted(certificateCode, appBaseUrl);
-            }
-
             String htmlContent = """
                 <!DOCTYPE html>
                 <html>
@@ -308,7 +292,7 @@ public class SmtpEmailService {
                                                 Bravo <strong>%s</strong>, voici la synthèse détaillée de votre performance.
                                             </p>
 
-                                            <!-- Score Card with 3 Columns: Score %, Points, Rank -->
+                                            <!-- Score Card with 3 Columns: Score %%, Points, Rank -->
                                             <table width="100%%" border="0" cellspacing="0" cellpadding="0" style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
                                                 <tr>
                                                     <td align="center" style="border-right: 1px solid #E2E8F0; width: 33%%; padding: 10px;">
@@ -325,8 +309,6 @@ public class SmtpEmailService {
                                                     </td>
                                                 </tr>
                                             </table>
-
-                                            %s
 
                                             <table width="100%%" border="0" cellspacing="0" cellpadding="0" style="margin-top: 28px;">
                                                 <tr>
@@ -359,7 +341,6 @@ public class SmtpEmailService {
                     quizTitle, participantName,
                     percentage, score, maxScore,
                     rank, totalPlayers,
-                    certificateHtml,
                     appBaseUrl
             );
 
