@@ -34,3 +34,8 @@ Thumbs.db
 
 # Standalone git backups
 **/.git_*_backup/
+
+# Database dumps & migration data (personal data: emails, password hashes)
+backup-new.sql
+database/*.sql
+database/backups/

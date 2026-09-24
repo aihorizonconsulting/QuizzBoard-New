@@ -46,6 +46,6 @@ public class Choice {
     @JsonProperty("correct")
     public void setCorrectLegacy(boolean correct) {
         this.isCorrect = correct;
-    }
+    }   
 }
 
