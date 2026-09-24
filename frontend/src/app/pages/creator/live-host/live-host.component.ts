@@ -212,77 +212,63 @@ import { LiveSyncService } from '../../../core/services/live-sync.service';
           </div>
         }
 
-        <!-- STAGE 2: QUESTION IN PROGRESS -->
-        @if (live.status === 'IN_PROGRESS' || live.status === 'QUESTION_REVIEW') {
+        <!-- STAGE 2: PARTIE EN COURS — SUIVI RÉEL DES RÉPONSES DES APPRENANTS -->
+        @if (live.status === 'IN_PROGRESS') {
           <div class="stage-question">
-            <!-- PROGRESS & TIMER BAR -->
+            <!-- PROGRESSION GLOBALE & TEMPS ÉCOULÉ -->
             <div class="question-progress-bar">
               <div class="q-indicator">
-                <span class="q-step">Question {{ live.currentQuestionIndex + 1 }} / {{ live.totalQuestions }}</span>
-                <span class="q-live-hint">Tous les apprenants jouent en direct</span>
+                <span class="q-step">Partie en cours • {{ live.totalQuestions }} questions</span>
+                <span class="q-live-hint">Chaque apprenant répond à son rythme ({{ live.timePerQuestionSeconds || 20 }}s max par question)</span>
               </div>
 
-              <!-- Question Countdown Timer -->
-              <div class="q-timer-badge" [class.timer-alert]="questionSecondsRemaining <= 5">
-                <app-icon name="clock" [size]="18" [color]="questionSecondsRemaining <= 5 ? '#DC2626' : 'var(--color-navy)'"></app-icon>
+              <div class="q-timer-badge">
+                <app-icon name="clock" [size]="18" color="var(--color-navy)"></app-icon>
                 <div class="timer-digits">
-                  <span class="timer-sec">{{ questionSecondsRemaining }}s</span>
-                  <span class="timer-lbl">restantes</span>
+                  <span class="timer-sec">{{ formatElapsed(live.elapsedSeconds) }}</span>
+                  <span class="timer-lbl">écoulées</span>
                 </div>
               </div>
 
               <div class="question-nav-actions">
-                <button class="btn btn-primary btn-sm" (click)="nextQuestion()">
-                  @if (live.currentQuestionIndex + 1 === live.totalQuestions) {
-                    <app-icon name="trophy" [size]="16" color="var(--color-navy)"></app-icon>
-                    <span>Afficher le Podium Final</span>
-                  } @else {
-                    <span>Question Suivante</span>
-                    <app-icon name="arrow-right" [size]="14" color="var(--color-navy)"></app-icon>
-                  }
+                <button class="btn btn-primary btn-sm" (click)="finishLive()">
+                  <app-icon name="trophy" [size]="16" color="var(--color-navy)"></app-icon>
+                  <span>Terminer et afficher le podium</span>
                 </button>
               </div>
             </div>
 
-            <!-- QUESTION CARD -->
+            <!-- SUIVI DES RÉPONSES -->
             <div class="question-main-card card">
-              <div class="question-badge-topic">ÉVALUATION EN DIRECT • CHRONO SYNCHRONE</div>
-              <h2 class="display-title question-headline">
-                {{ getCurrentQuestionText(live) }}
-              </h2>
+              <div class="question-badge-topic">ÉVALUATION EN DIRECT • SUIVI DES RÉPONSES</div>
+              <h2 class="display-title question-headline">{{ live.quizTitle }}</h2>
 
-              <!-- Live Answer Counter & Response Progress -->
               <div class="answer-counter-bar">
                 <div class="counter-badge">
                   <app-icon name="check-circle" [size]="16" color="var(--color-success)"></app-icon>
-                  <span>{{ getSimulatedAnswersCount(live) }} / {{ live.players.length }} Réponses enregistrées</span>
+                  <span>{{ finishedCount(live) }} / {{ live.players.length }} apprenants ont terminé • {{ totalAnswers(live) }} réponses enregistrées</span>
                 </div>
                 <div class="answers-track">
-                  <div class="answers-fill" [style.width]="(getSimulatedAnswersCount(live) / live.players.length) * 100 + '%'"></div>
+                  <div class="answers-fill" [style.width]="answersProgressPercent(live) + '%'"></div>
                 </div>
               </div>
-
-              <!-- Question Options Preview -->
-              <div class="live-options-preview">
-                <div class="opt-card opt-a"><span class="opt-key">A</span> Option 1 : Découpage modulaire Clean Architecture</div>
-                <div class="opt-card opt-b"><span class="opt-key">B</span> Option 2 : Monolithe sans séparation de couches</div>
-                <div class="opt-card opt-c"><span class="opt-key">C</span> Option 3 : Microservices avec bus Kafka</div>
-                <div class="opt-card opt-d"><span class="opt-key">D</span> Option 4 : Base de données NoSQL distribuée</div>
-              </div>
+              @if (finishedCount(live) === live.players.length && live.players.length > 0) {
+                <p class="all-finished-hint">Tous les apprenants ont terminé : vous pouvez afficher le podium.</p>
+              }
             </div>
 
-            <!-- Mini Live Leaderboard preview -->
+            <!-- CLASSEMENT EN DIRECT (SCORES RÉELS) -->
             <div class="live-leaderboard-preview card">
               <div class="lead-head">
                 <h4 class="h3" style="display: flex; align-items: center; gap: 8px; margin: 0;">
                   <app-icon name="trophy" [size]="18" color="var(--color-navy)"></app-icon>
-                  <span>Classement en Direct (Top 5)</span>
+                  <span>Classement en Direct</span>
                 </h4>
-                <span class="body-small text-muted">Mise à jour en temps réel à chaque réponse</span>
+                <span class="body-small text-muted">Mis à jour à chaque réponse des apprenants</span>
               </div>
 
               <div class="rank-list">
-                @for (p of live.players.slice(0, 5); track p.id; let rank = $index) {
+                @for (p of live.players; track p.id; let rank = $index) {
                   <div class="rank-row">
                     <span class="rank-pos">#{{ rank + 1 }}</span>
                     <div class="rank-user">
@@ -291,6 +277,9 @@ import { LiveSyncService } from '../../../core/services/live-sync.service';
                         <span class="rank-matricule">{{ p.matricule }}</span>
                       }
                     </div>
+                    <span class="rank-progress" [class.is-done]="p.finished">
+                      {{ p.finished ? 'Terminé' : (p.answeredCount || 0) + ' / ' + live.totalQuestions }}
+                    </span>
                     <span class="rank-streak">
                       <app-icon name="flame" [size]="14" color="var(--color-orange)"></app-icon>
                       {{ p.streak }} en série
@@ -312,7 +301,7 @@ import { LiveSyncService } from '../../../core/services/live-sync.service';
                 <app-icon name="x-circle" [size]="20" color="#B45309"></app-icon>
                 <div class="stop-text">
                   <strong>Session arrêtée par l'enseignant</strong>
-                  <span>Le live a été clôturé manuellement à la question {{ live.currentQuestionIndex + 1 }} / {{ live.totalQuestions }}. Le classement final a été calculé sur l'ensemble des points validés.</span>
+                  <span>Le live a été clôturé manuellement. Le classement tient compte des réponses enregistrées jusqu'à l'arrêt ; seuls les apprenants ayant terminé le quiz reçoivent leur résultat par email.</span>
                 </div>
               </div>
             }
@@ -325,60 +314,66 @@ import { LiveSyncService } from '../../../core/services/live-sync.service';
                 </div>
                 <h1 class="display-title" style="color: #FFFFFF; margin-top: 14px;">LE PODIUM DU LIVE</h1>
                 <p class="body-lead" style="color: #CBD5E1; margin: 4px 0 0 0;">
-                  Félicitations aux vainqueurs et à l'ensemble des {{ live.players.length }} participants !
+                  @if (rankedPlayers(live).length > 0) {
+                    Félicitations aux vainqueurs et à l'ensemble des {{ rankedPlayers(live).length }} participants classés !
+                  } @else {
+                    Aucun apprenant n'a répondu pendant ce live.
+                  }
                 </p>
               </div>
 
-              <div class="podium-stage">
-                <!-- 2nd Place (Silver) -->
-                @if (live.players.length > 1) {
-                  <div class="podium-column silver-col">
-                    <div class="podium-player">
-                      <div class="medal-icon silver-medal">2</div>
-                      <strong class="name">{{ live.players[1].nickname }}</strong>
-                      @if (live.players[1].matricule) {
-                        <span class="podium-mat">{{ live.players[1].matricule }}</span>
-                      }
-                      <span class="pts">{{ live.players[1].score }} pts</span>
-                      <span class="acc">{{ live.players[1].accuracyPercent || 80 }}% réussite</span>
+              @if (rankedPlayers(live); as ranked) {
+                <div class="podium-stage">
+                  <!-- 2nd Place (Silver) -->
+                  @if (ranked.length > 1) {
+                    <div class="podium-column silver-col">
+                      <div class="podium-player">
+                        <div class="medal-icon silver-medal">2</div>
+                        <strong class="name">{{ ranked[1].nickname }}</strong>
+                        @if (ranked[1].matricule) {
+                          <span class="podium-mat">{{ ranked[1].matricule }}</span>
+                        }
+                        <span class="pts">{{ ranked[1].score }} pts</span>
+                        <span class="acc">{{ ranked[1].accuracyPercent ?? 0 }}% réussite</span>
+                      </div>
+                      <div class="podium-block step-2">ARGENT</div>
                     </div>
-                    <div class="podium-block step-2">ARGENT</div>
-                  </div>
-                }
+                  }
 
-                <!-- 1st Place (Gold) -->
-                @if (live.players.length > 0) {
-                  <div class="podium-column gold-col">
-                    <div class="podium-player">
-                      <div class="crown-badge">👑</div>
-                      <div class="medal-icon gold-medal">1</div>
-                      <strong class="name">{{ live.players[0].nickname }}</strong>
-                      @if (live.players[0].matricule) {
-                        <span class="podium-mat">{{ live.players[0].matricule }}</span>
-                      }
-                      <span class="pts">{{ live.players[0].score }} pts</span>
-                      <span class="acc">{{ live.players[0].accuracyPercent || 100 }}% réussite</span>
+                  <!-- 1st Place (Gold) -->
+                  @if (ranked.length > 0) {
+                    <div class="podium-column gold-col">
+                      <div class="podium-player">
+                        <div class="crown-badge">👑</div>
+                        <div class="medal-icon gold-medal">1</div>
+                        <strong class="name">{{ ranked[0].nickname }}</strong>
+                        @if (ranked[0].matricule) {
+                          <span class="podium-mat">{{ ranked[0].matricule }}</span>
+                        }
+                        <span class="pts">{{ ranked[0].score }} pts</span>
+                        <span class="acc">{{ ranked[0].accuracyPercent ?? 0 }}% réussite</span>
+                      </div>
+                      <div class="podium-block step-1">OR • CHAMPION</div>
                     </div>
-                    <div class="podium-block step-1">OR • CHAMPION</div>
-                  </div>
-                }
+                  }
 
-                <!-- 3rd Place (Bronze) -->
-                @if (live.players.length > 2) {
-                  <div class="podium-column bronze-col">
-                    <div class="podium-player">
-                      <div class="medal-icon bronze-medal">3</div>
-                      <strong class="name">{{ live.players[2].nickname }}</strong>
-                      @if (live.players[2].matricule) {
-                        <span class="podium-mat">{{ live.players[2].matricule }}</span>
-                      }
-                      <span class="pts">{{ live.players[2].score }} pts</span>
-                      <span class="acc">{{ live.players[2].accuracyPercent || 70 }}% réussite</span>
+                  <!-- 3rd Place (Bronze) -->
+                  @if (ranked.length > 2) {
+                    <div class="podium-column bronze-col">
+                      <div class="podium-player">
+                        <div class="medal-icon bronze-medal">3</div>
+                        <strong class="name">{{ ranked[2].nickname }}</strong>
+                        @if (ranked[2].matricule) {
+                          <span class="podium-mat">{{ ranked[2].matricule }}</span>
+                        }
+                        <span class="pts">{{ ranked[2].score }} pts</span>
+                        <span class="acc">{{ ranked[2].accuracyPercent ?? 0 }}% réussite</span>
+                      </div>
+                      <div class="podium-block step-3">BRONZE</div>
                     </div>
-                    <div class="podium-block step-3">BRONZE</div>
-                  </div>
-                }
-              </div>
+                  }
+                </div>
+              }
             </div>
 
             <!-- BANNER CONFIRMATION ENVOI EMAILS RANG ET SCORE -->
@@ -430,11 +425,15 @@ import { LiveSyncService } from '../../../core/services/live-sync.service';
                   </thead>
                   <tbody>
                     @for (p of live.players; track p.id; let rank = $index) {
-                      <tr [class.highlight-row]="rank < 3">
+                      <tr [class.highlight-row]="hasPlayed(p) && rank < 3">
                         <td>
-                          <span class="rank-badge" [class.rank-gold]="rank === 0" [class.rank-silver]="rank === 1" [class.rank-bronze]="rank === 2">
-                            #{{ rank + 1 }}
-                          </span>
+                          @if (hasPlayed(p)) {
+                            <span class="rank-badge" [class.rank-gold]="rank === 0" [class.rank-silver]="rank === 1" [class.rank-bronze]="rank === 2">
+                              #{{ rank + 1 }}
+                            </span>
+                          } @else {
+                            <span class="rank-badge">—</span>
+                          }
                         </td>
                         <td>
                           <div class="player-cell">
@@ -459,19 +458,31 @@ import { LiveSyncService } from '../../../core/services/live-sync.service';
                           <strong class="score-txt">{{ p.score }} pts</strong>
                         </td>
                         <td>
-                          <span class="badge" [ngClass]="(p.accuracyPercent || 80) >= 80 ? 'badge-success' : ((p.accuracyPercent || 80) >= 60 ? 'badge-primary' : 'badge-orange')">
-                            {{ p.accuracyPercent || 80 }}%
-                          </span>
+                          @if (hasPlayed(p)) {
+                            <span class="badge" [ngClass]="(p.accuracyPercent ?? 0) >= 80 ? 'badge-success' : ((p.accuracyPercent ?? 0) >= 60 ? 'badge-primary' : 'badge-orange')">
+                              {{ p.accuracyPercent ?? 0 }}%
+                            </span>
+                          } @else {
+                            <span class="text-muted">—</span>
+                          }
                         </td>
                         <td class="body-small text-muted">
-                          {{ p.avgResponseTimeSeconds || 4.2 }}s / question
+                          @if (hasPlayed(p)) {
+                            {{ p.avgResponseTimeSeconds ?? 0 }}s / question
+                          } @else {
+                            —
+                          }
                         </td>
                         <td style="text-align: right;">
-                          @if (rank === 0) {
+                          @if (!hasPlayed(p)) {
+                            <span class="status-pill status-pending">N'a pas joué</span>
+                          } @else if (rank === 0) {
                             <span class="status-pill status-champion">🥇 1er Prix</span>
                           } @else if (rank < 3) {
                             <span class="status-pill status-podium">🏅 Podium</span>
-                          } @else if ((p.accuracyPercent || 80) >= 70) {
+                          } @else if (!p.finished) {
+                            <span class="status-pill status-pending">Non terminé ({{ p.answeredCount }} / {{ live.totalQuestions }})</span>
+                          } @else if ((p.accuracyPercent ?? 0) >= 70) {
                             <span class="status-pill status-valid">✓ Validé</span>
                           } @else {
                             <span class="status-pill status-pending">À consolider</span>
@@ -1006,37 +1017,12 @@ import { LiveSyncService } from '../../../core/services/live-sync.service';
           }
         }
 
-        .live-options-preview {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 12px;
-
-          .opt-card {
-            padding: 14px 18px;
-            border-radius: var(--radius-md);
-            font-size: 14px;
-            font-weight: 700;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-
-            .opt-key {
-              width: 24px;
-              height: 24px;
-              border-radius: 4px;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              font-weight: 900;
-              font-size: 12px;
-              background: rgba(255, 255, 255, 0.4);
-            }
-
-            &.opt-a { background: #EEF2FF; color: #3730A3; border: 1px solid #C7D2FE; }
-            &.opt-b { background: #ECFDF5; color: #065F46; border: 1px solid #A7F3D0; }
-            &.opt-c { background: #FFFBEB; color: #92400E; border: 1px solid #FDE68A; }
-            &.opt-d { background: #FFF1F2; color: #9F1239; border: 1px solid #FECDD3; }
-          }
+        .all-finished-hint {
+          text-align: center;
+          font-size: 13px;
+          font-weight: 700;
+          color: #16A34A;
+          margin: -12px 0 0 0;
         }
       }
 
@@ -1079,6 +1065,18 @@ import { LiveSyncService } from '../../../core/services/live-sync.service';
 
               .rank-name { font-size: 13px; color: var(--color-navy); }
               .rank-matricule { font-size: 10px; color: var(--color-text-secondary); font-family: monospace; }
+            }
+
+            .rank-progress {
+              font-size: 11px;
+              font-weight: 700;
+              color: var(--color-text-secondary);
+              background: #F1F5F9;
+              padding: 2px 10px;
+              border-radius: var(--radius-full);
+              margin-right: 16px;
+
+              &.is-done { color: #16A34A; background: #DCFCE7; }
             }
 
             .rank-streak {
@@ -1343,9 +1341,6 @@ import { LiveSyncService } from '../../../core/services/live-sync.service';
     }
 
     @media (max-width: 768px) {
-      .question-main-card .live-options-preview {
-        grid-template-columns: 1fr;
-      }
       .timing-card .timing-header {
         grid-template-columns: 1fr;
       }
@@ -1376,11 +1371,6 @@ export class LiveHostComponent implements OnInit, OnDestroy {
   countdownNumber = 3;
   private countdownTimer: any = null;
 
-  // In-Game Question Timer
-  questionSecondsRemaining = 20;
-  private questionTimerInterval: any = null;
-
-  // Email dispatch status
   private syncUnsubscribe: (() => void) | null = null;
   private backendSessionId: string | null = null;
   private livePollTimer: any = null;
@@ -1409,11 +1399,10 @@ export class LiveHostComponent implements OnInit, OnDestroy {
       }
     }
 
-    if (!this.session()) {
-      const list = this.quizService.getQuizzes()();
-      if (list.length > 0) {
-        this.quizService.startLiveSession(list[0], 20);
-      }
+    // Sans identifiant de session ni Live en cours, on renvoie vers la page de création de Live
+    if (!sessionId && !this.session()) {
+      this.router.navigate(['/app/live']);
+      return;
     }
 
     // Sauvegarder la session dans le bus synchronisé
@@ -1456,12 +1445,16 @@ export class LiveHostComponent implements OnInit, OnDestroy {
       this.syncUnsubscribe();
     }
     this.clearTimers();
+    this.stopLivePolling();
   }
 
   private clearTimers(): void {
     if (this.countdownTimer) clearInterval(this.countdownTimer);
-    if (this.questionTimerInterval) clearInterval(this.questionTimerInterval);
+  }
+
+  private stopLivePolling(): void {
     if (this.livePollTimer) clearInterval(this.livePollTimer);
+    this.livePollTimer = null;
   }
 
   private async loadBackendSession(sessionId: string): Promise<void> {
@@ -1475,14 +1468,16 @@ export class LiveHostComponent implements OnInit, OnDestroy {
   }
 
   private startLivePolling(sessionId: string): void {
-    if (this.livePollTimer) clearInterval(this.livePollTimer);
+    this.stopLivePolling();
     this.livePollTimer = setInterval(async () => {
       try {
         const backend = await this.liveService.getBackendLiveSession(sessionId);
         this.applyBackendSession(backend);
-        if (backend.status === 'FINISHED') {
-          clearInterval(this.livePollTimer);
-          this.livePollTimer = null;
+        // Après la fin, on continue tant que des apprenants terminent encore leur quiz
+        // (leurs réponses tardives mettent à jour le classement final).
+        const stillPlaying = backend.players.some(p => p.answeredCount > 0 && !p.finished);
+        if (backend.status === 'FINISHED' && !stillPlaying) {
+          this.stopLivePolling();
         }
       } catch {}
     }, 2000);
@@ -1497,9 +1492,46 @@ export class LiveHostComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
   }
 
-  onTimePerQuestionChange(seconds: number): void {
-    this.quizService.setTimePerQuestion(Number(seconds));
+  async onTimePerQuestionChange(seconds: number): Promise<void> {
+    const value = Number(seconds);
+    this.quizService.setTimePerQuestion(value);
+    if (this.backendSessionId) {
+      try {
+        const backend = await this.liveService.updateBackendLiveSettings(this.backendSessionId, value);
+        this.applyBackendSession(backend);
+      } catch {}
+    }
     this.liveSyncService.saveSessionState(this.session());
+  }
+
+  formatElapsed(seconds?: number): string {
+    const total = Math.max(0, Math.floor(seconds || 0));
+    const mins = Math.floor(total / 60);
+    const secs = total % 60;
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  }
+
+  hasPlayed(p: LiveSessionPlayer): boolean {
+    return (p.answeredCount || 0) > 0;
+  }
+
+  /** Joueurs classés : ceux qui ont répondu au moins une fois (déjà triés par le backend). */
+  rankedPlayers(live: LiveQuizSession): LiveSessionPlayer[] {
+    return live.players.filter(p => this.hasPlayed(p));
+  }
+
+  finishedCount(live: LiveQuizSession): number {
+    return live.players.filter(p => p.finished).length;
+  }
+
+  totalAnswers(live: LiveQuizSession): number {
+    return live.players.reduce((sum, p) => sum + (p.answeredCount || 0), 0);
+  }
+
+  answersProgressPercent(live: LiveQuizSession): number {
+    const expected = live.players.length * live.totalQuestions;
+    if (!expected) return 0;
+    return Math.min(100, Math.round((this.totalAnswers(live) / expected) * 100));
   }
 
   formatDuration(seconds?: number): string {
@@ -1605,57 +1637,56 @@ export class LiveHostComponent implements OnInit, OnDestroy {
     }
 
     // DIFFUSION SIMULTANÉE : tous les apprenants ouvrent le pop-up de quiz instantanément
+    const started = this.session() || cur;
     this.liveSyncService.broadcast({
       type: 'GAME_STARTED',
       pin: cur.pin,
-      payload: { quizId: cur.quizId }
+      payload: { quizId: cur.quizId, timePerQuestionSeconds: started.timePerQuestionSeconds || 20 }
     });
     this.liveSyncService.saveSessionState(this.session());
-
-    this.startQuestionCountdown();
     this.cdr.markForCheck();
   }
 
-  private startQuestionCountdown(): void {
+  // Fin normale du Live : fige le classement et envoie les résultats aux apprenants qui ont terminé
+  async finishLive(): Promise<void> {
     const cur = this.session();
-    const duration = cur?.timePerQuestionSeconds || 20;
-    this.questionSecondsRemaining = duration;
-    this.cdr.markForCheck();
+    if (!cur) return;
 
-    if (this.questionTimerInterval) clearInterval(this.questionTimerInterval);
+    const unfinished = cur.players.filter(p => !p.finished).length;
+    if (unfinished > 0) {
+      const ok = await this.confirmService.confirm({
+        title: 'Terminer le Live',
+        message: `${unfinished} apprenant(s) n'ont pas encore terminé. Le podium sera calculé avec les réponses déjà enregistrées ; ceux qui terminent ensuite recevront quand même leur résultat par email.`,
+        confirmText: 'Afficher le podium',
+        cancelText: 'Attendre encore',
+        variant: 'primary',
+        icon: 'trophy'
+      });
+      if (!ok) return;
+    }
 
-    this.questionTimerInterval = setInterval(() => {
-      this.questionSecondsRemaining--;
-      this.cdr.markForCheck();
-      if (this.questionSecondsRemaining <= 0) {
-        clearInterval(this.questionTimerInterval);
-      }
-    }, 1000);
-  }
-
-  async nextQuestion(): Promise<void> {
     if (this.backendSessionId) {
       try {
-        const backend = await this.liveService.nextBackendLiveQuestion(this.backendSessionId);
+        const backend = await this.liveService.finishBackendLiveSession(this.backendSessionId);
         this.applyBackendSession(backend);
       } catch {
-        this.quizService.nextLiveQuestion();
+        this.quizService.stopLiveSessionManually();
       }
     } else {
-      this.quizService.nextLiveQuestion();
+      this.quizService.stopLiveSessionManually();
     }
+    this.broadcastSessionEnded();
+  }
+
+  private broadcastSessionEnded(): void {
+    this.clearTimers();
     const cur = this.session();
-    if (cur && cur.status === 'IN_PROGRESS') {
-      this.startQuestionCountdown();
-    } else if (cur && cur.status === 'FINISHED') {
-      this.clearTimers();
+    if (cur) {
       this.liveSyncService.broadcast({
         type: 'SESSION_ENDED',
         pin: cur.pin,
         payload: { players: cur.players }
       });
-    } else {
-      this.clearTimers();
     }
   }
 
@@ -1670,7 +1701,6 @@ export class LiveHostComponent implements OnInit, OnDestroy {
       icon: 'lock'
     });
     if (!ok) return;
-    this.clearTimers();
     if (this.backendSessionId) {
       try {
         const backend = await this.liveService.stopBackendLiveSession(this.backendSessionId);
@@ -1681,48 +1711,45 @@ export class LiveHostComponent implements OnInit, OnDestroy {
     } else {
       this.quizService.stopLiveSessionManually();
     }
-    const cur = this.session();
-    if (cur) {
-      this.liveSyncService.broadcast({
-        type: 'SESSION_ENDED',
-        pin: cur.pin,
-        payload: { players: cur.players }
-      });
-    }
+    this.broadcastSessionEnded();
   }
 
-  // Les résultats par email sont envoyés côté joueur : à la fin du quiz, chaque participant
-  // soumet ses vraies réponses (POST /participations) et le backend lui envoie son bilan.
-
-  getCurrentQuestionText(s: LiveQuizSession): string {
-    return `Question ${s.currentQuestionIndex + 1} : Quelle est la meilleure stratégie pour garantir la scalabilité et la modularité d'une plateforme SaaS ?`;
-  }
-
-  getSimulatedAnswersCount(live: LiveQuizSession): number {
-    const elapsedRatio = Math.min(1, (live.timePerQuestionSeconds || 20 - this.questionSecondsRemaining) / (live.timePerQuestionSeconds || 20));
-    return Math.min(live.players.length, Math.floor(live.players.length * elapsedRatio) + 1);
-  }
+  // Les résultats par email sont envoyés par le backend : à la fin de la session (ou dès qu'un
+  // apprenant termine après la clôture), chacun reçoit son score et son rang dans ce Live.
 
   exportResultsCsv(live: LiveQuizSession): void {
-    let csvContent = 'data:text/csv;charset=utf-8,';
-    csvContent += 'Rang,Apprenant,Matricule,Email,Score,Pourcentage,TempsMoyen\n';
-
-    live.players.forEach((p, idx) => {
-      const line = `${idx + 1},"${p.nickname}","${p.matricule || ''}","${p.email || ''}",${p.score},${p.accuracyPercent || 80}%,${p.avgResponseTimeSeconds || 4.2}s`;
-      csvContent += line + '\n';
+    const escape = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`;
+    const header = ['Rang', 'Apprenant', 'Matricule', 'Email', 'Score', 'Réponses', 'Réussite (%)', 'Temps moyen (s)', 'Statut'];
+    const rows = live.players.map((p, idx) => {
+      const played = this.hasPlayed(p);
+      const status = !played ? "N'a pas joué" : (p.finished ? 'Terminé' : 'Non terminé');
+      return [
+        played ? idx + 1 : '',
+        p.nickname,
+        p.matricule || '',
+        p.email || '',
+        p.score,
+        `${p.answeredCount || 0} / ${live.totalQuestions}`,
+        played ? (p.accuracyPercent ?? 0) : '',
+        played ? (p.avgResponseTimeSeconds ?? 0) : '',
+        status
+      ].map(escape).join(',');
     });
 
-    const encodedUri = encodeURI(csvContent);
+    const csv = '﻿' + [header.map(escape).join(','), ...rows].join('\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
+    link.setAttribute('href', url);
     link.setAttribute('download', `resultats_live_${live.pin.replace(/\s+/g, '')}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   }
 
   exitLive(): void {
     this.clearTimers();
+    this.stopLivePolling();
     if (this.syncUnsubscribe) {
       this.syncUnsubscribe();
     }

@@ -30,6 +30,9 @@ public class Participation {
     private String classId;
     private String className;
 
+    // Session Live d'origine : le résultat est alors envoyé par email par la session (rang dans le Live)
+    private String liveSessionId;
+
     @Column(nullable = false)
     private String participantName;
 

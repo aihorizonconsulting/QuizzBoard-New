@@ -1,7 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { LiveSessionRecord, LiveAudienceType } from '../models/live-session.model';
-import { LiveQuizSession } from '../models/quiz.model';
+import { LiveQuizSession, Quiz } from '../models/quiz.model';
 import { environment } from '../../../environments/environment';
 import { firstValueFrom } from 'rxjs';
 
@@ -15,6 +15,20 @@ export interface BackendLivePlayer {
   ready: boolean;
   accuracyPercent: number;
   avgResponseTimeSeconds: number;
+  answeredCount: number;
+  finished: boolean;
+}
+
+/** Progression réelle d'un joueur, envoyée après chaque réponse (instantané cumulatif). */
+export interface LiveProgress {
+  playerId: string;
+  answeredCount: number;
+  correctCount: number;
+  score: number;
+  maxScore: number;
+  streak: number;
+  totalTimeSeconds: number;
+  finished: boolean;
 }
 
 export interface BackendLiveSession {
@@ -29,10 +43,12 @@ export interface BackendLiveSession {
   totalQuestions: number;
   timePerQuestionSeconds: number;
   totalDurationSeconds: number;
+  elapsedSeconds?: number;
   startedAt?: string;
   expectedEndAt?: string;
   endedAt?: string;
   manuallyStopped?: boolean;
+  createdAt?: string;
   players: BackendLivePlayer[];
 }
 
@@ -90,6 +106,41 @@ export class LiveSessionService {
     return newSession;
   }
 
+  /**
+   * Crée une session Live pour un quiz et renvoie son id (route /app/live/host/:id).
+   * La session est créée côté backend pour obtenir un vrai PIN rejoignable ; repli local si l'API est indisponible.
+   */
+  async launchLiveSession(quiz: Quiz, options: {
+    timePerQuestionSeconds?: number;
+    audienceType?: LiveAudienceType;
+    targetClassId?: string;
+    targetClassName?: string;
+  } = {}): Promise<string> {
+    const totalQuestions = quiz.questionsCount || quiz.questions?.length || 5;
+    const timePerQuestionSeconds = Number(options.timePerQuestionSeconds) || 20;
+    try {
+      const backend = await this.createBackendLiveSession({
+        quizId: quiz.id,
+        quizTitle: quiz.title || 'Quiz Live',
+        totalQuestions,
+        timePerQuestionSeconds
+      });
+      return backend.id;
+    } catch {
+      return this.createLiveSession({
+        quizId: quiz.id,
+        quizTitle: quiz.title || 'Quiz Live',
+        quizQuestionsCount: totalQuestions,
+        hostId: 'u1',
+        hostName: 'Professeur',
+        audienceType: options.audienceType || 'PUBLIC',
+        targetClassId: options.targetClassId,
+        targetClassName: options.targetClassName,
+        timePerQuestionSeconds
+      }).id;
+    }
+  }
+
   async createBackendLiveSession(data: {
     quizId: string;
     quizTitle: string;
@@ -143,11 +194,29 @@ export class LiveSessionService {
     return this.unwrapAndStore(response);
   }
 
-  async nextBackendLiveQuestion(id: string): Promise<BackendLiveSession> {
+  async updateBackendLiveSettings(id: string, timePerQuestionSeconds: number): Promise<BackendLiveSession> {
     const response = await firstValueFrom(
-      this.http.post<any>(`${environment.apiUrl}/live-sessions/${encodeURIComponent(id)}/next`, {})
+      this.http.put<any>(`${environment.apiUrl}/live-sessions/${encodeURIComponent(id)}/settings`, { timePerQuestionSeconds })
     );
     return this.unwrapAndStore(response);
+  }
+
+  async finishBackendLiveSession(id: string): Promise<BackendLiveSession> {
+    const response = await firstValueFrom(
+      this.http.post<any>(`${environment.apiUrl}/live-sessions/${encodeURIComponent(id)}/finish`, {})
+    );
+    return this.unwrapAndStore(response);
+  }
+
+  /** Envoi de la progression d'un joueur ; un échec ponctuel est rattrapé par l'envoi suivant. */
+  async reportLiveProgress(id: string, progress: LiveProgress): Promise<void> {
+    try {
+      await firstValueFrom(
+        this.http.post<any>(`${environment.apiUrl}/live-sessions/${encodeURIComponent(id)}/progress`, progress)
+      );
+    } catch (err) {
+      console.warn('Progression Live non transmise :', err);
+    }
   }
 
   async stopBackendLiveSession(id: string): Promise<BackendLiveSession> {
@@ -168,6 +237,7 @@ export class LiveSessionService {
       totalQuestions: session.totalQuestions,
       timePerQuestionSeconds: session.timePerQuestionSeconds,
       totalDurationSeconds: session.totalDurationSeconds,
+      elapsedSeconds: session.elapsedSeconds,
       startedAt: session.startedAt,
       expectedEndAt: session.expectedEndAt,
       endedAt: session.endedAt,
@@ -181,7 +251,9 @@ export class LiveSessionService {
         streak: p.streak,
         isReady: p.ready,
         accuracyPercent: p.accuracyPercent,
-        avgResponseTimeSeconds: p.avgResponseTimeSeconds
+        avgResponseTimeSeconds: p.avgResponseTimeSeconds,
+        answeredCount: p.answeredCount,
+        finished: p.finished
       }))
     };
   }
@@ -200,8 +272,36 @@ export class LiveSessionService {
     return session;
   }
 
+  /** Recharge depuis l'API les sessions Live de l'animateur connecté (conservées en base). */
+  async loadMyLiveSessions(): Promise<void> {
+    try {
+      const response = await firstValueFrom(
+        this.http.get<any>(`${environment.apiUrl}/live-sessions/mine`)
+      );
+      const list = response?.data || response;
+      const records = (Array.isArray(list) ? list : []).map((s: BackendLiveSession) => this.toRecord(s));
+      // La liste du serveur remplace l'ancienne (autre compte éventuel) ; seules les sessions
+      // créées hors ligne en repli local ("live-<horodatage>") sont conservées
+      this.liveSessionsState.update(current => [...records, ...current.filter(r => /^live-\d+$/.test(r.id))]);
+    } catch (err) {
+      console.warn('Chargement des sessions Live impossible :', err);
+    }
+  }
+
   private upsertRecord(session: BackendLiveSession): void {
-    const record: LiveSessionRecord = {
+    const record = this.toRecord(session);
+    this.liveSessionsState.update(list => {
+      const exists = list.some(s => s.id === record.id);
+      return exists ? list.map(s => s.id === record.id ? { ...s, ...record } : s) : [record, ...list];
+    });
+  }
+
+  private toRecord(session: BackendLiveSession): LiveSessionRecord {
+    const ranked = (session.players || []).filter(p => (p.answeredCount || 0) > 0);
+    const averageScorePercent = ranked.length
+      ? Math.round(ranked.reduce((sum, p) => sum + (p.accuracyPercent || 0), 0) / ranked.length)
+      : undefined;
+    return {
       id: session.id,
       pinCode: session.pin,
       quizId: session.quizId,
@@ -212,18 +312,14 @@ export class LiveSessionService {
       audienceType: 'PUBLIC',
       status: session.status === 'FINISHED' ? 'FINISHED' : session.status === 'IN_PROGRESS' ? 'RUNNING' : 'WAITING',
       participantsCount: session.players?.length || 0,
-      winnerNickname: session.players?.[0]?.nickname,
+      averageScorePercent,
+      winnerNickname: ranked[0]?.nickname,
       timePerQuestionSeconds: session.timePerQuestionSeconds,
       totalDurationSeconds: session.totalDurationSeconds,
       expectedEndAt: session.expectedEndAt,
       shuffleQuestions: false,
       showLeaderboardAfterEachQuestion: true,
-      createdAt: session.startedAt || new Date().toISOString()
+      createdAt: session.createdAt || session.startedAt || new Date().toISOString()
     };
-
-    this.liveSessionsState.update(list => {
-      const exists = list.some(s => s.id === record.id);
-      return exists ? list.map(s => s.id === record.id ? { ...s, ...record } : s) : [record, ...list];
-    });
   }
 }

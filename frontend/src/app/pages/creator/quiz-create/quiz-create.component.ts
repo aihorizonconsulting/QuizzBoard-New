@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { QuizService } from '../../../core/services/quiz.service';
+import { LiveSessionService } from '../../../core/services/live-session.service';
 import { CourseService } from '../../../core/services/course.service';
 import { ClasseService } from '../../../core/services/classe.service';
 import { AuthService } from '../../../core/services/auth.service';
@@ -25,6 +26,7 @@ export interface AttachedFile {
 })
 export class QuizCreateComponent implements OnInit {
   private quizService = inject(QuizService);
+  private liveService = inject(LiveSessionService);
   private courseService = inject(CourseService);
   private classeService = inject(ClasseService);
   public authService = inject(AuthService);
@@ -552,13 +554,13 @@ export class QuizCreateComponent implements OnInit {
     this.router.navigate(['/app/quizzes']);
   }
 
-  launchLiveNow() {
+  async launchLiveNow() {
     const finalCoverImage = this.coverImageUrl || this.suggestCoverImage(this.promptText || this.quizTitle, this.quizCategory);
     const currentUser = this.authService.currentUser();
     const creatorId = currentUser?.id || currentUser?.email || 'formateur';
     const creatorName = currentUser ? `${currentUser.prenom} ${currentUser.nom}`.trim() : 'Formateur QuizzBoard';
 
-    const created = this.quizService.createQuiz({
+    const created = await this.quizService.createQuizAsync({
       title: this.quizTitle,
       description: `Session live animée avec QuizzMind`,
       category: this.quizCategory,
@@ -572,8 +574,8 @@ export class QuizCreateComponent implements OnInit {
       questions: this.questions
     });
 
-    this.quizService.startLiveSession(created);
-    this.router.navigate(['/app/live/host']);
+    const sessionId = await this.liveService.launchLiveSession(created);
+    this.router.navigate(['/app/live/host', sessionId]);
   }
 
   goToGeneratedCourse() {

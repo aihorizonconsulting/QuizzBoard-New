@@ -377,18 +377,23 @@ export class JoinModalComponent {
           return;
         }
 
+        const playerId = joinedLive.players.find(p => p.email === playerPayload.email || p.nickname === playerPayload.nickname)?.id || 'p-' + Date.now();
+
         if (live.status === 'LOBBY') {
           this.liveSyncService.joinWaitingRoom(targetQuiz, live.pin, {
-            id: joinedLive.players.find(p => p.email === playerPayload.email || p.nickname === playerPayload.nickname)?.id || 'p-' + Date.now(),
+            id: playerId,
             nickname: playerPayload.nickname,
             email: playerPayload.email
-          });
+          }, joinedLive.id);
           this.close();
           return;
         }
 
         this.close();
-        this.quizPlayerModalService.open(targetQuiz, playerPayload);
+        this.quizPlayerModalService.open(targetQuiz, {
+          ...playerPayload,
+          live: { sessionId: joinedLive.id, playerId, timePerQuestionSeconds: joinedLive.timePerQuestionSeconds }
+        });
         return;
       }
 

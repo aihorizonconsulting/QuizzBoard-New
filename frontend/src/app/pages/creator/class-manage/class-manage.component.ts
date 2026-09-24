@@ -2089,23 +2089,21 @@ export class ClassManageComponent {
     this.courseService.unassignCourseFromClass(courseId, this.selectedClass.id);
   }
 
-  launchLiveForClass(c: Classe) {
+  async launchLiveForClass(c: Classe) {
     const quiz = c.assignedQuizIds.length > 0
       ? this.allQuizzes().find(q => q.id === c.assignedQuizIds[0])
       : this.allQuizzes()[0];
-    
-    const quizId = quiz?.id || 'q1';
-    const session = this.liveService.createLiveSession({
-      quizId,
-      quizTitle: quiz?.title || 'Quiz de Classe',
-      quizQuestionsCount: quiz?.questionsCount || 5,
-      hostId: 'u1',
-      hostName: 'Professeur',
+    if (!quiz) {
+      this.router.navigate(['/app/live']);
+      return;
+    }
+
+    const sessionId = await this.liveService.launchLiveSession(quiz, {
       audienceType: 'CLASS',
       targetClassId: c.id,
       targetClassName: c.name
     });
-    this.router.navigate(['/app/live/host', session.id]);
+    this.router.navigate(['/app/live/host', sessionId]);
   }
 
   openInviteModal() {

@@ -6,7 +6,8 @@ import { Quiz, Question, Choice } from '../../../core/models/quiz.model';
 import { ParticipantAnswer } from '../../../core/models/participation.model';
 import { AuthService } from '../../../core/services/auth.service';
 import { ParticipationService } from '../../../core/services/participation.service';
-import { QuizPlayerModalService } from '../../../core/services/quiz-player-modal.service';
+import { QuizPlayerModalService, LivePlayContext } from '../../../core/services/quiz-player-modal.service';
+import { LiveSessionService } from '../../../core/services/live-session.service';
 import { IconComponent } from '../icon/icon.component';
 
 @Component({
@@ -134,10 +135,17 @@ import { IconComponent } from '../icon/icon.component';
                   <div class="email-status-badge success">
                     <app-icon name="check-circle" [size]="18" color="#16A34A"></app-icon>
                     <div>
-                      <strong style="display: block; color: #15803D;">Rapport envoyé avec succès ! 🎯</strong>
-                      <span style="font-size: 12px; color: #166534;">
-                        Votre synthèse détaillée avec rang {{ className ? 'dans la classe ' + className : 'au classement général' }} a été transmise à <strong>{{ manualResultEmail }}</strong>.
-                      </span>
+                      @if (liveContext) {
+                        <strong style="display: block; color: #15803D;">Résultats enregistrés ! 🎯</strong>
+                        <span style="font-size: 12px; color: #166534;">
+                          Votre score et votre rang dans ce Live seront envoyés à <strong>{{ manualResultEmail }}</strong> dès la fin de la session.
+                        </span>
+                      } @else {
+                        <strong style="display: block; color: #15803D;">Rapport envoyé avec succès ! 🎯</strong>
+                        <span style="font-size: 12px; color: #166534;">
+                          Votre synthèse détaillée avec rang {{ className ? 'dans la classe ' + className : 'au classement général' }} a été transmise à <strong>{{ manualResultEmail }}</strong>.
+                        </span>
+                      }
                     </div>
                   </div>
                 } @else {
@@ -566,6 +574,7 @@ export class QuizModalPlayerComponent implements OnInit, OnDestroy, OnChanges {
   public authService = inject(AuthService);
   private partService = inject(ParticipationService);
   public playerModalService = inject(QuizPlayerModalService);
+  private liveSessionService = inject(LiveSessionService);
   private cdr = inject(ChangeDetectorRef);
 
   currentQuestionIndex = 0;
@@ -595,8 +604,14 @@ export class QuizModalPlayerComponent implements OnInit, OnDestroy, OnChanges {
     return this.quiz?.questions?.length || 5;
   }
 
+  /** Session Live dans laquelle ce quiz est joué (absente pour un quiz individuel). */
+  get liveContext(): LivePlayContext | undefined {
+    return this.playerModalService.guestParticipant()?.live;
+  }
+
   get questionTimeLimit(): number {
-    return this.currentQuestion.timeLimitSeconds || 20;
+    // En Live, le temps par question choisi par l'enseignant s'applique à toutes les questions
+    return this.liveContext?.timePerQuestionSeconds || this.currentQuestion.timeLimitSeconds || 20;
   }
 
   get timerPercentage(): number {
@@ -738,6 +753,7 @@ export class QuizModalPlayerComponent implements OnInit, OnDestroy, OnChanges {
       timeSpentSeconds: timeSpent,
       pointsEarned: points
     });
+    this.reportLiveProgress(false);
 
     this.cdr.markForCheck();
 
@@ -763,6 +779,7 @@ export class QuizModalPlayerComponent implements OnInit, OnDestroy, OnChanges {
       timeSpentSeconds: timeSpent,
       pointsEarned: 0
     });
+    this.reportLiveProgress(false);
 
     this.cdr.markForCheck();
 
@@ -800,12 +817,14 @@ export class QuizModalPlayerComponent implements OnInit, OnDestroy, OnChanges {
       this.emailSentSuccess = true;
       this.manualResultEmail = participantEmail;
     }
+    this.reportLiveProgress(true);
 
     const saved = await this.partService.saveParticipationAsync({
       quizId: this.quiz.id,
       quizTitle: this.quiz.title,
       classId: this.classId,
       className: this.className,
+      liveSessionId: this.liveContext?.sessionId,
       participantName,
       participantEmail,
       score: this.totalScore,
@@ -819,6 +838,27 @@ export class QuizModalPlayerComponent implements OnInit, OnDestroy, OnChanges {
       this.savedParticipationId = saved.id;
     }
     this.cdr.markForCheck();
+  }
+
+  /** Transmet la progression réelle du joueur à la session Live (tableau de bord de l'enseignant). */
+  private reportLiveProgress(finished: boolean): void {
+    const live = this.liveContext;
+    if (!live) return;
+
+    let streak = 0;
+    for (let i = this.recordedAnswers.length - 1; i >= 0 && this.recordedAnswers[i].isCorrect; i--) {
+      streak++;
+    }
+    this.liveSessionService.reportLiveProgress(live.sessionId, {
+      playerId: live.playerId,
+      answeredCount: this.recordedAnswers.length,
+      correctCount: this.recordedAnswers.filter(a => a.isCorrect).length,
+      score: this.totalScore,
+      maxScore: this.totalQuestions * 100,
+      streak,
+      totalTimeSeconds: this.recordedAnswers.reduce((acc, a) => acc + a.timeSpentSeconds, 0),
+      finished
+    });
   }
 
   restartQuiz() {

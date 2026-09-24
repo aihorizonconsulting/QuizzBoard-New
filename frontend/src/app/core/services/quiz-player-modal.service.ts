@@ -1,9 +1,17 @@
 import { Injectable, signal } from '@angular/core';
 import { Quiz } from '../models/quiz.model';
 
+/** Session Live dans laquelle le quiz est joué : la progression du joueur y est transmise. */
+export interface LivePlayContext {
+  sessionId: string;
+  playerId: string;
+  timePerQuestionSeconds?: number;
+}
+
 export interface QuizGuestParticipant {
   nickname: string;
   email?: string;
+  live?: LivePlayContext;
 }
 
 @Injectable({

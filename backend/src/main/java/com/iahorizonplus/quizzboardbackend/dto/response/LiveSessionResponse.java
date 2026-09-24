@@ -15,10 +15,12 @@ public record LiveSessionResponse(
         int totalQuestions,
         int timePerQuestionSeconds,
         int totalDurationSeconds,
+        long elapsedSeconds,
         LocalDateTime startedAt,
         LocalDateTime expectedEndAt,
         LocalDateTime endedAt,
         boolean manuallyStopped,
+        LocalDateTime createdAt,
         List<LivePlayerResponse> players
 ) {
     public record LivePlayerResponse(
@@ -30,6 +32,8 @@ public record LiveSessionResponse(
             int streak,
             boolean ready,
             int accuracyPercent,
-            double avgResponseTimeSeconds
+            double avgResponseTimeSeconds,
+            int answeredCount,
+            boolean finished
     ) {}
 }

@@ -5,6 +5,7 @@ import { LiveSessionService } from './live-session.service';
 
 export interface WaitingParticipant {
   pin: string;
+  liveSessionId?: string;
   quiz: Quiz;
   player: {
     id: string;
@@ -126,17 +127,9 @@ export class LiveSyncService {
         } : null);
       } else if (msg.type === 'GAME_STARTED') {
         // SIMULTANEOUS GAME LAUNCH FOR WAITING PARTICIPANT
-        const pInfo = currentWaiting.player;
-        const qInfo = currentWaiting.quiz;
-        // Close waiting room
+        this.stopWaitingPoll();
         this.waitingParticipant.set(null);
-        // Immediately pop up quiz player modal
-        setTimeout(() => {
-          this.quizPlayerModalService.open(qInfo, {
-            nickname: pInfo.nickname,
-            email: pInfo.email
-          });
-        }, 100);
+        this.openLiveQuiz(currentWaiting, msg.payload?.timePerQuestionSeconds);
       } else if (msg.type === 'SESSION_ENDED' || msg.type === 'GAME_STOPPED') {
         this.stopWaitingPoll();
         this.waitingParticipant.set(null);
@@ -147,9 +140,10 @@ export class LiveSyncService {
   /**
    * Join a waiting lobby for a live session in 'LOBBY' state
    */
-  joinWaitingRoom(quiz: Quiz, pin: string, player: { id: string; nickname: string; email?: string; matricule?: string }): void {
+  joinWaitingRoom(quiz: Quiz, pin: string, player: { id: string; nickname: string; email?: string; matricule?: string }, liveSessionId?: string): void {
     this.waitingParticipant.set({
       pin,
+      liveSessionId,
       quiz,
       player,
       isCountdownActive: false,
@@ -194,17 +188,25 @@ export class LiveSyncService {
       if (backendLive.status === 'IN_PROGRESS') {
         this.stopWaitingPoll();
         this.waitingParticipant.set(null);
-        setTimeout(() => {
-          this.quizPlayerModalService.open(currentWaiting.quiz, {
-            nickname: currentWaiting.player.nickname,
-            email: currentWaiting.player.email
-          });
-        }, 100);
+        this.openLiveQuiz({ ...currentWaiting, liveSessionId: backendLive.id }, backendLive.timePerQuestionSeconds);
       } else if (backendLive.status === 'FINISHED') {
         this.stopWaitingPoll();
         this.waitingParticipant.set(null);
       }
     }, 2000);
+  }
+
+  /** Ouvre le quiz du joueur ; sa progression est transmise à la session Live si elle est connue. */
+  private openLiveQuiz(waiting: WaitingParticipant, timePerQuestionSeconds?: number): void {
+    setTimeout(() => {
+      this.quizPlayerModalService.open(waiting.quiz, {
+        nickname: waiting.player.nickname,
+        email: waiting.player.email,
+        live: waiting.liveSessionId
+          ? { sessionId: waiting.liveSessionId, playerId: waiting.player.id, timePerQuestionSeconds }
+          : undefined
+      });
+    }, 100);
   }
 
   private stopWaitingPoll(): void {

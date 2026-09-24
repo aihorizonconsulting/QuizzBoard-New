@@ -829,6 +829,11 @@ export class LiveManageComponent {
   quizzes = this.quizService.getQuizzes();
   classes = this.classService.getClasses();
 
+  constructor() {
+    // Les sessions sont conservées côté serveur : on les recharge à chaque ouverture de la page
+    this.liveService.loadMyLiveSessions();
+  }
+
   searchQuery = '';
   filterStatus: 'ALL' | 'WAITING' | 'FINISHED' = 'ALL';
   viewMode: 'grid' | 'list' = 'grid';

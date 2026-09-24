@@ -58,6 +58,8 @@ export interface LiveSessionPlayer {
   avgResponseTimeSeconds?: number;
   lastAnswerTime?: number;
   lastAnswerCorrect?: boolean;
+  answeredCount?: number;
+  finished?: boolean;
 }
 
 export interface LiveQuizSession {
@@ -70,6 +72,7 @@ export interface LiveQuizSession {
   totalQuestions: number;
   timePerQuestionSeconds?: number;
   totalDurationSeconds?: number;
+  elapsedSeconds?: number;
   startedAt?: string;
   expectedEndAt?: string;
   endedAt?: string;

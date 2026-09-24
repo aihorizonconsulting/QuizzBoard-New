@@ -13,6 +13,7 @@ export interface Participation {
   userId?: string;
   classId?: string;
   className?: string;
+  liveSessionId?: string;
   participantName: string;
   participantEmail?: string;
   score: number;

@@ -5,6 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { CourseService } from '../../../core/services/course.service';
 import { ClasseService } from '../../../core/services/classe.service';
 import { QuizService } from '../../../core/services/quiz.service';
+import { LiveSessionService } from '../../../core/services/live-session.service';
 import { Course, CourseChapter, CourseLevel } from '../../../core/models/course.model';
 import { IconComponent } from '../../../shared/components/icon/icon.component';
 
@@ -32,6 +33,7 @@ export class CourseDetailComponent implements OnInit {
   private courseService = inject(CourseService);
   private classeService = inject(ClasseService);
   private quizService = inject(QuizService);
+  private liveService = inject(LiveSessionService);
 
   course = signal<Course | null>(null);
   selectedChapterIndex = 0; // 0..N, or -1 for final quiz
@@ -379,9 +381,9 @@ export class CourseDetailComponent implements OnInit {
     return 'MEDIUM';
   }
 
-  launchChapterQuizLive(ch: CourseChapter) {
+  async launchChapterQuizLive(ch: CourseChapter) {
     const c = this.course();
-    const createdQuiz = this.quizService.createQuiz({
+    const createdQuiz = await this.quizService.createQuizAsync({
       title: ch.quizTitle || `Quiz ${ch.title}`,
       description: `Quiz de validation intermédiaire du ${ch.title}`,
       category: c?.category || 'Général',
@@ -395,12 +397,12 @@ export class CourseDetailComponent implements OnInit {
       questions: []
     });
 
-    this.quizService.startLiveSession(createdQuiz);
-    this.router.navigate(['/app/live/host']);
+    const sessionId = await this.liveService.launchLiveSession(createdQuiz);
+    this.router.navigate(['/app/live/host', sessionId]);
   }
 
-  launchFinalQuizLive(c: Course) {
-    const createdQuiz = this.quizService.createQuiz({
+  async launchFinalQuizLive(c: Course) {
+    const createdQuiz = await this.quizService.createQuizAsync({
       title: c.finalQuizTitle || `Examen Final : ${c.title}`,
       description: `Examen final de validation des compétences pour le cours "${c.title}"`,
       category: c.category,
@@ -414,7 +416,7 @@ export class CourseDetailComponent implements OnInit {
       questions: []
     });
 
-    this.quizService.startLiveSession(createdQuiz);
-    this.router.navigate(['/app/live/host']);
+    const sessionId = await this.liveService.launchLiveSession(createdQuiz);
+    this.router.navigate(['/app/live/host', sessionId]);
   }
 }

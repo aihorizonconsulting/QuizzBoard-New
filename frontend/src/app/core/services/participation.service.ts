@@ -152,6 +152,7 @@ export class ParticipationService {
       quizTitle: participation.quizTitle,
       classId: participation.classId,
       className: participation.className,
+      liveSessionId: participation.liveSessionId,
       participantName: participation.participantName,
       participantEmail: participation.participantEmail,
       score: participation.score,

@@ -110,8 +110,10 @@ public class ParticipationServiceImpl implements ParticipationService {
             log.warn("Impossible de calculer le rang du participant: {}", e.getMessage());
         }
 
-        // Envoi automatique d'email avec les résultats du quiz et le classement (classe ou général)
-        if (saved.getParticipantEmail() != null && !saved.getParticipantEmail().isBlank()) {
+        // Envoi automatique d'email avec les résultats du quiz et le classement (classe ou général).
+        // Pour un quiz Live, c'est la session qui envoie l'email avec le rang parmi ses joueurs.
+        boolean isLiveParticipation = saved.getLiveSessionId() != null && !saved.getLiveSessionId().isBlank();
+        if (!isLiveParticipation && saved.getParticipantEmail() != null && !saved.getParticipantEmail().isBlank()) {
             try {
                 smtpEmailService.sendQuizCompletedEmail(
                         saved.getParticipantEmail(),

@@ -2,6 +2,7 @@ import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink, Router } from '@angular/router';
 import { QuizService } from '../../../core/services/quiz.service';
+import { LiveSessionService } from '../../../core/services/live-session.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { PromotionService } from '../../../core/services/promotion.service';
 import { Quiz } from '../../../core/models/quiz.model';
@@ -725,6 +726,7 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
 })
 export class DashboardComponent implements OnInit {
   private quizService = inject(QuizService);
+  private liveService = inject(LiveSessionService);
   public authService = inject(AuthService);
   public promotionService = inject(PromotionService);
   private router = inject(Router);
@@ -790,9 +792,9 @@ export class DashboardComponent implements OnInit {
     }
   }
 
-  startLive(quiz: Quiz) {
-    this.quizService.startLiveSession(quiz);
-    this.router.navigate(['/app/live/host']);
+  async startLive(quiz: Quiz) {
+    const sessionId = await this.liveService.launchLiveSession(quiz);
+    this.router.navigate(['/app/live/host', sessionId]);
   }
 
   launchFirstLive() {

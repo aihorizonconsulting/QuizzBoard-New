@@ -1,6 +1,7 @@
-import { Injectable, signal, inject } from '@angular/core';
+import { Injectable, signal, inject, effect, untracked } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Quiz, Question, LiveQuizSession, LiveSessionPlayer } from '../models/quiz.model';
+import { AuthService } from './auth.service';
 import { environment } from '../../../environments/environment';
 import { firstValueFrom } from 'rxjs';
 
@@ -9,29 +10,64 @@ import { firstValueFrom } from 'rxjs';
 })
 export class QuizService {
   private http = inject(HttpClient);
+  private authService = inject(AuthService);
   private quizzes = signal<Quiz[]>([]);
+  // Enregistrements backend en cours des quiz créés localement (id local -> quiz serveur)
+  private pendingQuizSaves = new Map<string, Promise<Quiz | null>>();
+  // Compte pour lequel la liste a été chargée (undefined = jamais chargée)
+  private loadedForUserId: string | null | undefined = undefined;
+  private loadSequence = 0;
   isLoading = signal<boolean>(true);
-  
+
   // Live Session State
   activeLiveSession = signal<LiveQuizSession | null>(null);
 
   constructor() {
     this.loadBackendQuizzes();
+    // Recharge la liste quand le compte connecté change (connexion, déconnexion, autre compte)
+    effect(() => {
+      const userId = this.authService.currentUser()?.id ?? null;
+      untracked(() => {
+        if (userId !== this.loadedForUserId) {
+          this.loadBackendQuizzes();
+        }
+      });
+    });
   }
 
+  /**
+   * Charge les quiz publics et, pour un utilisateur connecté, tous ses propres quiz
+   * (y compris privés ou brouillons, absents de la liste publique).
+   */
   async loadBackendQuizzes(): Promise<void> {
+    this.loadedForUserId = this.authService.currentUser()?.id ?? null;
+    const requestId = ++this.loadSequence;
     this.isLoading.set(true);
     try {
-      const res = await firstValueFrom(
-        this.http.get<any>(`${environment.apiUrl}/quizzes`)
-      );
-      const serverQuizzes = res?.data || res;
-      this.quizzes.set(Array.isArray(serverQuizzes) ? serverQuizzes : []);
+      const [publicRes, mineRes] = await Promise.all([
+        firstValueFrom(this.http.get<any>(`${environment.apiUrl}/quizzes`)),
+        this.authService.getToken()
+          ? firstValueFrom(this.http.get<any>(`${environment.apiUrl}/quizzes`, { params: { my: 'true' } })).catch(() => null)
+          : Promise.resolve(null)
+      ]);
+      // Une réponse plus récente (changement de compte entre-temps) a priorité
+      if (requestId !== this.loadSequence) return;
+      const publicQuizzes: Quiz[] = this.asList(publicRes);
+      const myQuizzes: Quiz[] = this.asList(mineRes);
+      const myIds = new Set(myQuizzes.map(q => q.id));
+      // Quiz créés localement dont l'enregistrement serveur est encore en cours
+      const pendingLocal = this.quizzes().filter(q => this.pendingQuizSaves.has(q.id));
+      this.quizzes.set([...pendingLocal, ...myQuizzes, ...publicQuizzes.filter(q => !myIds.has(q.id))]);
     } catch {
-      this.quizzes.set([]);
+      if (requestId === this.loadSequence) this.quizzes.set([]);
     } finally {
-      this.isLoading.set(false);
+      if (requestId === this.loadSequence) this.isLoading.set(false);
     }
+  }
+
+  private asList(res: any): Quiz[] {
+    const data = res?.data || res;
+    return Array.isArray(data) ? data : [];
   }
 
   async getCreatorStats(): Promise<{
@@ -197,7 +233,17 @@ export class QuizService {
     };
 
     this.quizzes.update(list => [newQuiz, ...list]);
+    this.persistNewQuiz(newQuiz, quiz);
+    return newQuiz;
+  }
 
+  /** Comme createQuiz, mais attend l'enregistrement backend pour renvoyer le quiz avec son id serveur. */
+  async createQuizAsync(quiz: Omit<Quiz, 'id' | 'createdAt' | 'updatedAt' | 'participationsCount' | 'averageScorePercent'>): Promise<Quiz> {
+    const newQuiz = this.createQuiz(quiz);
+    return (await this.pendingQuizSaves.get(newQuiz.id)) || newQuiz;
+  }
+
+  private persistNewQuiz(newQuiz: Quiz, quiz: Omit<Quiz, 'id' | 'createdAt' | 'updatedAt' | 'participationsCount' | 'averageScorePercent'>): void {
     const payload = {
       ...quiz,
       id: undefined,
@@ -208,17 +254,21 @@ export class QuizService {
       }))
     };
 
-    this.http.post<any>(`${environment.apiUrl}/quizzes`, payload).subscribe({
-      next: (res) => {
+    const save = firstValueFrom(this.http.post<any>(`${environment.apiUrl}/quizzes`, payload))
+      .then(res => {
         const saved = res?.data || res;
         if (saved && saved.id) {
           this.quizzes.update(list => list.map(q => q.id === newQuiz.id ? { ...saved } : q));
+          return saved as Quiz;
         }
-      },
-      error: (err) => console.warn('Sauvegarde quiz backend (fallback local actif):', err)
-    });
-
-    return newQuiz;
+        return null;
+      })
+      .catch(err => {
+        console.warn('Sauvegarde quiz backend (fallback local actif):', err);
+        return null;
+      })
+      .finally(() => this.pendingQuizSaves.delete(newQuiz.id));
+    this.pendingQuizSaves.set(newQuiz.id, save);
   }
 
   updateQuiz(id: string, updates: Partial<Quiz>): void {
@@ -326,13 +376,7 @@ export class QuizService {
       totalDurationSeconds,
       startedAt: now.toISOString(),
       expectedEndAt,
-      players: [
-        { id: 'p1', nickname: 'Fatou Sow', email: 'fatou.sow@etudiant.univ.sn', matricule: 'ETU-2026-001', score: 0, streak: 0, isReady: true, accuracyPercent: 100, avgResponseTimeSeconds: 3.4 },
-        { id: 'p2', nickname: 'Moussa Ndiaye', email: 'moussa.n@etudiant.univ.sn', matricule: 'ETU-2026-002', score: 0, streak: 0, isReady: true, accuracyPercent: 80, avgResponseTimeSeconds: 4.8 },
-        { id: 'p3', nickname: 'Ousmane Koné', email: 'ousmane.k@etudiant.univ.sn', matricule: 'ETU-2026-003', score: 0, streak: 0, isReady: true, accuracyPercent: 60, avgResponseTimeSeconds: 5.2 },
-        { id: 'p4', nickname: 'Awa Diop', email: 'awa.diop@etudiant.univ.sn', matricule: 'ETU-2026-004', score: 0, streak: 0, isReady: true, accuracyPercent: 80, avgResponseTimeSeconds: 4.1 },
-        { id: 'p5', nickname: 'Jean-Marc B.', email: 'jm.bamba@etudiant.univ.sn', matricule: 'ETU-2026-005', score: 0, streak: 0, isReady: true, accuracyPercent: 40, avgResponseTimeSeconds: 6.9 }
-      ]
+      players: []
     };
 
     this.activeLiveSession.set(session);
@@ -371,8 +415,10 @@ export class QuizService {
       score: 0,
       streak: 0,
       isReady: true,
-      accuracyPercent: 100,
-      avgResponseTimeSeconds: Number((3 + Math.random() * 3).toFixed(1))
+      accuracyPercent: 0,
+      avgResponseTimeSeconds: 0,
+      answeredCount: 0,
+      finished: false
     };
 
     const updated = {
@@ -439,7 +485,10 @@ export class QuizService {
       ...p,
       score: 0,
       streak: 0,
-      accuracyPercent: 100
+      accuracyPercent: 0,
+      avgResponseTimeSeconds: 0,
+      answeredCount: 0,
+      finished: false
     }));
 
     const updated = {
@@ -477,53 +526,4 @@ export class QuizService {
     }
   }
 
-  nextLiveQuestion(): void {
-    const current = this.activeLiveSession();
-    if (!current) return;
-
-    if (current.currentQuestionIndex + 1 < current.totalQuestions) {
-      // Simulate real-time answers with realistic scores & precision
-      const updatedPlayers = current.players.map((p, idx) => {
-        const isCorrect = Math.random() > 0.25;
-        const pts = isCorrect ? Math.floor(100 + Math.random() * 50) : 0;
-        const streak = isCorrect ? p.streak + 1 : 0;
-        const prevCorrectAnswers = Math.round(((p.accuracyPercent || 100) / 100) * (current.currentQuestionIndex + 1));
-        const newCorrect = prevCorrectAnswers + (isCorrect ? 1 : 0);
-        const accuracy = Math.round((newCorrect / (current.currentQuestionIndex + 2)) * 100);
-
-        return {
-          ...p,
-          score: p.score + pts,
-          streak,
-          accuracyPercent: accuracy,
-          lastAnswerCorrect: isCorrect,
-          avgResponseTimeSeconds: Number((3 + Math.random() * 4).toFixed(1))
-        };
-      }).sort((a, b) => b.score - a.score);
-
-      const updated = {
-        ...current,
-        currentQuestionIndex: current.currentQuestionIndex + 1,
-        players: updatedPlayers
-      };
-      this.activeLiveSession.set(updated);
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem('quizzboard_active_live_session', JSON.stringify(updated));
-        } catch {}
-      }
-    } else {
-      const updated = {
-        ...current,
-        status: 'FINISHED' as const,
-        endedAt: new Date().toISOString()
-      };
-      this.activeLiveSession.set(updated);
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem('quizzboard_active_live_session', JSON.stringify(updated));
-        } catch {}
-      }
-    }
-  }
 }
