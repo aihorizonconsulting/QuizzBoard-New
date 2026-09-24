@@ -36,6 +36,13 @@ public class User {
     @Column(nullable = false)
     private UserRole role;
 
+    // false pour les comptes importés de l'ancien QuizzBoard : l'utilisateur doit
+    // choisir son rôle à sa prochaine connexion. Le défaut SQL (false) s'applique
+    // aux lignes existantes et importées ; les nouveaux comptes sont créés à true.
+    @Builder.Default
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean roleSelected = true;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default
@@ -94,6 +101,10 @@ public class User {
 
     public boolean isActive() {
         return "ACTIVE".equalsIgnoreCase(this.status);
+    }
+
+    public boolean needsRoleSelection() {
+        return role != UserRole.ADMIN && !roleSelected;
     }
 
     public void setActive(boolean active) {

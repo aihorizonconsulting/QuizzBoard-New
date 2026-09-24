@@ -152,62 +152,82 @@ declare const google: any;
         </div>
       </div>
 
-      <!-- MODAL CHOIX DE RÔLE GOOGLE AUTH (PREMIÈRE CONNEXION) -->
-      @if (showGoogleRoleModal) {
+      <!-- MODAL CHOIX DU RÔLE : NOUVEAU COMPTE GOOGLE OU COMPTE IMPORTÉ DE L'ANCIEN QUIZZBOARD -->
+      @if (showRoleModal) {
         <div class="google-role-modal-backdrop animate-fade-in">
           <div class="google-role-modal-card animate-slide-up">
-            <div class="modal-top-emoji">🎉</div>
-            <h3 class="role-modal-title">Bienvenue sur QuizzBoard !</h3>
-            <p class="role-modal-subtitle">
-              @if (pendingGoogleUser?.prenom) {
-                Ravi de vous compter parmi nous, <strong>{{ pendingGoogleUser.prenom }}</strong> !<br>
-              }
-              Indiquez votre profil pour configurer votre tableau de bord sur mesure :
-            </p>
+            @if (isLegacyAccount) {
+              <div class="modal-top-emoji">👋</div>
+              <h3 class="role-modal-title">Bon retour sur QuizzBoard !</h3>
+              <p class="role-modal-subtitle">
+                @if (pendingUser?.prenom) {
+                  Bonjour <strong>{{ pendingUser.prenom }}</strong>, QuizzBoard fait peau neuve !<br>
+                }
+                Pour accéder à votre compte, indiquez comment vous utilisez la plateforme :
+              </p>
+            } @else {
+              <div class="modal-top-emoji">🎉</div>
+              <h3 class="role-modal-title">Bienvenue sur QuizzBoard !</h3>
+              <p class="role-modal-subtitle">
+                @if (pendingUser?.prenom) {
+                  Ravi de vous compter parmi nous, <strong>{{ pendingUser.prenom }}</strong> !<br>
+                }
+                Indiquez votre profil pour configurer votre tableau de bord sur mesure :
+              </p>
+            }
 
             <div class="role-cards-grid">
-              <div 
-                class="role-card-option" 
-                [class.is-selected]="selectedGoogleRole === 'CREATOR'"
-                (click)="selectedGoogleRole = 'CREATOR'">
+              <div
+                class="role-card-option"
+                [class.is-selected]="selectedRole === 'CREATOR'"
+                (click)="selectedRole = 'CREATOR'">
                 <div class="role-icon-box creator">👨‍🏫</div>
                 <div class="role-info">
                   <h4 class="role-name">Formateur / Enseignant</h4>
                   <p class="role-desc">Créer des quiz interactifs, concevoir des cours avec l'IA, animer des arènes live et piloter des classes.</p>
                 </div>
                 <div class="role-check-indicator">
-                  @if (selectedGoogleRole === 'CREATOR') { <span>✓</span> }
+                  @if (selectedRole === 'CREATOR') { <span>✓</span> }
                 </div>
               </div>
 
-              <div 
-                class="role-card-option" 
-                [class.is-selected]="selectedGoogleRole === 'LEARNER'"
-                (click)="selectedGoogleRole = 'LEARNER'">
+              <div
+                class="role-card-option"
+                [class.is-selected]="selectedRole === 'LEARNER'"
+                (click)="selectedRole = 'LEARNER'">
                 <div class="role-icon-box learner">🎓</div>
                 <div class="role-info">
                   <h4 class="role-name">Apprenant / Étudiant</h4>
                   <p class="role-desc">Participer aux quiz, rejoindre des classes, suivre votre progression et décrocher vos certificats.</p>
                 </div>
                 <div class="role-check-indicator">
-                  @if (selectedGoogleRole === 'LEARNER') { <span>✓</span> }
+                  @if (selectedRole === 'LEARNER') { <span>✓</span> }
                 </div>
               </div>
             </div>
 
+            @if (isLegacyAccount) {
+              <p class="role-legacy-hint">Vous avez créé des quiz ou des cours ? Choisissez <strong>Formateur</strong> pour les retrouver.</p>
+            }
+
             <div class="role-modal-actions">
-              <button 
-                type="button" 
-                class="btn btn-primary btn-full" 
-                [disabled]="isGoogleLoading"
-                (click)="confirmGoogleRole(selectedGoogleRole)">
-                @if (isGoogleLoading) {
+              <button
+                type="button"
+                class="btn btn-primary btn-full"
+                [disabled]="!selectedRole || isRoleSubmitting"
+                (click)="confirmRole()">
+                @if (isRoleSubmitting) {
                   <span class="btn-spinner"></span>
                   <span>Configuration de votre espace...</span>
-                } @else {
-                  <span>Continuer comme {{ selectedGoogleRole === 'CREATOR' ? 'Formateur' : 'Apprenant' }}</span>
+                } @else if (selectedRole) {
+                  <span>Continuer comme {{ selectedRole === 'CREATOR' ? 'Formateur' : 'Apprenant' }}</span>
                   <app-icon name="arrow-right" [size]="16"></app-icon>
+                } @else {
+                  <span>Choisissez votre rôle pour continuer</span>
                 }
+              </button>
+              <button type="button" class="role-cancel-link" [disabled]="isRoleSubmitting" (click)="cancelRoleSelection()">
+                Annuler
               </button>
             </div>
           </div>
@@ -522,13 +542,37 @@ declare const google: any;
         }
       }
 
+      .role-legacy-hint {
+        font-size: 12px;
+        color: var(--color-text-secondary);
+        text-align: center;
+        margin: -4px 0 14px;
+      }
+
       .role-modal-actions {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+
         .btn-full {
           width: 100%;
           justify-content: center;
           padding: 13px 20px;
           font-size: 14px;
           font-weight: 800;
+        }
+
+        .role-cancel-link {
+          border: none;
+          background: transparent;
+          color: var(--color-text-secondary);
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          padding: 4px 8px;
+
+          &:hover:not(:disabled) { color: var(--color-navy); text-decoration: underline; }
         }
       }
     }
@@ -547,10 +591,18 @@ export class LoginComponent {
   isLoading = false;
   isGoogleLoading = false;
 
-  showGoogleRoleModal = false;
+  // Choix du rôle : nouveau compte Google ou compte importé de l'ancien QuizzBoard
+  showRoleModal = false;
+  roleModalSource: 'google' | 'password' = 'google';
   pendingGoogleCredential: string | null = null;
-  pendingGoogleUser: any = null;
-  selectedGoogleRole: 'CREATOR' | 'LEARNER' = 'CREATOR';
+  pendingUser: any = null;
+  selectedRole: 'CREATOR' | 'LEARNER' | null = null;
+  isRoleSubmitting = false;
+
+  /** Un compte existant (id connu) qui doit confirmer son rôle, par opposition à une inscription Google. */
+  get isLegacyAccount(): boolean {
+    return !!this.pendingUser?.id;
+  }
 
   clearFieldError(field: string) {
     if (this.fieldErrors[field]) {
@@ -577,18 +629,12 @@ export class LoginComponent {
 
             this.authService.loginWithGoogle(response.credential).subscribe({
               next: (authRes: any) => {
+                this.isGoogleLoading = false;
                 if (authRes?.requiresRoleSelection) {
-                  this.isGoogleLoading = false;
-                  this.pendingGoogleUser = authRes.user;
-                  this.showGoogleRoleModal = true;
-                  this.cdr.markForCheck();
+                  this.openRoleModal('google', authRes.user);
                   return;
                 }
-                this.isGoogleLoading = false;
-                const target = authRes.user?.role === 'LEARNER'
-                  ? '/app/learner/dashboard'
-                  : (authRes.user?.role === 'ADMIN' ? '/admin/dashboard' : '/app/dashboard');
-                this.router.navigate([target]);
+                this.navigateByRole(authRes.user?.role);
               },
               error: (err: any) => {
                 this.isGoogleLoading = false;
@@ -605,28 +651,64 @@ export class LoginComponent {
     }
   }
 
-  confirmGoogleRole(role: 'CREATOR' | 'LEARNER') {
-    if (!this.pendingGoogleCredential) return;
-    this.selectedGoogleRole = role;
-    this.isGoogleLoading = true;
+  private openRoleModal(source: 'google' | 'password', user: any) {
+    this.roleModalSource = source;
+    this.pendingUser = user;
+    this.selectedRole = null;
+    this.showRoleModal = true;
+    this.cdr.markForCheck();
+  }
+
+  confirmRole() {
+    const role = this.selectedRole;
+    if (!role) return;
+
+    let request$;
+    if (this.roleModalSource === 'google') {
+      if (!this.pendingGoogleCredential) return;
+      request$ = this.authService.loginWithGoogle(this.pendingGoogleCredential, role);
+    } else {
+      request$ = this.authService.login(this.email, this.password, role);
+    }
+
+    this.isRoleSubmitting = true;
     this.cdr.markForCheck();
 
-    this.authService.loginWithGoogle(this.pendingGoogleCredential, role).subscribe({
+    request$.subscribe({
       next: (authRes: any) => {
-        this.isGoogleLoading = false;
-        this.showGoogleRoleModal = false;
-        const target = authRes.user?.role === 'LEARNER'
-          ? '/app/learner/dashboard'
-          : (authRes.user?.role === 'ADMIN' ? '/admin/dashboard' : '/app/dashboard');
-        this.router.navigate([target]);
+        this.isRoleSubmitting = false;
+        if (authRes?.requiresRoleSelection) {
+          this.cdr.markForCheck();
+          return;
+        }
+        this.showRoleModal = false;
+        this.navigateByRole(authRes.user?.role);
       },
       error: (err: any) => {
-        this.isGoogleLoading = false;
-        this.errorMessage = err?.error?.message || 'Erreur lors de la configuration de votre profil.';
-        this.showGoogleRoleModal = false;
+        this.isRoleSubmitting = false;
+        this.showRoleModal = false;
+        this.errorMessage = err?.userFriendlyMessage || err?.error?.message || 'Erreur lors de la configuration de votre profil.';
         this.cdr.markForCheck();
       }
     });
+  }
+
+  cancelRoleSelection() {
+    this.showRoleModal = false;
+    this.pendingGoogleCredential = null;
+    this.pendingUser = null;
+    this.selectedRole = null;
+    this.cdr.markForCheck();
+  }
+
+  private navigateByRole(role?: string) {
+    if (role === 'ADMIN') {
+      this.router.navigate(['/admin/dashboard']);
+    } else if (role === 'LEARNER') {
+      this.router.navigate(['/app/learner/dashboard']);
+    } else {
+      this.router.navigate(['/app/dashboard']);
+    }
   }
 
   loginWithGoogle() {
@@ -670,14 +752,12 @@ export class LoginComponent {
       next: (res: any) => {
         this.isLoading = false;
         this.cdr.markForCheck();
-        const role = res.user?.role;
-        if (role === 'ADMIN') {
-          this.router.navigate(['/admin/dashboard']);
-        } else if (role === 'LEARNER') {
-          this.router.navigate(['/app/learner/dashboard']);
-        } else {
-          this.router.navigate(['/app/dashboard']);
+        // Compte importé de l'ancien QuizzBoard : le rôle doit être choisi avant la connexion
+        if (res?.requiresRoleSelection) {
+          this.openRoleModal('password', res.user);
+          return;
         }
+        this.navigateByRole(res.user?.role);
       },
       error: (err: any) => {
         this.isLoading = false;

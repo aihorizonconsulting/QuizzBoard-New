@@ -78,15 +78,21 @@ export class AuthService {
   }
 
   /**
-   * Connexion avec email et mot de passe via l'API Spring Boot
+   * Connexion avec email et mot de passe via l'API Spring Boot.
+   * Le rôle n'est envoyé que par un compte importé qui doit choisir son rôle
+   * (réponse précédente avec requiresRoleSelection = true).
    */
-  login(email: string, password: string): Observable<AuthResponse> {
-    return this.http.post<AuthResponse>(`${environment.apiUrl}/auth/login`, {
+  login(email: string, password: string, role?: UserRole): Observable<AuthResponse> {
+    const payload: { email: string; password: string; role?: UserRole } = {
       email: email.trim().toLowerCase(),
       password
-    }).pipe(
+    };
+    if (role) {
+      payload.role = role;
+    }
+    return this.http.post<AuthResponse>(`${environment.apiUrl}/auth/login`, payload).pipe(
       tap(response => {
-        if (response.token && response.user) {
+        if (!response.requiresRoleSelection && response.token && response.user) {
           this.setSession(response.token, response.user);
         }
       })

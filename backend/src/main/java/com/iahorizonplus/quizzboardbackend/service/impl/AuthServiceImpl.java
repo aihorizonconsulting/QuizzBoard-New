@@ -57,7 +57,7 @@ public class AuthServiceImpl implements AuthService {
                 .nom(request.nom().trim())
                 .email(cleanEmail)
                 .password(passwordEncoder.encode(request.password()))
-                .role(request.role())
+                .role(SelfAssignedRole.require(request.role()))
                 .subscriptionTier(SubscriptionTier.FREE)
                 .authProvider(AuthProvider.LOCAL)
                 .avatarUrl(null)
@@ -84,7 +84,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public AuthResponse login(LoginRequest request) {
         String cleanEmail = request.email() != null ? request.email().toLowerCase().trim() : "";
 
@@ -108,6 +108,16 @@ public class AuthServiceImpl implements AuthService {
         // 3. Vérification explicite du mot de passe
         if (!passwordEncoder.matches(request.password(), user.getPassword())) {
             throw new BadRequestException("password", "Le mot de passe saisi est incorrect pour ce compte. Veuillez vérifier votre saisie ou réinitialiser votre mot de passe.");
+        }
+
+        // 4. Compte importé de l'ancien QuizzBoard : aucun jeton tant que le rôle n'est pas choisi
+        if (user.needsRoleSelection()) {
+            if (request.role() == null) {
+                return AuthResponse.roleRequired(userMapper.toDto(user));
+            }
+            user.setRole(SelfAssignedRole.require(request.role()));
+            user.setRoleSelected(true);
+            user = userRepository.save(user);
         }
 
         String jwtToken = jwtUtils.generateToken(user.getEmail(), user.getRole().name());

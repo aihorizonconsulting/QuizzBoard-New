@@ -1,5 +1,6 @@
 package com.iahorizonplus.quizzboardbackend.dto.request;
 
+import com.iahorizonplus.quizzboardbackend.entity.UserRole;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 
@@ -9,5 +10,8 @@ public record LoginRequest(
     String email,
 
     @NotBlank(message = "Le mot de passe est obligatoire")
-    String password
+    String password,
+
+    // Optionnel : rôle choisi par un compte importé qui doit confirmer son rôle
+    UserRole role
 ) {}
