@@ -103,7 +103,7 @@
   <!-- SKELETON LOADER STATE (FUN & CLEAN) -->
   @if (isLoading) {
     <div class="skeleton-grid-4 animate-fade-in" style="margin-bottom: 24px;">
-      @for (i of [1, 2, 3, 4, 5, 6]; track i) {
+      @for (i of [1, 2, 3, 4, 5, 6, 7, 8]; track i) {
         <div class="skeleton-compact-card">
           <div class="sk-top">
             <div class="skeleton-fun" style="height: 16px; width: 70px; border-radius: 9999px;"></div>
@@ -160,10 +160,10 @@
         @for (course of paginatedCourses(); track course.id) {
           <div class="course-card card card-interactive animate-fade-in">
             <!-- COMPACT COVER IMAGE -->
-            <div class="course-cover" [style.backgroundImage]="'url(' + course.coverImage + ')'">
+            <div class="course-cover" [style.backgroundImage]="courseCoverBackground(course)">
               <div class="cover-overlay"></div>
               <div class="cover-top-badges">
-                <span class="badge badge-primary">{{ course.category }}</span>
+                <span class="badge badge-primary" [title]="course.category">{{ course.category }}</span>
                 <span class="badge badge-navy">{{ levelLabel(course.level) }}</span>
                 @if (course.hasCertificate) {
                   <span class="badge" style="background: #FEF3C7; color: #92400E; font-weight: 800; display: inline-flex; align-items: center; gap: 3px;">
@@ -261,7 +261,7 @@
       <div class="course-list-rows animate-fade-in">
         @for (course of paginatedCourses(); track course.id) {
           <div class="course-list-row card animate-fade-in">
-            <img [src]="course.coverImage" [alt]="course.title" class="row-thumb">
+            <img [src]="course.coverImage || defaultCourseCover" [appImgFallback]="defaultCourseCover" alt="" class="row-thumb">
 
             <div class="row-main-info">
               <div class="row-top-tags">

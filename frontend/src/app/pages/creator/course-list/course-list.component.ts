@@ -7,15 +7,17 @@ import { ClasseService } from '../../../core/services/classe.service';
 import { Course, CourseChapter, CourseLevel } from '../../../core/models/course.model';
 import { IconComponent } from '../../../shared/components/icon/icon.component';
 import { PaginationComponent } from '../../../shared/components/pagination/pagination.component';
+import { ImgFallbackDirective } from '../../../shared/directives/img-fallback.directive';
 import { ConfirmDialogService } from '../../../core/services/confirm-dialog.service';
 import { PromotionService } from '../../../core/services/promotion.service';
 import { FileUploadService } from '../../../core/services/file-upload.service';
 import { AuthService } from '../../../core/services/auth.service';
+import { DEFAULT_COURSE_COVER, coverBackground } from '../../../core/utils/cover-image.util';
 
 @Component({
   selector: 'app-course-list',
   standalone: true,
-  imports: [CommonModule, RouterLink, FormsModule, IconComponent, PaginationComponent],
+  imports: [CommonModule, RouterLink, FormsModule, IconComponent, PaginationComponent, ImgFallbackDirective],
   templateUrl: './course-list.component.html',
   styleUrl: './course-list.component.scss'
 })
@@ -57,9 +59,14 @@ export class CourseListComponent {
   }
 
   currentPage = 1;
-  pageSize = 6;
+  pageSize = 8;
 
   modalCourse: Course | null = null;
+  readonly defaultCourseCover = DEFAULT_COURSE_COVER;
+
+  courseCoverBackground(course: Course): string {
+    return coverBackground(course.coverImage, DEFAULT_COURSE_COVER);
+  }
 
   filteredCourses(): Course[] {
     let list = this.courses();

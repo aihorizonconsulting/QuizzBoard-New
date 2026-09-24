@@ -8,11 +8,13 @@ import { Quiz } from '../../../core/models/quiz.model';
 import { IconComponent } from '../../../shared/components/icon/icon.component';
 import { QuizModalPlayerComponent } from '../../../shared/components/quiz-modal-player/quiz-modal-player.component';
 import { PaginationComponent } from '../../../shared/components/pagination/pagination.component';
+import { ImgFallbackDirective } from '../../../shared/directives/img-fallback.directive';
+import { DEFAULT_QUIZ_COVER } from '../../../core/utils/cover-image.util';
 
 @Component({
   selector: 'app-explore',
   standalone: true,
-  imports: [CommonModule, RouterLink, FormsModule, IconComponent, QuizModalPlayerComponent, PaginationComponent],
+  imports: [CommonModule, RouterLink, FormsModule, IconComponent, QuizModalPlayerComponent, PaginationComponent, ImgFallbackDirective],
   template: `
     <div class="explore-page">
       <!-- HERO HEADER -->
@@ -138,19 +140,19 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
                   @for (quiz of paginatedQuizzes(); track quiz.id) {
                     <div class="quiz-compact-card card card-interactive">
                       <div class="card-main-row">
-                        <img [src]="quiz.coverImage" class="quiz-thumb" alt="Quiz cover">
+                        <img [src]="quiz.coverImage || defaultQuizCover" [appImgFallback]="defaultQuizCover" class="quiz-thumb" alt="">
                         <div class="quiz-info">
                           <div class="tags-row">
-                            <span class="category-pill">{{ quiz.category }}</span>
+                            <span class="category-pill" [title]="quiz.category">{{ quiz.category }}</span>
                             <span class="free-pill">Gratuit</span>
                           </div>
 
                           <h3 class="quiz-title" [title]="quiz.title">{{ quiz.title }}</h3>
 
                           <div class="author-and-metrics">
-                            <span class="author-name">Par {{ quiz.creatorName }}</span>
+                            <span class="author-name" [title]="quiz.creatorName">Par {{ quiz.creatorName }}</span>
                             <span>•</span>
-                            <span><strong>{{ quiz.questionsCount }}</strong> Qs</span>
+                            <span class="questions-count"><strong>{{ questionsCount(quiz) }}</strong> Qs</span>
                           </div>
                         </div>
                       </div>
@@ -171,7 +173,7 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
                 <div class="quizzes-list-rows animate-fade-in">
                   @for (quiz of paginatedQuizzes(); track quiz.id) {
                     <div class="quiz-list-row card card-interactive">
-                      <img [src]="quiz.coverImage" class="row-thumb" alt="Cover">
+                      <img [src]="quiz.coverImage || defaultQuizCover" [appImgFallback]="defaultQuizCover" class="row-thumb" alt="">
 
                       <div class="row-main-info">
                         <div class="row-top-tags">
@@ -183,11 +185,11 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
 
                       <div class="row-stats">
                         <div class="stat-item">
-                          <span class="stat-num">{{ quiz.creatorName }}</span>
+                          <span class="stat-num" [title]="quiz.creatorName">{{ quiz.creatorName }}</span>
                           <span class="stat-label">Auteur</span>
                         </div>
                         <div class="stat-item">
-                          <span class="stat-num">{{ quiz.questionsCount }}</span>
+                          <span class="stat-num">{{ questionsCount(quiz) }}</span>
                           <span class="stat-label">Questions</span>
                         </div>
                         <div class="stat-item hide-on-mobile">
@@ -396,21 +398,22 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
       }
     }
 
-    /* 4 CARDS PER ROW GRID (DESKTOP) */
+    /* 4 CARDS PER ROW GRID (DESKTOP) — colonnes et rangées de taille identique */
     .quizzes-grid {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-auto-rows: 1fr;
       gap: 12px;
     }
 
     @media (max-width: 1200px) {
-      .quizzes-grid { grid-template-columns: repeat(3, 1fr); }
+      .quizzes-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     }
     @media (max-width: 900px) {
-      .quizzes-grid { grid-template-columns: repeat(2, 1fr); }
+      .quizzes-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
     @media (max-width: 600px) {
-      .quizzes-grid { grid-template-columns: 1fr; }
+      .quizzes-grid { grid-template-columns: minmax(0, 1fr); }
     }
 
     .quiz-compact-card {
@@ -418,6 +421,7 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
       display: flex;
       flex-direction: column;
       gap: 8px;
+      min-width: 0;
       border-radius: var(--radius-md);
       transition: transform 0.15s ease, box-shadow 0.15s ease;
 
@@ -449,6 +453,7 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
             align-items: center;
             gap: 4px;
             margin-bottom: 2px;
+            min-width: 0;
 
             .category-pill {
               font-size: 9px;
@@ -457,6 +462,10 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
               background: var(--color-navy-light);
               padding: 1px 5px;
               border-radius: var(--radius-xs);
+              min-width: 0;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
             }
 
             .free-pill {
@@ -466,6 +475,7 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
               background: var(--color-primary-light);
               padding: 1px 5px;
               border-radius: var(--radius-xs);
+              flex-shrink: 0;
             }
           }
 
@@ -485,6 +495,16 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
             display: flex;
             align-items: center;
             gap: 4px;
+            white-space: nowrap;
+            min-width: 0;
+
+            .author-name {
+              min-width: 0;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+
+            .questions-count { flex-shrink: 0; }
 
             strong { color: var(--color-navy); }
           }
@@ -527,6 +547,7 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
       .row-thumb {
         width: 38px;
         height: 38px;
+        min-width: 38px;
         border-radius: var(--radius-xs);
         object-fit: cover;
       }
@@ -580,7 +601,15 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
           flex-direction: column;
           align-items: center;
 
-          .stat-num { font-size: 12px; font-weight: 800; color: var(--color-navy); }
+          .stat-num {
+            font-size: 12px;
+            font-weight: 800;
+            color: var(--color-navy);
+            max-width: 140px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
           .stat-label { font-size: 9px; color: var(--color-text-secondary); }
         }
       }
@@ -634,10 +663,15 @@ export class ExploreComponent {
 
   isLoading = false;
   activePlayQuiz: Quiz | null = null;
+  readonly defaultQuizCover = DEFAULT_QUIZ_COVER;
+
+  questionsCount(quiz: Quiz): number {
+    return quiz.questionsCount ?? quiz.questions?.length ?? 0;
+  }
 
   filteredQuizzes(): Quiz[] {
     return this.quizzes().filter(q => {
-      const matchPublic = q.visibility === 'PUBLIC';
+      const matchPublic = q.visibility === 'PUBLIC' && this.questionsCount(q) > 0;
       const matchSearch = !this.searchQuery ||
         q.title.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
         q.description.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
