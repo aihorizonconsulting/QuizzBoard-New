@@ -1,0 +1,48 @@
+server:
+  port: ${SERVER_PORT:8080}
+  servlet:
+    context-path: ${API_PREFIX:/api/v1}
+
+spring:
+  datasource:
+    url: ${LOCAL_DATASOURCE_URL:jdbc:h2:file:./data/quizzboard_local;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE}
+    username: ${LOCAL_DATASOURCE_USERNAME:sa}
+    password: ${LOCAL_DATASOURCE_PASSWORD:}
+    driver-class-name: org.h2.Driver
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        format_sql: true
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  data:
+    redis:
+      repositories:
+        enabled: false
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:2525}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+
+app:
+  cors:
+    allowed-origins: ${CORS_ORIGINS:http://localhost:4200,http://127.0.0.1:4200}
+  mail:
+    enabled: ${SMTP_ENABLED:false}
+    from: ${MAIL_FROM:QuizzBoard Support <no-reply@quizzboard.com>}
+    reset-password-url: ${RESET_PASSWORD_URL:http://localhost:4200/reinitialisation-mot-de-passe?token=}
+  payment:
+    simulation-enabled: ${ENABLE_PAYMENT_SIMULATION:false}
+  ai:
+    gemini:
+      api-key: ${GEMINI_API_KEY:}
+      model: ${GEMINI_MODEL:gemini-2.5-flash}
+      base-url: https://generativelanguage.googleapis.com/v1beta

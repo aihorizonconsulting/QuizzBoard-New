@@ -4,6 +4,10 @@ server:
     context-path: ${API_PREFIX:/api/v1}
 
 spring:
+  config:
+    import:
+      - optional:file:.env[.properties]
+      - optional:file:../.env[.properties]
   application:
     name: quizzboard-backend
 
@@ -69,7 +73,7 @@ app:
   google:
     client-id: ${GOOGLE_CLIENT_ID:google-client-id-placeholder}
   payment:
-    simulation-enabled: ${ENABLE_PAYMENT_SIMULATION:true}
+    simulation-enabled: ${ENABLE_PAYMENT_SIMULATION:false}
     wave:
       api-key: ${WAVE_API_KEY:}
       webhook-secret: ${WAVE_WEBHOOK_SECRET:}
@@ -89,13 +93,13 @@ app:
       public-key: ${PAYDUNYA_PUBLIC_KEY:}
       token: ${PAYDUNYA_TOKEN:}
       mode: ${PAYDUNYA_MODE:sandbox}
-      cancel-url: ${PAYDUNYA_CANCEL_URL:http://localhost:4200/app/pricing?status=cancelled}
+      cancel-url: ${PAYDUNYA_CANCEL_URL:http://localhost:4200/tarifs?status=cancelled}
       return-url: ${PAYDUNYA_RETURN_URL:http://localhost:4200/app/subscription/callback}
       callback-url: ${PAYDUNYA_CALLBACK_URL:http://localhost:8080/api/v1/payments/paydunya/ipn}
   ai:
     gemini:
       api-key: ${GEMINI_API_KEY:}
-      model: gemini-1.5-flash
+      model: ${GEMINI_MODEL:gemini-2.5-flash}
       base-url: https://generativelanguage.googleapis.com/v1beta
     groq:
       api-key: ${GROQ_API_KEY:}
@@ -109,6 +113,8 @@ app:
     cloud-name: ${CLOUDINARY_CLOUD_NAME:}
     api-key: ${CLOUDINARY_API_KEY:}
     api-secret: ${CLOUDINARY_API_SECRET:}
+  live:
+    session-ttl-hours: ${LIVE_SESSION_TTL_HOURS:6}
 
 # 5. Documentation OpenAPI / Swagger UI
 springdoc:

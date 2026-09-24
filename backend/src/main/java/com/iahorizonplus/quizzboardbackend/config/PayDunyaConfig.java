@@ -14,7 +14,7 @@ public class PayDunyaConfig {
     private String publicKey = "";
     private String token = "";
     private String mode = "sandbox"; // "sandbox" or "live"
-    private String cancelUrl = "http://localhost:4200/app/pricing?status=cancelled";
+    private String cancelUrl = "http://localhost:4200/tarifs?status=cancelled";
     private String returnUrl = "http://localhost:4200/app/subscription/callback";
     private String callbackUrl = "http://localhost:8080/api/v1/payments/paydunya/ipn";
 
@@ -27,6 +27,7 @@ public class PayDunyaConfig {
 
     public boolean isConfigured() {
         return masterKey != null && !masterKey.isBlank() && !masterKey.contains("placeholder") && !masterKey.contains("votre_")
+                && !masterKey.startsWith("live_public_") && !masterKey.startsWith("test_public_")
                 && privateKey != null && !privateKey.isBlank() && !privateKey.contains("votre_")
                 && token != null && !token.isBlank() && !token.contains("votre_");
     }

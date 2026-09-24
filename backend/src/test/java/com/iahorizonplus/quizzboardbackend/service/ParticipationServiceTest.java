@@ -215,6 +215,7 @@ class ParticipationServiceTest {
         when(quizRepository.findById("quiz-100")).thenReturn(Optional.of(sampleQuiz));
         when(participationRepository.save(any(Participation.class))).thenAnswer(inv -> inv.getArgument(0));
         when(participationRepository.findByQuizIdOrderByScoreDesc("quiz-100")).thenReturn(List.of(p));
+        when(smtpEmailService.isDeliveryEnabled()).thenReturn(true);
 
         boolean sent = participationService.sendParticipationEmail("part-public-1", "public.player@example.com");
 
@@ -235,4 +236,3 @@ class ParticipationServiceTest {
         );
     }
 }
-

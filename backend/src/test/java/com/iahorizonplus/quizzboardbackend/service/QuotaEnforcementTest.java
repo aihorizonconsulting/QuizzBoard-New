@@ -83,7 +83,7 @@ class QuotaEnforcementTest {
 
         assertThatThrownBy(() -> quizService.createQuiz(newQuiz, "usr-free", "Aissatou Diallo"))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("Limite du forfait FREE atteinte (3 quiz maximum)");
+                .hasMessageContaining("Limite du forfait DÉCOUVERTE atteinte (3 quiz maximum)");
 
         verify(quizRepository, never()).save(any(Quiz.class));
     }

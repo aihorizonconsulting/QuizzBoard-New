@@ -11,7 +11,7 @@ services:
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
     ports:
-      - "127.0.0.1:${DB_PORT:-5432}:5432"
+      - "127.0.0.1:${DB_HOST_PORT:-5434}:5432"
     volumes:
       - quizzboard_prod_postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -65,6 +65,7 @@ services:
       - REDIS_HOST=redis-prod
       - REDIS_PORT=6379
       - CORS_ORIGINS=${CORS_ORIGINS:-https://quizzboard.com,https://www.quizzboard.com}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-385748483146-1r3b7ab8tmhetu1t4pshvelc35lalabg.apps.googleusercontent.com}
     ports:
       - "127.0.0.1:8080:8080"
     volumes:

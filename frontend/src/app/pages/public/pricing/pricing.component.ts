@@ -79,15 +79,14 @@ import { extractFieldErrors, getGeneralErrorMessage } from '../../../core/utils/
                     <span>{{ authService.isAuthenticated() ? 'Accéder à mon Espace (Gratuit)' : 'Commencer Gratuitement' }}</span>
                   </a>
                 } @else {
-                  <!-- Forfait Formateur Payant désactivé -->
                   <button 
                     type="button" 
-                    class="btn btn-outline btn-full" 
-                    disabled 
-                    style="opacity: 0.6; cursor: not-allowed; background: #F1F5F9; border-color: #CBD5E1; color: #64748B;"
-                    title="Forfait Formateur temporairement indisponible">
-                    <app-icon name="lock" [size]="15" color="#64748B"></app-icon>
-                    <span>Choisir {{ plan.name }} (Bientôt disponible)</span>
+                    class="btn btn-full plan-cta"
+                    [class.cta-starter]="plan.id === 'STARTER'"
+                    [class.cta-learner]="plan.id === 'LEARNER_PLUS'"
+                    (click)="openPaymentModal(plan)">
+                    <app-icon name="shield" [size]="15" color="#FFFFFF"></app-icon>
+                    <span>Choisir {{ plan.name }}</span>
                   </button>
                 }
               </div>
@@ -111,7 +110,7 @@ import { extractFieldErrors, getGeneralErrorMessage } from '../../../core/utils/
         </div>
       </section>
 
-      <!-- PAYMENT MODAL (Simulating Wave, Orange Money, Stripe) -->
+      <!-- PAYMENT MODAL -->
       @if (selectedPlanForPayment) {
         <div class="modal-backdrop" (click)="selectedPlanForPayment = null">
           <div class="modal-card card" (click)="$event.stopPropagation()">
@@ -129,7 +128,7 @@ import { extractFieldErrors, getGeneralErrorMessage } from '../../../core/utils/
                   </span>
                 </div>
                 <div class="summary-row" style="font-size: 12px; color: var(--color-text-secondary);">
-                  <span>Renouvellement automatique • Résiliable à tout moment en 1 clic</span>
+                  <span>Paiement sécurisé par facture PayDunya • Activation après confirmation</span>
                 </div>
               </div>
 
@@ -147,7 +146,7 @@ import { extractFieldErrors, getGeneralErrorMessage } from '../../../core/utils/
                         <span>PayDunya Passerelle Globale</span>
                         <span class="badge badge-primary" style="font-size: 10px; padding: 2px 6px;">Sécurisé</span>
                       </div>
-                      <div class="pay-sub">Accepte Wave, Orange Money, Free Money et Carte Bancaire (Visa / Mastercard)</div>
+                      <div class="pay-sub">Les moyens disponibles sont affichés directement par PayDunya selon le pays et votre compte marchand.</div>
                     </div>
                   </div>
                   <input type="radio" checked readonly>
@@ -157,7 +156,7 @@ import { extractFieldErrors, getGeneralErrorMessage } from '../../../core/utils/
               <!-- Input fields with real-time field errors -->
               <div class="form-group" style="margin-top: 16px;">
                 <label class="section-lbl" style="display: block; margin-bottom: 6px;">
-                  Numéro de téléphone mobile (optionnel)
+                  Contact mobile (optionnel)
                 </label>
                 <input 
                   type="tel"
@@ -168,7 +167,7 @@ import { extractFieldErrors, getGeneralErrorMessage } from '../../../core/utils/
                   class="input-field"
                   style="width: 100%; padding: 10px 14px; border-radius: 8px; border: 1.5px solid var(--color-border); font-size: 14px; font-weight: 600;">
                 <span style="display: block; font-size: 12px; color: var(--color-text-secondary); margin-top: 4px;">
-                  Préremplit automatiquement votre contact sur le guichet sécurisé PayDunya.
+                  PayDunya peut redemander les informations obligatoires sur son guichet sécurisé.
                 </span>
                 @if (fieldErrors['phoneNumber']) {
                   <span class="field-error-msg animate-fade-in">
@@ -248,16 +247,16 @@ import { extractFieldErrors, getGeneralErrorMessage } from '../../../core/utils/
     }
 
     .pricing-cards-section {
-      max-width: 960px;
+      max-width: 1180px;
       margin: 40px auto 0 auto;
       padding: 0 24px;
     }
 
     .pricing-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-      gap: 32px;
-      max-width: 820px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 22px;
+      max-width: 1120px;
       margin: 0 auto;
       align-items: stretch;
     }
@@ -325,6 +324,32 @@ import { extractFieldErrors, getGeneralErrorMessage } from '../../../core/utils/
 
       .btn-full {
         width: 100%;
+      }
+
+      .plan-cta {
+        border: 0;
+        color: #FFFFFF;
+        box-shadow: var(--shadow-sm);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+
+        &.cta-starter {
+          background: #0F766E;
+        }
+
+        &.cta-starter:hover {
+          background: #115E59;
+        }
+
+        &.cta-learner {
+          background: #7C3AED;
+        }
+
+        &.cta-learner:hover {
+          background: #6D28D9;
+        }
       }
     }
 
@@ -497,6 +522,18 @@ import { extractFieldErrors, getGeneralErrorMessage } from '../../../core/utils/
       padding-top: 16px;
       border-top: 1px solid var(--color-border);
     }
+
+    @media (max-width: 1050px) {
+      .pricing-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 700px) {
+      .pricing-grid {
+        grid-template-columns: 1fr;
+      }
+    }
   `]
 })
 export class PricingComponent implements OnInit {
@@ -532,6 +569,8 @@ export class PricingComponent implements OnInit {
         const found = this.plans().find(p => p.id === targetPlan);
         if (found && found.id === 'FREE') {
           this.selectPlan(found);
+        } else if (found) {
+          this.openPaymentModal(found);
         }
       }
       this.cdr.markForCheck();
@@ -582,11 +621,14 @@ export class PricingComponent implements OnInit {
     this.cdr.markForCheck();
 
     this.subService.subscribeToPlan(this.selectedPlanForPayment.id, 'PAYDUNYA', this.paymentPhone)
-      .then(() => {
+      .then((started) => {
         this.isProcessing = false;
-        this.selectedPlanForPayment = null;
+        if (!started) {
+          this.generalError = 'Impossible de créer une session PayDunya réelle. Vérifiez la configuration de paiement et réessayez.';
+          this.cdr.markForCheck();
+          return;
+        }
         this.cdr.markForCheck();
-        this.router.navigate(['/app/subscription']);
       })
       .catch((err) => {
         this.isProcessing = false;

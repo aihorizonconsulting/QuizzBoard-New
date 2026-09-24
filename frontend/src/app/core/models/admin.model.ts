@@ -4,7 +4,7 @@ export interface AuditLog {
   adminName: string;
   action: string;
   target: string;
-  ipAddress: string;
+  ipAddress?: string;
   severity: 'INFO' | 'WARNING' | 'CRITICAL';
 }
 
@@ -42,14 +42,15 @@ export interface PlatformSettings {
 
 export interface TransactionRecord {
   id: string;
-  date: string;
+  date?: string;
+  createdAt?: string;
   userName: string;
   userEmail: string;
   organization?: string;
   plan: 'STARTER';
   amountFcfa: number;
   amountUsd: number;
-  paymentMethod: 'WAVE' | 'ORANGE_MONEY' | 'STRIPE';
-  status: 'PAID' | 'PENDING' | 'REFUNDED' | 'FAILED';
+  paymentMethod: 'WAVE' | 'ORANGE_MONEY' | 'STRIPE' | 'PAYDUNYA';
+  status: 'INITIATED' | 'PAID' | 'PENDING' | 'REFUNDED' | 'FAILED' | 'CANCELLED' | 'EXPIRED';
   reference: string;
 }

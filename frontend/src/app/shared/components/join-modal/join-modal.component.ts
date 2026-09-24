@@ -7,6 +7,7 @@ import { QuizPlayerModalService } from '../../../core/services/quiz-player-modal
 import { QuizService } from '../../../core/services/quiz.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { LiveSyncService } from '../../../core/services/live-sync.service';
+import { LiveSessionService } from '../../../core/services/live-session.service';
 import { IconComponent } from '../icon/icon.component';
 
 @Component({
@@ -286,6 +287,7 @@ export class JoinModalComponent {
   private quizService = inject(QuizService);
   private authService = inject(AuthService);
   private liveSyncService = inject(LiveSyncService);
+  private liveSessionService = inject(LiveSessionService);
 
   code = '';
   nickname = this.getDefaultNickname();
@@ -336,6 +338,38 @@ export class JoinModalComponent {
 
     this.isJoining = true;
     try {
+      const backendLive = await this.liveSessionService.findBackendLiveSessionByPin(this.code);
+      if (backendLive) {
+        const playerPayload = {
+          nickname: this.nickname.trim(),
+          email: this.email.trim() || undefined
+        };
+        const joinedLive = await this.liveSessionService.joinBackendLiveSession(backendLive.id, playerPayload);
+        const live = this.liveSessionService.toLiveQuizSession(joinedLive);
+        this.quizService.activeLiveSession.set(live);
+        this.liveSyncService.saveSessionState(live);
+
+        const targetQuiz = await this.quizService.fetchQuizByCodeOrPin(live.quizId);
+        if (!targetQuiz) {
+          this.codeError = 'Live trouvé, mais le quiz associé est introuvable.';
+          return;
+        }
+
+        if (live.status === 'LOBBY') {
+          this.liveSyncService.joinWaitingRoom(targetQuiz, live.pin, {
+            id: joinedLive.players.find(p => p.email === playerPayload.email || p.nickname === playerPayload.nickname)?.id || 'p-' + Date.now(),
+            nickname: playerPayload.nickname,
+            email: playerPayload.email
+          });
+          this.close();
+          return;
+        }
+
+        this.close();
+        this.quizPlayerModalService.open(targetQuiz, playerPayload);
+        return;
+      }
+
       const targetQuiz = await this.quizService.fetchQuizByCodeOrPin(this.code);
       if (targetQuiz) {
         const cleanInput = this.code.trim().replace(/\s+/g, '').toLowerCase();

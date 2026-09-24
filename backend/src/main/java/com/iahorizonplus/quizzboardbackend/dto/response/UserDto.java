@@ -13,6 +13,7 @@ public record UserDto(
     String email,
     UserRole role,
     SubscriptionTier subscriptionTier,
+    LocalDateTime subscriptionExpiresAt,
     AuthProvider authProvider,
     String avatarUrl,
     String organization,

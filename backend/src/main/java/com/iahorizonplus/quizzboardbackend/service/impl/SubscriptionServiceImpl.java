@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -23,10 +24,11 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     private final PlatformSettingsRepository settingsRepository;
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public SubscriptionTier getCurrentTier(String userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Utilisateur introuvable"));
+        expireIfNeeded(user);
         return user.getSubscriptionTier();
     }
 
@@ -36,6 +38,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Utilisateur introuvable"));
         user.setSubscriptionTier(tier);
+        user.setSubscriptionExpiresAt(tier == SubscriptionTier.FREE ? null : LocalDateTime.now().plusMonths(1));
         userRepository.save(user);
         log.info("Abonnement utilisateur {} mis à niveau vers {}", userId, tier);
     }
@@ -58,5 +61,16 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     public PlatformSettings updatePlatformSettings(PlatformSettings settings) {
         settings.setId("default-settings");
         return settingsRepository.save(settings);
+    }
+
+    private void expireIfNeeded(User user) {
+        if (user.getSubscriptionTier() != SubscriptionTier.FREE
+                && user.getSubscriptionExpiresAt() != null
+                && user.getSubscriptionExpiresAt().isBefore(LocalDateTime.now())) {
+            user.setSubscriptionTier(SubscriptionTier.FREE);
+            user.setSubscriptionExpiresAt(null);
+            userRepository.save(user);
+            log.info("Abonnement expiré pour {}, retour au forfait FREE.", user.getEmail());
+        }
     }
 }

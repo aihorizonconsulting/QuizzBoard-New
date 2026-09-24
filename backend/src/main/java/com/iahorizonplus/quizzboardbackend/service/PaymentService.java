@@ -13,8 +13,6 @@ public interface PaymentService {
 
     Invoice handlePaymentCallback(PaymentCallbackRequest callback);
 
-    Invoice simulatePaymentSuccess(String reference);
-
     Invoice confirmPayDunya(String token);
 
     boolean handlePayDunyaIpn(java.util.Map<String, Object> payload);

@@ -8,6 +8,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -26,12 +29,31 @@ public class JwtUtils {
     private long jwtRefreshExpirationMs;
 
     private SecretKey getSigningKey() {
-        byte[] keyBytes = Decoders.BASE64.decode(this.jwtSecret);
-        if (keyBytes.length < 32) {
-            // Fallback si la clé n'est pas en base64 de 256 bits
-            return Keys.hmacShaKeyFor(this.jwtSecret.getBytes());
+        String secret = jwtSecret == null ? "" : jwtSecret.trim();
+
+        try {
+            byte[] keyBytes = Decoders.BASE64.decode(secret);
+            if (keyBytes.length >= 32) {
+                return Keys.hmacShaKeyFor(keyBytes);
+            }
+        } catch (RuntimeException ex) {
+            log.warn("JWT_SECRET n'est pas une clé Base64 valide, utilisation de la valeur brute comme secret HMAC.");
         }
-        return Keys.hmacShaKeyFor(keyBytes);
+
+        byte[] rawKeyBytes = secret.getBytes(StandardCharsets.UTF_8);
+        if (rawKeyBytes.length >= 32) {
+            return Keys.hmacShaKeyFor(rawKeyBytes);
+        }
+
+        return Keys.hmacShaKeyFor(sha256(rawKeyBytes));
+    }
+
+    private byte[] sha256(byte[] value) {
+        try {
+            return MessageDigest.getInstance("SHA-256").digest(value);
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("Algorithme SHA-256 indisponible pour la clé JWT.", ex);
+        }
     }
 
     public String generateToken(String email, String role) {

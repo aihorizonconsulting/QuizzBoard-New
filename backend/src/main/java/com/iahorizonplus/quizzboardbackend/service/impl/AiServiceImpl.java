@@ -38,6 +38,12 @@ public class AiServiceImpl implements AiService {
     @Value("${app.ai.gemini.api-key:}")
     private String geminiApiKey;
 
+    @Value("${app.ai.gemini.model:gemini-1.5-flash}")
+    private String geminiModel;
+
+    @Value("${app.ai.gemini.base-url:https://generativelanguage.googleapis.com/v1beta}")
+    private String geminiBaseUrl;
+
     @Value("${app.ai.groq.api-key:}")
     private String groqApiKey;
 
@@ -193,7 +199,10 @@ public class AiServiceImpl implements AiService {
     }
 
     private boolean isGeminiConfigured() {
-        return geminiApiKey != null && !geminiApiKey.isBlank() && !geminiApiKey.contains("votre_cle");
+        return geminiApiKey != null
+                && !geminiApiKey.isBlank()
+                && !geminiApiKey.contains("votre_cle")
+                && !geminiApiKey.contains("your_key");
     }
 
     private List<Question> callGeminiForQuiz(String prompt, int count) {
@@ -221,7 +230,7 @@ public class AiServiceImpl implements AiService {
                     )
             );
 
-            String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + geminiApiKey.trim();
+            String url = buildGeminiGenerateUrl();
 
             String response = restClient.post()
                     .uri(url)
@@ -234,7 +243,7 @@ public class AiServiceImpl implements AiService {
                 JsonNode root = objectMapper.readTree(response);
                 JsonNode textNode = root.path("candidates").path(0).path("content").path("parts").path(0).path("text");
                 if (!textNode.isMissingNode()) {
-                    String jsonText = textNode.asText().trim();
+                    String jsonText = extractJsonPayload(textNode.asText());
                     JsonNode questionsArray = objectMapper.readTree(jsonText);
                     if (questionsArray.isArray() && questionsArray.size() > 0) {
                         List<Question> parsedQuestions = new ArrayList<>();
@@ -261,9 +270,13 @@ public class AiServiceImpl implements AiService {
                             if (choicesArray.isArray()) {
                                 int choiceOrder = 1;
                                 for (JsonNode cNode : choicesArray) {
+                                    String choiceText = cNode.path("text").asText("").trim();
+                                    if (choiceText.isBlank()) {
+                                        continue;
+                                    }
                                     Choice c = Choice.builder()
                                             .id(UUID.randomUUID().toString())
-                                            .text(cNode.path("text").asText())
+                                            .text(choiceText)
                                             .isCorrect(cNode.path("isCorrect").asBoolean(false))
                                             .order(choiceOrder++)
                                             .question(q)
@@ -271,10 +284,13 @@ public class AiServiceImpl implements AiService {
                                     choices.add(c);
                                 }
                             }
+                            if (!hasValidChoices(type, choices)) {
+                                continue;
+                            }
                             q.setChoices(choices);
                             parsedQuestions.add(q);
                         }
-                        log.info("Gemini 1.5 Flash a généré avec succès {} questions réelles pour : {}", parsedQuestions.size(), prompt);
+                        log.info("{} a généré avec succès {} questions réelles pour : {}", geminiModel, parsedQuestions.size(), prompt);
                         return parsedQuestions;
                     }
                 }
@@ -308,7 +324,7 @@ public class AiServiceImpl implements AiService {
                     )
             );
 
-            String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + geminiApiKey.trim();
+            String url = buildGeminiGenerateUrl();
 
             String response = restClient.post()
                     .uri(url)
@@ -321,7 +337,7 @@ public class AiServiceImpl implements AiService {
                 JsonNode root = objectMapper.readTree(response);
                 JsonNode textNode = root.path("candidates").path(0).path("content").path("parts").path(0).path("text");
                 if (!textNode.isMissingNode()) {
-                    JsonNode chaptersArray = objectMapper.readTree(textNode.asText().trim());
+                    JsonNode chaptersArray = objectMapper.readTree(extractJsonPayload(textNode.asText()));
                     if (chaptersArray.isArray() && chaptersArray.size() > 0) {
                         List<CourseChapter> chapters = new ArrayList<>();
                         int order = 1;
@@ -340,7 +356,7 @@ public class AiServiceImpl implements AiService {
                             chapters.add(courseChapterRepository.save(ch));
                             order++;
                         }
-                        log.info("Gemini 1.5 Flash a généré avec succès {} chapitres de cours pour : {}", chapters.size(), topic);
+                        log.info("{} a généré avec succès {} chapitres de cours pour : {}", geminiModel, chapters.size(), topic);
                         return chapters;
                     }
                 }
@@ -349,6 +365,44 @@ public class AiServiceImpl implements AiService {
             log.warn("Appel direct à Google Gemini pour le cours échoué ({}), bascule automatique sur le modèle pédagogique intégré.", e.getMessage());
         }
         return null;
+    }
+
+    private String buildGeminiGenerateUrl() {
+        String baseUrl = trimTrailingSlash(geminiBaseUrl);
+        String model = (geminiModel == null || geminiModel.isBlank()) ? "gemini-1.5-flash" : geminiModel.trim();
+        return "%s/models/%s:generateContent?key=%s".formatted(baseUrl, model, geminiApiKey.trim());
+    }
+
+    private String trimTrailingSlash(String value) {
+        if (value == null || value.isBlank()) {
+            return "https://generativelanguage.googleapis.com/v1beta";
+        }
+        return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
+    }
+
+    private String extractJsonPayload(String rawText) {
+        if (rawText == null) {
+            return "";
+        }
+        String text = rawText.trim();
+        if (text.startsWith("```")) {
+            text = text.replaceFirst("^```(?:json)?\\s*", "").replaceFirst("\\s*```$", "").trim();
+        }
+        int arrayStart = text.indexOf('[');
+        int arrayEnd = text.lastIndexOf(']');
+        if (arrayStart >= 0 && arrayEnd > arrayStart) {
+            return text.substring(arrayStart, arrayEnd + 1);
+        }
+        return text;
+    }
+
+    private boolean hasValidChoices(QuestionType type, List<Choice> choices) {
+        long correctCount = choices.stream().filter(Choice::isCorrect).count();
+        return switch (type) {
+            case TRUE_FALSE -> choices.size() >= 2 && correctCount == 1;
+            case SINGLE_CHOICE -> choices.size() >= 2 && correctCount == 1;
+            case MULTIPLE_CHOICE -> choices.size() >= 2 && correctCount >= 1;
+        };
     }
 
     @Override

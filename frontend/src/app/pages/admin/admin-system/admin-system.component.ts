@@ -1,14 +1,15 @@
-import { Component, inject, signal, computed } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AdminService } from '../../../core/services/admin.service';
 import { AuditLog } from '../../../core/models/admin.model';
 import { IconComponent } from '../../../shared/components/icon/icon.component';
+import { PaginationComponent } from '../../../shared/components/pagination/pagination.component';
 
 @Component({
   selector: 'app-admin-system',
   standalone: true,
-  imports: [CommonModule, FormsModule, IconComponent],
+  imports: [CommonModule, FormsModule, IconComponent, PaginationComponent],
   template: `
     <div class="admin-system-page animate-fade-in">
       <!-- HEADER -->
@@ -130,6 +131,7 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
             <input 
               type="text" 
               [(ngModel)]="searchLog" 
+              (ngModelChange)="currentPage = 1"
               placeholder="Filtrer les logs..." 
               class="search-mini">
           </div>
@@ -148,7 +150,7 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
               </tr>
             </thead>
             <tbody>
-              @for (log of filteredLogs(); track log.id) {
+              @for (log of paginatedLogs(); track log.id) {
                 <tr>
                   <td class="time-cell">
                     <strong>{{ log.timestamp }}</strong>
@@ -173,13 +175,20 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
                   </td>
 
                   <td class="ip-cell">
-                    <code>{{ log.ipAddress }}</code>
+                    <code>{{ log.ipAddress || '-' }}</code>
                   </td>
                 </tr>
               }
             </tbody>
           </table>
         </div>
+
+        <app-pagination
+          [currentPage]="currentPage"
+          [pageSize]="pageSize"
+          [totalItems]="filteredLogs().length"
+          (pageChange)="currentPage = $event">
+        </app-pagination>
       </div>
     </div>
   `,
@@ -373,17 +382,29 @@ export class AdminSystemComponent {
   auditLogs = this.adminService.getAuditLogs();
 
   searchLog = '';
+  currentPage = 1;
+  pageSize = 10;
 
-  filteredLogs = computed(() => {
+  filteredLogs(): AuditLog[] {
     return this.auditLogs().filter(log => {
       const q = this.searchLog.toLowerCase().trim();
       return !q ||
         log.action.toLowerCase().includes(q) ||
         log.target.toLowerCase().includes(q) ||
         log.adminName.toLowerCase().includes(q) ||
-        log.ipAddress.toLowerCase().includes(q);
+        (log.ipAddress || '').toLowerCase().includes(q);
     });
-  });
+  }
+
+  paginatedLogs(): AuditLog[] {
+    const list = this.filteredLogs();
+    const maxPage = Math.max(1, Math.ceil(list.length / this.pageSize));
+    if (this.currentPage > maxPage) {
+      this.currentPage = maxPage;
+    }
+    const start = (this.currentPage - 1) * this.pageSize;
+    return list.slice(start, start + this.pageSize);
+  }
 
   exportAuditLogs() {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.auditLogs(), null, 2));

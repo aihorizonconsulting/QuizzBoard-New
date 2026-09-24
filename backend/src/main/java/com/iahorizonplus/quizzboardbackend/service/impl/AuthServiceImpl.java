@@ -26,6 +26,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Service
@@ -158,10 +160,11 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public UserDto getCurrentUser(String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Utilisateur introuvable."));
+        expireSubscriptionIfNeeded(user);
         return userMapper.toDto(user);
     }
 
@@ -176,6 +179,18 @@ public class AuthServiceImpl implements AuthService {
                 .orElseThrow(() -> new ResourceNotFoundException("Utilisateur introuvable."));
 
         String newAccessToken = jwtUtils.generateToken(user.getEmail(), user.getRole().name());
+        expireSubscriptionIfNeeded(user);
         return new AuthResponse(newAccessToken, refreshToken, userMapper.toDto(user));
+    }
+
+    private void expireSubscriptionIfNeeded(User user) {
+        if (user.getSubscriptionTier() != SubscriptionTier.FREE
+                && user.getSubscriptionExpiresAt() != null
+                && user.getSubscriptionExpiresAt().isBefore(LocalDateTime.now())) {
+            user.setSubscriptionTier(SubscriptionTier.FREE);
+            user.setSubscriptionExpiresAt(null);
+            userRepository.save(user);
+            log.info("Abonnement expiré pour {}, retour au forfait FREE.", user.getEmail());
+        }
     }
 }

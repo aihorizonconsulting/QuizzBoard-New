@@ -87,8 +87,8 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           password: ${{ secrets.SERVER_PASSWORD }}
           port: 22
-          timeout: 10m
-          command_timeout: 10m
+          timeout: 30m
+          command_timeout: 30m
           script_stop: true
           script: |
             echo "===================================================="
@@ -101,7 +101,7 @@ jobs:
       # ------------------------------------------------------------------------
       # ÉTAPE 5 : CONTRÔLE DE SANTÉ DES SERVICES PROD
       # ------------------------------------------------------------------------
-      - name: 5. 🩺 Vérifier l'état et la santé des services PRODUCTION
+      - name: 5. 🌐 Installer la configuration Nginx PRODUCTION
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.SERVER_HOST }}
@@ -112,16 +112,61 @@ jobs:
           script_stop: true
           script: |
             echo "===================================================="
-            echo "🩺 ÉTAPE 5 : Statut des conteneurs de PRODUCTION..."
+            echo "🌐 ÉTAPE 5 : Configuration Nginx pour quizzboard.com..."
             cd /var/www/QuizzBoard-New
+            if [ ! -f /etc/letsencrypt/live/quizzboard.com/fullchain.pem ]; then
+              echo "❌ Certificat SSL introuvable : /etc/letsencrypt/live/quizzboard.com/fullchain.pem"
+              exit 1
+            fi
+            cp nginx-quizzboard.com.conf /etc/nginx/sites-available/quizzboard.com
+            ln -sf /etc/nginx/sites-available/quizzboard.com /etc/nginx/sites-enabled/quizzboard.com
+            nginx -t
+            systemctl reload nginx || nginx -s reload
+            echo "✅ Nginx PRODUCTION pointe vers les conteneurs QuizzBoard."
+            echo "===================================================="
+
+      # ------------------------------------------------------------------------
+      # ÉTAPE 6 : CONTRÔLE DE SANTÉ DES SERVICES PROD
+      # ------------------------------------------------------------------------
+      - name: 6. 🩺 Vérifier l'état et la santé des services PRODUCTION
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: 22
+          script_stop: true
+          script: |
+            echo "===================================================="
+            echo "🩺 ÉTAPE 6 : Statut des conteneurs de PRODUCTION..."
+            cd /var/www/QuizzBoard-New
+            echo "Attente de l'API backend PRODUCTION..."
+            for attempt in $(seq 1 60); do
+              if curl -fsS --max-time 5 http://127.0.0.1:8080/api/v1/subscriptions/settings >/dev/null; then
+                echo "✅ API backend PRODUCTION prête après ${attempt} tentative(s)."
+                break
+              fi
+
+              if [ "$attempt" -eq 60 ]; then
+                echo "❌ API backend PRODUCTION indisponible après 10 minutes."
+                docker compose -f docker-compose.prod.yml ps
+                docker compose -f docker-compose.prod.yml logs --tail=160 backend-prod
+                exit 1
+              fi
+
+              sleep 10
+            done
             docker compose -f docker-compose.prod.yml ps
+            echo "Test public quizzboard.com..."
+            curl -fsS --max-time 10 https://quizzboard.com/api/v1/subscriptions/settings >/dev/null
             echo "✅ Déploiement PRODUCTION actif sur https://quizzboard.com"
             echo "===================================================="
 
       # ------------------------------------------------------------------------
-      # ÉTAPE 6 : NETTOYAGE DES IMAGES DOCKER ORPHELINES
+      # ÉTAPE 7 : NETTOYAGE DES IMAGES DOCKER ORPHELINES
       # ------------------------------------------------------------------------
-      - name: 6. 🧹 Nettoyer les images Docker orphelines
+      - name: 7. 🧹 Nettoyer les images Docker orphelines
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.SERVER_HOST }}

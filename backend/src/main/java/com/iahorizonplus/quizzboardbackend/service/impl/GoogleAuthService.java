@@ -20,7 +20,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -35,13 +37,15 @@ public class GoogleAuthService {
     @Value("${app.google.client-id:google-client-id-placeholder}")
     private String googleClientId;
 
+    private static final String FRONTEND_GOOGLE_CLIENT_ID = "385748483146-1r3b7ab8tmhetu1t4pshvelc35lalabg.apps.googleusercontent.com";
+
     @Transactional
     public AuthResponse authenticateWithGoogle(GoogleAuthRequest request) {
         GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(
                 new NetHttpTransport(),
                 GsonFactory.getDefaultInstance()
         )
-        .setAudience(Collections.singletonList(googleClientId))
+        .setAudience(allowedClientIds())
         .build();
 
         GoogleIdToken idToken;
@@ -118,5 +122,22 @@ public class GoogleAuthService {
         String refreshToken = jwtUtils.generateRefreshToken(saved.getEmail());
 
         return new AuthResponse(jwtToken, refreshToken, userMapper.toDto(saved));
+    }
+
+    private List<String> allowedClientIds() {
+        List<String> clientIds = new ArrayList<>();
+        if (googleClientId != null && !googleClientId.isBlank() && !googleClientId.contains("placeholder")) {
+            String[] configuredIds = googleClientId.split(",");
+            for (String configuredId : configuredIds) {
+                String cleanId = configuredId.trim();
+                if (!cleanId.isBlank()) {
+                    clientIds.add(cleanId);
+                }
+            }
+        }
+        if (!clientIds.contains(FRONTEND_GOOGLE_CLIENT_ID)) {
+            clientIds.add(FRONTEND_GOOGLE_CLIENT_ID);
+        }
+        return Collections.unmodifiableList(clientIds);
     }
 }

@@ -29,7 +29,7 @@ public class PayDunyaPaymentService {
 
     private final PayDunyaConfig payDunyaConfig;
     private final TransactionRepository transactionRepository;
-    private final PaymentSimulationService paymentSimulationService;
+    private final PaymentSettlementService paymentSettlementService;
     private final SmtpEmailService emailService;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final RestTemplate restTemplate = new RestTemplate();
@@ -45,23 +45,9 @@ public class PayDunyaPaymentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction introuvable avec la référence : " + reference));
 
         if (!payDunyaConfig.isConfigured()) {
-            log.warn("PayDunya n'est pas complètement configuré (clés manquantes). Utilisation du mode Sandbox Simulation.");
-            String mockToken = "mock-" + reference;
-            transaction.setPaydunyaToken(mockToken);
+            transaction.setStatus(PaymentStatus.FAILED);
             transactionRepository.save(transaction);
-
-            String simulatedCheckoutUrl = payDunyaConfig.getReturnUrl() + "?token=" + mockToken;
-            return new PaymentInitiateResponse(
-                    "paydunya-" + System.currentTimeMillis(),
-                    reference,
-                    PaymentMethod.PAYDUNYA,
-                    amountFcfa,
-                    "FCFA",
-                    simulatedCheckoutUrl,
-                    "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=" + simulatedCheckoutUrl,
-                    true,
-                    "Session PayDunya simulée créée. Redirection vers la page de confirmation."
-            );
+            throw new BadRequestException("paydunya", "PayDunya n'est pas configuré avec une Master Key réelle valide sur le serveur.");
         }
 
         try {
@@ -131,30 +117,31 @@ public class PayDunyaPaymentService {
                     );
                 } else {
                     log.error("PayDunya a retourné une erreur : {}", response.getBody());
+                    transaction.setStatus(PaymentStatus.FAILED);
+                    transactionRepository.save(transaction);
+                    throw new BadRequestException("paydunya", resolveGatewayErrorMessage(root));
                 }
             }
+        } catch (BadRequestException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Erreur lors de l'appel à l'API PayDunya : {}", e.getMessage(), e);
         }
 
-        // Fallback sécurisé en cas d'indisponibilité de l'API externe
-        log.warn("Basculement sur le mode simulation PayDunya pour la référence {}", reference);
-        String mockToken = "mock-" + reference;
-        transaction.setPaydunyaToken(mockToken);
+        transaction.setStatus(PaymentStatus.FAILED);
         transactionRepository.save(transaction);
-        String simulatedCheckoutUrl = payDunyaConfig.getReturnUrl() + "?token=" + mockToken;
+        throw new BadRequestException("paydunya", "PayDunya n'a pas pu créer la facture. Aucun paiement simulé n'est autorisé sur cet environnement.");
+    }
 
-        return new PaymentInitiateResponse(
-                "paydunya-" + System.currentTimeMillis(),
-                reference,
-                PaymentMethod.PAYDUNYA,
-                amountFcfa,
-                "FCFA",
-                simulatedCheckoutUrl,
-                "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=" + simulatedCheckoutUrl,
-                true,
-                "Mode de secours : Paiement simulé disponible."
-        );
+    private String resolveGatewayErrorMessage(JsonNode root) {
+        String gatewayMessage = root.path("response_text").asText("");
+        if (gatewayMessage.toLowerCase().contains("invalid masterkey")) {
+            return "PayDunya refuse la transaction : la variable PAYDUNYA_MASTER_KEY du serveur est invalide. Renseignez la vraie Master Key PayDunya, pas la clé publique.";
+        }
+        if (!gatewayMessage.isBlank()) {
+            return "PayDunya refuse la transaction : " + gatewayMessage;
+        }
+        return "PayDunya refuse la création de facture. Vérifiez les clés et le mode PayDunya.";
     }
 
     /**
@@ -168,11 +155,8 @@ public class PayDunyaPaymentService {
             throw new BadRequestException("token", "Le token PayDunya est manquant.");
         }
 
-        // Cas token de simulation / sandbox
         if (token.startsWith("mock-")) {
-            String reference = token.substring(5);
-            log.info("Validation du token de simulation PayDunya pour la référence : {}", reference);
-            return paymentSimulationService.simulateSuccess(reference);
+            throw new BadRequestException("token", "Les tokens de paiement simulé ne sont pas acceptés sur cet environnement.");
         }
 
         TransactionRecord transaction = transactionRepository.findByPaydunyaToken(token)
@@ -203,7 +187,7 @@ public class PayDunyaPaymentService {
 
                     if ("completed".equalsIgnoreCase(status)) {
                         if (reference != null && !reference.isBlank()) {
-                            return paymentSimulationService.simulateSuccess(reference);
+                            return paymentSettlementService.settleSuccessfulPayment(reference);
                         }
                     } else if ("cancelled".equalsIgnoreCase(status)) {
                         if (transaction != null) {
@@ -225,12 +209,6 @@ public class PayDunyaPaymentService {
             } catch (Exception e) {
                 log.error("Erreur lors de la vérification du paiement PayDunya : {}", e.getMessage(), e);
             }
-        }
-
-        // Si transaction trouvée en base et en mode simulation activé
-        if (transaction != null) {
-            log.info("Transaction trouvée sans vérification API externe, validation de sécurité locale.");
-            return paymentSimulationService.simulateSuccess(transaction.getReference());
         }
 
         throw new ResourceNotFoundException("Aucune transaction trouvée pour le token PayDunya : " + token);
@@ -268,7 +246,7 @@ public class PayDunyaPaymentService {
 
                 if ("completed".equalsIgnoreCase(status) && reference != null) {
                     log.info("IPN PayDunya valide et succès confirmé pour la référence {}", reference);
-                    paymentSimulationService.simulateSuccess(reference);
+                    paymentSettlementService.settleSuccessfulPayment(reference);
                     return true;
                 }
             }

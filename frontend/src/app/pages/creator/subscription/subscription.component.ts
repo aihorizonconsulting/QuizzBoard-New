@@ -44,7 +44,7 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
             @if (authService.subscriptionTier() === 'FREE') {
               Formule Découverte (Gratuit)
             } @else {
-              Formule STARTER Illimité (9 900 FCFA / mois)
+              Formule STARTER Illimité (999 FCFA / mois)
             }
           </h2>
 
@@ -206,7 +206,7 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
             class="pill-btn" 
             [class.active]="authService.subscriptionTier() === 'STARTER'"
             (click)="switchTier('STARTER')">
-            Plan STARTER (9 900 F)
+            Plan STARTER (999 F)
           </button>
         </div>
       </div>

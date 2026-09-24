@@ -4,6 +4,8 @@ import com.iahorizonplus.quizzboardbackend.dto.response.ApiResponse;
 import com.iahorizonplus.quizzboardbackend.dto.response.LinkDto;
 import com.iahorizonplus.quizzboardbackend.entity.PlatformSettings;
 import com.iahorizonplus.quizzboardbackend.entity.SubscriptionTier;
+import com.iahorizonplus.quizzboardbackend.exception.BadRequestException;
+import com.iahorizonplus.quizzboardbackend.exception.UnauthorizedException;
 import com.iahorizonplus.quizzboardbackend.security.UserPrincipal;
 import com.iahorizonplus.quizzboardbackend.service.SubscriptionService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -56,6 +58,37 @@ public class SubscriptionController {
                 new LinkDto("current-user", "/api/v1/subscriptions/current", "GET", "application/json")
         );
         return ResponseEntity.ok(ApiResponse.ok(settings, "Paramètres de la plateforme récupérés", links, "/api/v1/subscriptions/settings"));
+    }
+
+    @PostMapping("/subscribe")
+    @Operation(summary = "Mettre à jour le forfait de l'utilisateur connecté")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> subscribe(
+            @RequestBody Map<String, String> request,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        if (currentUser == null) {
+            throw new UnauthorizedException("Vous devez être connecté pour modifier votre abonnement.");
+        }
+
+        String tierValue = request.get("tier");
+        if (tierValue == null || tierValue.isBlank()) {
+            throw new BadRequestException("tier", "Le forfait est obligatoire.");
+        }
+
+        SubscriptionTier tier;
+        try {
+            tier = SubscriptionTier.valueOf(tierValue.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new BadRequestException("tier", "Forfait invalide. Valeurs acceptées : FREE, STARTER, LEARNER_PLUS.");
+        }
+
+        subscriptionService.upgradeUserTier(currentUser.getId(), tier);
+        Map<String, Object> data = Map.of("tier", tier.name());
+        List<LinkDto> links = List.of(
+                new LinkDto("self", "/api/v1/subscriptions/subscribe", "POST", "application/json"),
+                new LinkDto("current-user", "/api/v1/subscriptions/current", "GET", "application/json"),
+                new LinkDto("settings", "/api/v1/subscriptions/settings", "GET", "application/json")
+        );
+        return ResponseEntity.ok(ApiResponse.ok(data, "Abonnement mis à jour", links, "/api/v1/subscriptions/subscribe"));
     }
 
     @PutMapping("/settings")

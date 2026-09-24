@@ -94,6 +94,10 @@ export const routes: Routes = [
         redirectTo: 'dashboard',
         pathMatch: 'full'
       },
+      {
+        path: 'profile',
+        loadComponent: () => import('./pages/profile/user-profile.component').then(m => m.UserProfileComponent)
+      },
       // Creator Space - Protected by creatorGuard
       {
         path: 'dashboard',

@@ -37,22 +37,9 @@ public class PaymentController {
         PaymentInitiateResponse result = paymentService.initiatePayment(email, request);
         List<LinkDto> links = List.of(
                 new LinkDto("self", "/api/v1/payments/initiate", "POST", "application/json"),
-                new LinkDto("invoices", "/api/v1/payments/invoices", "GET", "application/json"),
-                new LinkDto("simulate-success", "/api/v1/payments/simulate/" + result.reference() + "/success", "POST", "application/json")
+                new LinkDto("invoices", "/api/v1/payments/invoices", "GET", "application/json")
         );
         return new ResponseEntity<>(ApiResponse.created(result, "Transaction de paiement initiée", links, "/api/v1/payments/initiate"), HttpStatus.CREATED);
-    }
-
-    @PostMapping("/simulate/{reference}/success")
-    @Operation(summary = "Simuler la validation réussie d'un paiement en environnement local")
-    public ResponseEntity<ApiResponse<Invoice>> simulatePaymentSuccess(@PathVariable String reference) {
-        Invoice invoice = paymentService.simulatePaymentSuccess(reference);
-        List<LinkDto> links = List.of(
-                new LinkDto("self", "/api/v1/payments/simulate/" + reference + "/success", "POST", "application/json"),
-                new LinkDto("invoices", "/api/v1/payments/invoices", "GET", "application/json"),
-                new LinkDto("subscriptions", "/api/v1/subscriptions/current", "GET", "application/json")
-        );
-        return ResponseEntity.ok(ApiResponse.ok(invoice, "Paiement simulé avec succès", links, "/api/v1/payments/simulate/" + reference + "/success"));
     }
 
     @PostMapping("/callback")
@@ -72,9 +59,12 @@ public class PaymentController {
             @RequestBody(required = false) PaymentInitiateRequest request,
             @AuthenticationPrincipal UserPrincipal currentUser) {
         String email = currentUser != null ? currentUser.getEmail() : "user@quizzboard.com";
+        String planId = request != null && request.planId() != null ? request.planId() : "STARTER";
+        double defaultFcfa = "LEARNER_PLUS".equalsIgnoreCase(planId) || "LEARNER_MONTHLY".equalsIgnoreCase(planId) ? 200.0 : 999.0;
+        double defaultUsd = "LEARNER_PLUS".equalsIgnoreCase(planId) || "LEARNER_MONTHLY".equalsIgnoreCase(planId) ? 0.5 : 2.0;
         PaymentInitiateRequest req = request != null
-                ? new PaymentInitiateRequest(PaymentMethod.PAYDUNYA, request.planId() != null ? request.planId() : "STARTER", request.amountFcfa() != null ? request.amountFcfa() : 9900.0, request.amountUsd(), "FCFA", request.phoneNumber())
-                : new PaymentInitiateRequest(PaymentMethod.PAYDUNYA, "STARTER", 9900.0, 15.0, "FCFA", null);
+                ? new PaymentInitiateRequest(PaymentMethod.PAYDUNYA, planId, request.amountFcfa() != null ? request.amountFcfa() : defaultFcfa, request.amountUsd() != null ? request.amountUsd() : defaultUsd, "FCFA", request.phoneNumber())
+                : new PaymentInitiateRequest(PaymentMethod.PAYDUNYA, "STARTER", defaultFcfa, defaultUsd, "FCFA", null);
         PaymentInitiateResponse result = paymentService.initiatePayment(email, req);
         List<LinkDto> links = List.of(
                 new LinkDto("self", "/api/v1/payments/paydunya/initiate", "POST", "application/json"),

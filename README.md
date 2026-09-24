@@ -42,7 +42,7 @@ QuizzBoard prend en charge l'API officielle de paiement **PayDunya** :
 
 - **Mode Dual :** `PAYDUNYA_MODE=test` (Sandbox) ou `PAYDUNYA_MODE=live` (Production).
 - **Sécurité IPN :** Vérification de l'empreinte **SHA-512** de la clé Master sur les webhooks instantanés (`/api/v1/payments/paydunya/ipn`).
-- **Mode Secours Local :** En environnement local sans clés renseignées, un simulateur sandbox automatique attribue le token `mock-{reference}` pour tester les parcours de souscription de bout en bout.
+- **Paiement réel obligatoire :** sans clés PayDunya valides, l'initiation de paiement échoue au lieu de simuler une souscription.
 
 ### Endpoints Paiement REST :
 - `POST /api/v1/payments/initiate` : Initie un paiement (PayDunya, Wave, Orange Money).
@@ -131,18 +131,27 @@ docker compose up --build -d
 - Swagger OpenAPI : `http://localhost:8080/api/v1/swagger-ui/index.html`
 
 ### Option B : Développement Local
-1. Démarrer PostgreSQL (port 5432) et Redis (port 6379)
-2. Backend :
+Cette option fonctionne sans Docker, sans PostgreSQL local et avec une base H2 persistante dans `backend/data/`.
+
+1. Backend :
    ```bash
-   cd quizzboard-backend
-   .\mvnw.cmd spring-boot:run
+   ./scripts/start-backend-local.sh
    ```
-3. Frontend :
+2. Frontend :
    ```bash
-   cd quizzboard-client
-   npm install
-   npm start
+   ./scripts/start-frontend-local.sh
    ```
+3. Ouvrir `http://localhost:4200`
+
+Compte de démonstration local :
+- Email : `admin@quizzboard.com`
+- Mot de passe : `Password123!`
+
+Notes locales :
+- La génération IA fonctionne avec un moteur intégré si Gemini n'est pas disponible.
+- Pour utiliser Gemini réellement, renseigner `GEMINI_API_KEY` et vérifier les crédits du projet Google AI Studio.
+- Les emails sont désactivés en profil `local` tant que `SMTP_ENABLED=true`, `SMTP_USERNAME` et `SMTP_PASSWORD` ne sont pas définis.
+- Les paiements réels exigent `ENABLE_PAYMENT_SIMULATION=false` et des clés PayDunya valides.
 
 ---
 

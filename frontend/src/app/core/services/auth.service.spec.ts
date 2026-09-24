@@ -56,7 +56,7 @@ describe('AuthService', () => {
   it('should authenticate user and store token on login', () => {
     service.login('amadou.diallo@quizzboard.com', 'password123').subscribe(res => {
       expect(res.token).toBe('jwt-token-12345');
-      expect(res.user.email).toBe('amadou.diallo@quizzboard.com');
+      expect(res.user?.email).toBe('amadou.diallo@quizzboard.com');
     });
 
     const req = httpMock.expectOne(`${environment.apiUrl}/auth/login`);

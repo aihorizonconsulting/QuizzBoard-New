@@ -891,7 +891,7 @@ export class LiveManageComponent {
     this.showCreateModal = true;
   }
 
-  submitLaunchLive() {
+  async submitLaunchLive() {
     this.fieldErrors = {};
     if (!this.selectedQuizId) {
       this.fieldErrors['quiz'] = 'Veuillez sélectionner un quiz à animer.';
@@ -908,20 +908,32 @@ export class LiveManageComponent {
       targetClassName = found?.name;
     }
 
-    const newSession = this.liveService.createLiveSession({
-      quizId: this.selectedQuizId,
-      quizTitle: quiz?.title || 'Quiz Live',
-      quizQuestionsCount: quiz?.questionsCount || 5,
-      hostId: 'u1',
-      hostName: 'Professeur',
-      audienceType: this.audienceType,
-      targetClassId: this.selectedClassId || undefined,
-      targetClassName,
-      timePerQuestionSeconds: Number(this.createTimePerQuestion)
-    });
+    let newSessionId = '';
+    try {
+      const backendSession = await this.liveService.createBackendLiveSession({
+        quizId: this.selectedQuizId,
+        quizTitle: quiz?.title || 'Quiz Live',
+        totalQuestions: quiz?.questionsCount || quiz?.questions?.length || 5,
+        timePerQuestionSeconds: Number(this.createTimePerQuestion)
+      });
+      newSessionId = backendSession.id;
+    } catch {
+      const localSession = this.liveService.createLiveSession({
+        quizId: this.selectedQuizId,
+        quizTitle: quiz?.title || 'Quiz Live',
+        quizQuestionsCount: quiz?.questionsCount || 5,
+        hostId: 'u1',
+        hostName: 'Professeur',
+        audienceType: this.audienceType,
+        targetClassId: this.selectedClassId || undefined,
+        targetClassName,
+        timePerQuestionSeconds: Number(this.createTimePerQuestion)
+      });
+      newSessionId = localSession.id;
+    }
 
     this.showCreateModal = false;
-    this.router.navigate(['/app/live/host', newSession.id]);
+    this.router.navigate(['/app/live/host', newSessionId]);
   }
 
   launchSession(sess: LiveSessionRecord) {

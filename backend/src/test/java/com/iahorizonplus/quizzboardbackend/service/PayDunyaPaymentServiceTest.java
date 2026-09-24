@@ -1,16 +1,13 @@
 package com.iahorizonplus.quizzboardbackend.service;
 
 import com.iahorizonplus.quizzboardbackend.config.PayDunyaConfig;
-import com.iahorizonplus.quizzboardbackend.dto.response.PaymentInitiateResponse;
-import com.iahorizonplus.quizzboardbackend.entity.Invoice;
-import com.iahorizonplus.quizzboardbackend.entity.PaymentMethod;
 import com.iahorizonplus.quizzboardbackend.entity.PaymentStatus;
 import com.iahorizonplus.quizzboardbackend.entity.TransactionRecord;
 import com.iahorizonplus.quizzboardbackend.exception.BadRequestException;
 import com.iahorizonplus.quizzboardbackend.external.SmtpEmailService;
 import com.iahorizonplus.quizzboardbackend.repository.TransactionRepository;
 import com.iahorizonplus.quizzboardbackend.service.impl.PayDunyaPaymentService;
-import com.iahorizonplus.quizzboardbackend.service.impl.PaymentSimulationService;
+import com.iahorizonplus.quizzboardbackend.service.impl.PaymentSettlementService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -40,7 +37,7 @@ class PayDunyaPaymentServiceTest {
     private TransactionRepository transactionRepository;
 
     @Mock
-    private PaymentSimulationService paymentSimulationService;
+    private PaymentSettlementService paymentSettlementService;
 
     @Mock
     private SmtpEmailService emailService;
@@ -62,41 +59,27 @@ class PayDunyaPaymentServiceTest {
     }
 
     @Test
-    @DisplayName("Initiation PayDunya (Mode Sandbox) : Génération de session avec token mock et checkoutUrl")
-    void createCheckout_SandboxMode_Success() {
+    @DisplayName("Initiation PayDunya réelle : rejet si clés manquantes")
+    void createCheckout_MissingConfig_ThrowsBadRequestException() {
         when(transactionRepository.findByReference("PD-12345")).thenReturn(Optional.of(transaction));
         when(payDunyaConfig.isConfigured()).thenReturn(false);
-        when(payDunyaConfig.getReturnUrl()).thenReturn("http://localhost:4200/app/subscription/callback");
 
-        PaymentInitiateResponse response = payDunyaPaymentService.createCheckout("PD-12345", 9900.0, "client@quizzboard.com");
+        assertThatThrownBy(() -> payDunyaPaymentService.createCheckout("PD-12345", 9900.0, "client@quizzboard.com"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("PayDunya");
 
-        assertThat(response).isNotNull();
-        assertThat(response.reference()).isEqualTo("PD-12345");
-        assertThat(response.paymentMethod()).isEqualTo(PaymentMethod.PAYDUNYA);
-        assertThat(response.checkoutUrl()).contains("token=mock-PD-12345");
-        assertThat(response.isSimulated()).isTrue();
-
+        assertThat(transaction.getStatus()).isEqualTo(PaymentStatus.FAILED);
         verify(transactionRepository).save(transaction);
-        assertThat(transaction.getPaydunyaToken()).isEqualTo("mock-PD-12345");
     }
 
     @Test
-    @DisplayName("Confirmation PayDunya : Validation avec token mock simulant un succès")
-    void confirmInvoice_MockToken_Success() {
-        Invoice invoice = Invoice.builder()
-                .reference("PD-12345")
-                .amountFcfa(9900.0)
-                .status(PaymentStatus.PAID)
-                .build();
+    @DisplayName("Confirmation PayDunya réelle : rejet des tokens mock")
+    void confirmInvoice_MockToken_ThrowsBadRequestException() {
+        assertThatThrownBy(() -> payDunyaPaymentService.confirmInvoice("mock-PD-12345"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("simulé");
 
-        when(paymentSimulationService.simulateSuccess("PD-12345")).thenReturn(invoice);
-
-        Invoice confirmed = payDunyaPaymentService.confirmInvoice("mock-PD-12345");
-
-        assertThat(confirmed).isNotNull();
-        assertThat(confirmed.getReference()).isEqualTo("PD-12345");
-        assertThat(confirmed.getStatus()).isEqualTo(PaymentStatus.PAID);
-        verify(paymentSimulationService).simulateSuccess("PD-12345");
+        verify(paymentSettlementService, never()).settleSuccessfulPayment(any());
     }
 
     @Test
@@ -131,7 +114,7 @@ class PayDunyaPaymentServiceTest {
         boolean handled = payDunyaPaymentService.handleIpn(payload);
 
         assertThat(handled).isTrue();
-        verify(paymentSimulationService).simulateSuccess("PD-12345");
+        verify(paymentSettlementService).settleSuccessfulPayment("PD-12345");
     }
 
     @Test
@@ -150,6 +133,6 @@ class PayDunyaPaymentServiceTest {
         boolean handled = payDunyaPaymentService.handleIpn(payload);
 
         assertThat(handled).isFalse();
-        verify(paymentSimulationService, never()).simulateSuccess(any());
+        verify(paymentSettlementService, never()).settleSuccessfulPayment(any());
     }
 }

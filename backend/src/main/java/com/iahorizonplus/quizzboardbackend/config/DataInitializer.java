@@ -31,12 +31,21 @@ public class DataInitializer implements CommandLineRunner {
                     .freeMaxQuizzes(3)
                     .freeMaxLiveParticipants(25)
                     .freeAiCreditsMonth(5)
-                    .starterPriceFcfa(9900.0)
-                    .starterPriceUsd(15.0)
+                    .starterPriceFcfa(999.0)
+                    .starterPriceUsd(2.0)
                     .isMaintenanceMode(false)
                     .waveActive(true)
                     .omActive(true)
                     .build());
+        } else {
+            settingsRepository.findById("default-settings").ifPresent(settings -> {
+                if (settings.getStarterPriceFcfa() == 9900.0) {
+                    settings.setStarterPriceFcfa(999.0);
+                    settings.setStarterPriceUsd(2.0);
+                    settingsRepository.save(settings);
+                    log.info("Tarif STARTER mis à jour à 999 FCFA.");
+                }
+            });
         }
 
         // 2. Compte Administrateur Unique pour la gestion
