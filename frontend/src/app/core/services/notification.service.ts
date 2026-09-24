@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { AppNotification } from '../models/notification.model';
 import { AuthService } from './auth.service';
 import { environment } from '../../../environments/environment';
+import { reloadOnAccountChange } from '../utils/account-change.util';
 
 @Injectable({
   providedIn: 'root'
@@ -17,6 +18,11 @@ export class NotificationService {
 
   constructor() {
     this.loadNotifications();
+    reloadOnAccountChange(() => this.loadNotifications(), () => {
+      this.adminState.set([]);
+      this.creatorState.set([]);
+      this.learnerState.set([]);
+    });
   }
 
   loadNotifications(): void {

@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, tap } from 'rxjs';
 import { Community, ForumTopic, ForumComment, ResourceFile, Meeting } from '../models/community.model';
 import { environment } from '../../../environments/environment';
+import { reloadOnAccountChange } from '../utils/account-change.util';
 
 @Injectable({
   providedIn: 'root'
@@ -14,6 +15,7 @@ export class CommunityService {
 
   constructor() {
     this.loadCommunities();
+    reloadOnAccountChange(() => this.loadCommunities());
   }
 
   loadCommunities(): void {

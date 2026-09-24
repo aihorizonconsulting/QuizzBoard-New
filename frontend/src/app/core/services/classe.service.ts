@@ -2,6 +2,7 @@ import { Injectable, signal, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Classe, Student } from '../models/classe.model';
 import { environment } from '../../../environments/environment';
+import { reloadOnAccountChange } from '../utils/account-change.util';
 
 @Injectable({
   providedIn: 'root'
@@ -13,6 +14,7 @@ export class ClasseService {
 
   constructor() {
     this.loadClasses();
+    reloadOnAccountChange(() => this.loadClasses(), () => this.classesState.set([]));
   }
 
   loadClasses(): void {

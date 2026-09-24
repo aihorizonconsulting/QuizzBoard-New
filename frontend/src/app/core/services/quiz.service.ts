@@ -1,8 +1,9 @@
-import { Injectable, signal, inject, effect, untracked } from '@angular/core';
+import { Injectable, signal, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Quiz, Question, LiveQuizSession, LiveSessionPlayer } from '../models/quiz.model';
 import { AuthService } from './auth.service';
 import { environment } from '../../../environments/environment';
+import { reloadOnAccountChange } from '../utils/account-change.util';
 import { firstValueFrom } from 'rxjs';
 
 @Injectable({
@@ -14,8 +15,6 @@ export class QuizService {
   private quizzes = signal<Quiz[]>([]);
   // Enregistrements backend en cours des quiz créés localement (id local -> quiz serveur)
   private pendingQuizSaves = new Map<string, Promise<Quiz | null>>();
-  // Compte pour lequel la liste a été chargée (undefined = jamais chargée)
-  private loadedForUserId: string | null | undefined = undefined;
   private loadSequence = 0;
   isLoading = signal<boolean>(true);
 
@@ -24,15 +23,7 @@ export class QuizService {
 
   constructor() {
     this.loadBackendQuizzes();
-    // Recharge la liste quand le compte connecté change (connexion, déconnexion, autre compte)
-    effect(() => {
-      const userId = this.authService.currentUser()?.id ?? null;
-      untracked(() => {
-        if (userId !== this.loadedForUserId) {
-          this.loadBackendQuizzes();
-        }
-      });
-    });
+    reloadOnAccountChange(() => this.loadBackendQuizzes());
   }
 
   /**
@@ -40,7 +31,6 @@ export class QuizService {
    * (y compris privés ou brouillons, absents de la liste publique).
    */
   async loadBackendQuizzes(): Promise<void> {
-    this.loadedForUserId = this.authService.currentUser()?.id ?? null;
     const requestId = ++this.loadSequence;
     this.isLoading.set(true);
     try {

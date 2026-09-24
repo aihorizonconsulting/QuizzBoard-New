@@ -46,6 +46,8 @@ public class ClasseServiceImpl implements ClasseService {
     @Override
     @Transactional
     public Classe createClasse(String creatorEmail, Classe classe) {
+        // id temporaire éventuel envoyé par le frontend : l'id est toujours généré par la base
+        classe.setId(null);
         if (classe.getName() == null || classe.getName().trim().isEmpty()) {
             throw new BadRequestException("name", "Le nom de la classe est obligatoire.");
         }
@@ -84,6 +86,7 @@ public class ClasseServiceImpl implements ClasseService {
     @Override
     @Transactional
     public Student addStudentToClasse(String classId, Student student) {
+        student.setId(null);
         Classe classe = getClasseById(classId);
         student.setClasse(classe);
         return studentRepository.save(student);

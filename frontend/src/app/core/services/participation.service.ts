@@ -4,6 +4,7 @@ import { firstValueFrom } from 'rxjs';
 import { Participation, Certificate } from '../models/participation.model';
 import { AuthService } from './auth.service';
 import { environment } from '../../../environments/environment';
+import { reloadOnAccountChange } from '../utils/account-change.util';
 
 @Injectable({
   providedIn: 'root'
@@ -16,6 +17,7 @@ export class ParticipationService {
 
   constructor() {
     this.loadBackendData();
+    reloadOnAccountChange(() => this.loadBackendData());
   }
 
   loadBackendData(): void {

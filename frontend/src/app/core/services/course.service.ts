@@ -2,6 +2,7 @@ import { Injectable, signal, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Course, CourseChapter, CourseAiGenerationOptions, CourseLevel } from '../models/course.model';
 import { environment } from '../../../environments/environment';
+import { reloadOnAccountChange } from '../utils/account-change.util';
 import { firstValueFrom } from 'rxjs';
 
 @Injectable({
@@ -14,6 +15,7 @@ export class CourseService {
 
   constructor() {
     this.loadCourses();
+    reloadOnAccountChange(() => this.loadCourses());
   }
 
   loadCourses(): void {

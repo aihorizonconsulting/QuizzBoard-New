@@ -105,6 +105,8 @@ public class AdminServiceImpl implements AdminService {
     @Override
     @Transactional
     public User createUser(User user, String rawPassword) {
+        // id temporaire éventuel envoyé par le frontend : l'id est toujours généré par la base
+        user.setId(null);
         if (user.getEmail() == null || user.getEmail().isBlank()) {
             throw new com.iahorizonplus.quizzboardbackend.exception.BadRequestException("email", "L'adresse email est requise");
         }

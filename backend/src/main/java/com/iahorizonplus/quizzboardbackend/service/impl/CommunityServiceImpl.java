@@ -42,6 +42,8 @@ public class CommunityServiceImpl implements CommunityService {
     @Override
     @Transactional
     public Community createCommunity(Community community, String creatorId, String creatorName) {
+        // id temporaire éventuel envoyé par le frontend : l'id est toujours généré par la base
+        community.setId(null);
         if (community.getName() == null || community.getName().trim().isEmpty()) {
             throw new BadRequestException("name", "Le nom de la communauté est obligatoire.");
         }
@@ -117,6 +119,7 @@ public class CommunityServiceImpl implements CommunityService {
     @Override
     @Transactional
     public ForumTopic createTopic(String communityId, ForumTopic topic, String authorId, String authorName) {
+        topic.setId(null);
         Community community = getCommunityById(communityId);
         topic.setCommunity(community);
         topic.setAuthorId(authorId);
@@ -127,6 +130,7 @@ public class CommunityServiceImpl implements CommunityService {
     @Override
     @Transactional
     public ForumComment addComment(String topicId, ForumComment comment, String authorId, String authorName) {
+        comment.setId(null);
         ForumTopic topic = topicRepository.findById(topicId)
                 .orElseThrow(() -> new ResourceNotFoundException("Topic non trouvé avec l'id: " + topicId));
         comment.setTopic(topic);
@@ -138,6 +142,7 @@ public class CommunityServiceImpl implements CommunityService {
     @Override
     @Transactional
     public Meeting scheduleMeeting(String communityId, Meeting meeting) {
+        meeting.setId(null);
         Community community = getCommunityById(communityId);
         meeting.setCommunity(community);
         return meetingRepository.save(meeting);
@@ -146,6 +151,7 @@ public class CommunityServiceImpl implements CommunityService {
     @Override
     @Transactional
     public ResourceFile addResource(String communityId, ResourceFile resource) {
+        resource.setId(null);
         Community community = getCommunityById(communityId);
         resource.setCommunity(community);
         return resourceRepository.save(resource);

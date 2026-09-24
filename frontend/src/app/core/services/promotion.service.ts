@@ -2,6 +2,7 @@ import { Injectable, signal, computed, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Promotion, PromotionStatus, PromotionPermissions } from '../models/promotion.model';
 import { environment } from '../../../environments/environment';
+import { reloadOnAccountChange } from '../utils/account-change.util';
 
 @Injectable({
   providedIn: 'root'
@@ -64,6 +65,7 @@ export class PromotionService {
 
   constructor() {
     this.loadPromotions();
+    reloadOnAccountChange(() => this.loadPromotions(), () => this.promotionsState.set([]));
   }
 
   loadPromotions(): void {

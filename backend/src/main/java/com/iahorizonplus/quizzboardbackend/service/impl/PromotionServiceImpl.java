@@ -47,6 +47,8 @@ public class PromotionServiceImpl implements PromotionService {
     @Override
     @Transactional
     public Promotion createPromotion(String creatorEmail, Promotion promotion) {
+        // id temporaire éventuel envoyé par le frontend : l'id est toujours généré par la base
+        promotion.setId(null);
         if (promotion.getName() == null || promotion.getName().trim().isEmpty()) {
             throw new BadRequestException("name", "Le nom de la promotion est obligatoire.");
         }
