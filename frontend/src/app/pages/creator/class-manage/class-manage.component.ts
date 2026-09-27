@@ -391,7 +391,7 @@ import { extractFieldErrors } from '../../../core/utils/form-error.util';
                 </span>
                 <span>
                   <app-icon name="calendar" [size]="13" color="#CBD5E1"></app-icon>
-                  Créée le {{ selectedClass.createdAt }}
+                  Créée le {{ selectedClass.createdAt | date:'dd/MM/yyyy' }}
                 </span>
               </div>
             </div>
@@ -443,7 +443,7 @@ import { extractFieldErrors } from '../../../core/utils/form-error.util';
                           </div>
                           <div class="student-names">
                             <strong class="st-fullname">{{ st.prenom }} {{ st.nom }}</strong>
-                            <span class="st-date">Inscrit le {{ st.joinedAt }}</span>
+                            <span class="st-date">Inscrit le {{ st.joinedAt | date:'dd/MM/yyyy' }}</span>
                           </div>
                         </div>
                       </td>

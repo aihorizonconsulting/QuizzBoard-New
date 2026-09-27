@@ -213,7 +213,7 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
                   </span>
                 </td>
 
-                <td class="date-cell">{{ user.createdAt }}</td>
+                <td class="date-cell">{{ user.createdAt | date:'dd/MM/yyyy' }}</td>
 
                 <td>
                   <div class="actions-cell">

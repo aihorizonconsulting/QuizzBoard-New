@@ -568,7 +568,7 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
                             {{ member.totalXp }} XP
                           </strong>
                         </td>
-                        <td class="body-small">{{ member.joinedAt }}</td>
+                        <td class="body-small">{{ member.joinedAt | date:'dd/MM/yyyy' }}</td>
                       </tr>
                     }
                   </tbody>

@@ -123,7 +123,7 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
                     <h3 class="cert-card-title">{{ cert.quizTitle }}</h3>
                     <span class="cert-issuer">{{ cert.issuerName }}</span>
                     <div class="cert-meta">
-                      <span>Délivré le {{ cert.issuedAt }}</span>
+                      <span>Délivré le {{ cert.issuedAt | date:'dd/MM/yyyy' }}</span>
                       <span class="cert-code">#{{ cert.verificationCode }}</span>
                     </div>
                   </div>
@@ -154,7 +154,7 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
                       <span class="cert-code">#{{ cert.verificationCode }}</span>
                     </div>
                     <h3 class="row-title">{{ cert.quizTitle }}</h3>
-                    <span class="body-small text-muted">{{ cert.issuerName }} • Délivré le {{ cert.issuedAt }}</span>
+                    <span class="body-small text-muted">{{ cert.issuerName }} • Délivré le {{ cert.issuedAt | date:'dd/MM/yyyy' }}</span>
                   </div>
 
                   <div class="row-action" (click)="$event.stopPropagation()">
@@ -224,7 +224,7 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
                   </div>
                   <div class="badge-item">
                     <span class="b-lbl">DATE D'ÉMISSION</span>
-                    <strong class="b-val">{{ selectedCert.issuedAt }}</strong>
+                    <strong class="b-val">{{ selectedCert.issuedAt | date:'dd/MM/yyyy' }}</strong>
                   </div>
                   <div class="badge-item">
                     <span class="b-lbl">CODE VÉRIFICATION</span>

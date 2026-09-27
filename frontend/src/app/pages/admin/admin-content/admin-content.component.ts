@@ -177,7 +177,7 @@ interface AdminTopicItem extends ForumTopic {
                     }
                   </td>
 
-                  <td class="date-cell">{{ quiz.createdAt }}</td>
+                  <td class="date-cell">{{ quiz.createdAt | date:'dd/MM/yyyy' }}</td>
 
                   <td>
                     <div class="actions-cell">
@@ -273,7 +273,7 @@ interface AdminTopicItem extends ForumTopic {
                     <span class="participations-badge">{{ course.assignedClassNames.length ? (course.assignedClassNames.length * 32) : 28 }} apprenants</span>
                   </td>
 
-                  <td class="date-cell">{{ course.createdAt }}</td>
+                  <td class="date-cell">{{ course.createdAt | date:'dd/MM/yyyy' }}</td>
 
                   <td>
                     <div class="actions-cell">
@@ -430,7 +430,7 @@ interface AdminTopicItem extends ForumTopic {
                     <span class="issuer-name">{{ cert.issuerName }}</span>
                   </td>
 
-                  <td class="date-cell">{{ cert.issuedAt }}</td>
+                  <td class="date-cell">{{ cert.issuedAt | date:'dd/MM/yyyy' }}</td>
 
                   <td>
                     @if (cert.status === 'REVOKED') {
