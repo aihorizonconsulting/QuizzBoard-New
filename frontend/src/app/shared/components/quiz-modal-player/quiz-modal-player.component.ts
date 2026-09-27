@@ -604,6 +604,13 @@ export class QuizModalPlayerComponent implements OnInit, OnDestroy, OnChanges {
     return this.quiz?.questions?.length || 5;
   }
 
+  /** Score maximal : somme des points des questions (même calcul que le serveur). */
+  get maxPossibleScore(): number {
+    const questions = this.quiz?.questions || [];
+    const total = questions.reduce((acc, q) => acc + (q.points || 100), 0);
+    return total > 0 ? total : this.totalQuestions * 100;
+  }
+
   /** Session Live dans laquelle ce quiz est joué (absente pour un quiz individuel). */
   get liveContext(): LivePlayContext | undefined {
     return this.playerModalService.guestParticipant()?.live;
@@ -804,7 +811,7 @@ export class QuizModalPlayerComponent implements OnInit, OnDestroy, OnChanges {
   async finishQuiz() {
     this.isFinished = true;
     this.clearAllTimers();
-    this.maxTotalScore = this.totalQuestions * 100;
+    this.maxTotalScore = this.maxPossibleScore;
     this.scorePercentage = Math.round((this.totalScore / this.maxTotalScore) * 100);
     this.earnedXp = this.totalScore + 50;
 
@@ -836,6 +843,12 @@ export class QuizModalPlayerComponent implements OnInit, OnDestroy, OnChanges {
     });
     if (saved && saved.id) {
       this.savedParticipationId = saved.id;
+      // Le score officiel est celui calculé par le serveur
+      if (!saved.id.startsWith('part-') && typeof saved.percentage === 'number') {
+        this.totalScore = saved.score;
+        this.maxTotalScore = saved.maxScore;
+        this.scorePercentage = Math.round(saved.percentage);
+      }
     }
     this.cdr.markForCheck();
   }
@@ -854,7 +867,7 @@ export class QuizModalPlayerComponent implements OnInit, OnDestroy, OnChanges {
       answeredCount: this.recordedAnswers.length,
       correctCount: this.recordedAnswers.filter(a => a.isCorrect).length,
       score: this.totalScore,
-      maxScore: this.totalQuestions * 100,
+      maxScore: this.maxPossibleScore,
       streak,
       totalTimeSeconds: this.recordedAnswers.reduce((acc, a) => acc + a.timeSpentSeconds, 0),
       finished

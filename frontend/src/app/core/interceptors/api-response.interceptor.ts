@@ -1,6 +1,9 @@
 import { HttpInterceptorFn, HttpResponse, HttpErrorResponse } from '@angular/common/http';
 import { map, catchError, throwError } from 'rxjs';
 
+/** Événement navigateur émis quand l'API rejette le jeton de session (écouté par AuthService). */
+export const SESSION_EXPIRED_EVENT = 'quizzboard:session-expired';
+
 export interface FieldErrorDetail {
   field: string;
   rejectedValue?: any;
@@ -46,6 +49,12 @@ export const apiResponseInterceptor: HttpInterceptorFn = (req, next) => {
       return event;
     }),
     catchError((error: HttpErrorResponse) => {
+      // Jeton expiré ou invalide sur une requête authentifiée : la session est terminée
+      // (sinon l'interface reste « connectée » alors que plus rien n'est enregistré).
+      if (error.status === 401 && req.headers.has('Authorization') && !req.url.includes('/auth/')
+          && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
+      }
       // Si le backend Spring Boot a renvoyé l'enveloppe d'erreur ApiResponse
       if (error.error && typeof error.error === 'object') {
         const envelope = error.error as ApiResponseEnvelope;

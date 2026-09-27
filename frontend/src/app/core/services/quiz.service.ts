@@ -5,6 +5,7 @@ import { AuthService } from './auth.service';
 import { environment } from '../../../environments/environment';
 import { reloadOnAccountChange } from '../utils/account-change.util';
 import { firstValueFrom } from 'rxjs';
+import { ToastService } from './toast.service';
 
 @Injectable({
   providedIn: 'root'
@@ -12,9 +13,8 @@ import { firstValueFrom } from 'rxjs';
 export class QuizService {
   private http = inject(HttpClient);
   private authService = inject(AuthService);
+  private toast = inject(ToastService);
   private quizzes = signal<Quiz[]>([]);
-  // Enregistrements backend en cours des quiz créés localement (id local -> quiz serveur)
-  private pendingQuizSaves = new Map<string, Promise<Quiz | null>>();
   private loadSequence = 0;
   isLoading = signal<boolean>(true);
 
@@ -45,9 +45,7 @@ export class QuizService {
       const publicQuizzes: Quiz[] = this.asList(publicRes);
       const myQuizzes: Quiz[] = this.asList(mineRes);
       const myIds = new Set(myQuizzes.map(q => q.id));
-      // Quiz créés localement dont l'enregistrement serveur est encore en cours
-      const pendingLocal = this.quizzes().filter(q => this.pendingQuizSaves.has(q.id));
-      this.quizzes.set([...pendingLocal, ...myQuizzes, ...publicQuizzes.filter(q => !myIds.has(q.id))]);
+      this.quizzes.set([...myQuizzes, ...publicQuizzes.filter(q => !myIds.has(q.id))]);
     } catch {
       if (requestId === this.loadSequence) this.quizzes.set([]);
     } finally {
@@ -194,87 +192,74 @@ export class QuizService {
     }
   }
 
-  toggleVisibility(id: string): void {
-    this.quizzes.update(list =>
-      list.map(q => {
-        if (q.id === id) {
-          const currentVis = q.visibility || 'PUBLIC';
-          const newVis = currentVis === 'PUBLIC' ? 'PRIVATE' : 'PUBLIC';
-          return { ...q, visibility: newVis, updatedAt: new Date().toISOString().split('T')[0] };
-        }
-        return q;
-      })
-    );
+  private replaceQuiz(saved: Quiz): Quiz {
+    this.quizzes.update(list => list.some(q => q.id === saved.id)
+      ? list.map(q => q.id === saved.id ? saved : q)
+      : [saved, ...list]);
+    return saved;
+  }
 
-    const updated = this.quizzes().find(q => q.id === id);
-    if (updated) {
-      this.http.put(`${environment.apiUrl}/quizzes/${id}`, updated).subscribe({ error: () => {} });
+  async toggleVisibility(id: string): Promise<boolean> {
+    try {
+      const res = await firstValueFrom(this.http.put<any>(`${environment.apiUrl}/quizzes/${id}/visibility`, {}));
+      const saved: Quiz = res?.data || res;
+      if (saved?.id) this.replaceQuiz(saved);
+      return true;
+    } catch (err) {
+      this.toast.apiError(err, "La visibilité du quiz n'a pas pu être modifiée.");
+      return false;
     }
   }
 
-  createQuiz(quiz: Omit<Quiz, 'id' | 'createdAt' | 'updatedAt' | 'participationsCount' | 'averageScorePercent'>): Quiz {
-    const newQuiz: Quiz = {
-      ...quiz,
-      id: 'quiz-' + Date.now(),
-      participationsCount: 0,
-      averageScorePercent: 0,
-      createdAt: new Date().toISOString().split('T')[0],
-      updatedAt: new Date().toISOString().split('T')[0]
-    };
-
-    this.quizzes.update(list => [newQuiz, ...list]);
-    this.persistNewQuiz(newQuiz, quiz);
-    return newQuiz;
-  }
-
-  /** Comme createQuiz, mais attend l'enregistrement backend pour renvoyer le quiz avec son id serveur. */
-  async createQuizAsync(quiz: Omit<Quiz, 'id' | 'createdAt' | 'updatedAt' | 'participationsCount' | 'averageScorePercent'>): Promise<Quiz> {
-    const newQuiz = this.createQuiz(quiz);
-    return (await this.pendingQuizSaves.get(newQuiz.id)) || newQuiz;
-  }
-
-  private persistNewQuiz(newQuiz: Quiz, quiz: Omit<Quiz, 'id' | 'createdAt' | 'updatedAt' | 'participationsCount' | 'averageScorePercent'>): void {
+  /**
+   * Enregistre un nouveau quiz sur le serveur et renvoie le quiz enregistré (avec son id réel).
+   * En cas d'échec (quota du forfait, session expirée, serveur injoignable...) l'erreur est affichée
+   * et relancée : l'appelant garde alors le formulaire ouvert pour ne rien perdre.
+   */
+  async createQuiz(quiz: Omit<Quiz, 'id' | 'createdAt' | 'updatedAt' | 'participationsCount' | 'averageScorePercent'>): Promise<Quiz> {
     const payload = {
       ...quiz,
-      id: undefined,
-      questions: quiz.questions?.map(q => ({
+      questions: quiz.questions?.map((q, index) => ({
         ...q,
         id: undefined,
-        choices: q.choices?.map(c => ({ ...c, id: undefined }))
+        order: index + 1,
+        choices: q.choices?.map((c, cIndex) => ({ ...c, id: undefined, order: cIndex + 1 }))
       }))
     };
-
-    const save = firstValueFrom(this.http.post<any>(`${environment.apiUrl}/quizzes`, payload))
-      .then(res => {
-        const saved = res?.data || res;
-        if (saved && saved.id) {
-          this.quizzes.update(list => list.map(q => q.id === newQuiz.id ? { ...saved } : q));
-          return saved as Quiz;
-        }
-        return null;
-      })
-      .catch(err => {
-        console.warn('Sauvegarde quiz backend (fallback local actif):', err);
-        return null;
-      })
-      .finally(() => this.pendingQuizSaves.delete(newQuiz.id));
-    this.pendingQuizSaves.set(newQuiz.id, save);
-  }
-
-  updateQuiz(id: string, updates: Partial<Quiz>): void {
-    this.quizzes.update(list => 
-      list.map(q => q.id === id ? { ...q, ...updates, updatedAt: new Date().toISOString().split('T')[0] } : q)
-    );
-
-    const updated = this.quizzes().find(q => q.id === id);
-    if (updated) {
-      this.http.put(`${environment.apiUrl}/quizzes/${id}`, updated).subscribe({ error: () => {} });
+    try {
+      const res = await firstValueFrom(this.http.post<any>(`${environment.apiUrl}/quizzes`, payload));
+      const saved: Quiz = res?.data || res;
+      this.toast.success(`Quiz « ${saved.title} » enregistré.`);
+      return this.replaceQuiz(saved);
+    } catch (err) {
+      this.toast.apiError(err, "Le quiz n'a pas pu être enregistré.");
+      throw err;
     }
   }
 
-  deleteQuiz(id: string): void {
-    this.quizzes.update(list => list.filter(q => q.id !== id));
-    this.http.delete(`${environment.apiUrl}/quizzes/${id}`).subscribe({ error: () => {} });
+  /** Met à jour le quiz sur le serveur ; renvoie le quiz enregistré, ou null (erreur affichée) en cas d'échec. */
+  async updateQuiz(id: string, updates: Partial<Quiz>): Promise<Quiz | null> {
+    const current = this.quizzes().find(q => q.id === id);
+    try {
+      const res = await firstValueFrom(this.http.put<any>(`${environment.apiUrl}/quizzes/${id}`, { ...current, ...updates }));
+      const saved: Quiz = res?.data || res;
+      this.toast.success('Modifications du quiz enregistrées.');
+      return saved?.id ? this.replaceQuiz(saved) : null;
+    } catch (err) {
+      this.toast.apiError(err, "Les modifications du quiz n'ont pas pu être enregistrées.");
+      return null;
+    }
+  }
+
+  async deleteQuiz(id: string): Promise<boolean> {
+    try {
+      await firstValueFrom(this.http.delete(`${environment.apiUrl}/quizzes/${id}`));
+      this.quizzes.update(list => list.filter(q => q.id !== id));
+      return true;
+    } catch (err) {
+      this.toast.apiError(err, "Le quiz n'a pas pu être supprimé.");
+      return false;
+    }
   }
 
   // Real AI Quiz Generation via Spring Boot Backend with Local Fallback

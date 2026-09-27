@@ -4,12 +4,14 @@ import { Observable, tap } from 'rxjs';
 import { Community, ForumTopic, ForumComment, ResourceFile, Meeting } from '../models/community.model';
 import { environment } from '../../../environments/environment';
 import { reloadOnAccountChange } from '../utils/account-change.util';
+import { ToastService } from './toast.service';
 
 @Injectable({
   providedIn: 'root'
 })
 export class CommunityService {
   private http = inject(HttpClient);
+  private toast = inject(ToastService);
   private communities = signal<Community[]>([]);
   isLoading = signal<boolean>(true);
 
@@ -128,8 +130,19 @@ export class CommunityService {
       })
     );
 
-    this.http.post<ForumTopic>(`${environment.apiUrl}/communities/${communityId}/topics`, newTopic).subscribe({
-      error: () => {}
+    this.http.post<ForumTopic>(`${environment.apiUrl}/communities/${communityId}/topics`, {
+      title: newTopic.title,
+      content: newTopic.content,
+      authorAvatar: newTopic.authorAvatar
+    }).subscribe({
+      next: (saved) => {
+        if (!saved?.id) return;
+        this.updateTopics(communityId, topics => topics.map(t => t.id === newTopic.id ? { ...saved, communityId, comments: saved.comments || [] } : t));
+      },
+      error: (err) => {
+        this.updateTopics(communityId, topics => topics.filter(t => t.id !== newTopic.id));
+        this.toast.apiError(err, 'Votre sujet n\'a pas pu être publié.');
+      }
     });
 
     return newTopic;
@@ -167,9 +180,34 @@ export class CommunityService {
       })
     );
 
-    this.http.post<ForumComment>(`${environment.apiUrl}/communities/${communityId}/topics/${topicId}/comments`, newComment).subscribe({
-      error: () => {}
+    this.http.post<ForumComment>(`${environment.apiUrl}/communities/topics/${topicId}/comments`, {
+      content: newComment.content,
+      authorAvatar: newComment.authorAvatar
+    }).subscribe({
+      next: (saved) => {
+        if (!saved?.id) return;
+        this.updateTopics(communityId, topics => topics.map(t => t.id !== topicId ? t : {
+          ...t,
+          comments: t.comments.map(c => c.id === newComment.id ? saved : c)
+        }));
+      },
+      error: (err) => {
+        this.updateTopics(communityId, topics => topics.map(t => t.id !== topicId ? t : {
+          ...t,
+          commentsCount: Math.max(0, t.commentsCount - 1),
+          comments: t.comments.filter(c => c.id !== newComment.id)
+        }));
+        this.toast.apiError(err, 'Votre commentaire n\'a pas pu être publié.');
+      }
     });
+  }
+
+  private updateTopics(communityId: string, fn: (topics: ForumTopic[]) => ForumTopic[]): void {
+    this.communities.update(list => list.map(c => {
+      if (c.id !== communityId) return c;
+      const topics = fn(c.topics || []);
+      return { ...c, topics, topicsCount: topics.length };
+    }));
   }
 
   addResource(communityId: string, resource: { title: string; fileType: 'PDF' | 'DOC' | 'ZIP' | 'IMAGE'; fileSize: string; uploadedByName: string }): void {

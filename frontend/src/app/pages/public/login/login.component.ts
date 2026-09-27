@@ -152,29 +152,18 @@ declare const google: any;
         </div>
       </div>
 
-      <!-- MODAL CHOIX DU RÔLE : NOUVEAU COMPTE GOOGLE OU COMPTE IMPORTÉ DE L'ANCIEN QUIZZBOARD -->
+      <!-- MODAL CHOIX DU RÔLE : NOUVEAU COMPTE GOOGLE UNIQUEMENT -->
       @if (showRoleModal) {
         <div class="google-role-modal-backdrop animate-fade-in">
           <div class="google-role-modal-card animate-slide-up">
-            @if (isLegacyAccount) {
-              <div class="modal-top-emoji">👋</div>
-              <h3 class="role-modal-title">Bon retour sur QuizzBoard !</h3>
-              <p class="role-modal-subtitle">
-                @if (pendingUser?.prenom) {
-                  Bonjour <strong>{{ pendingUser.prenom }}</strong>, QuizzBoard fait peau neuve !<br>
-                }
-                Pour accéder à votre compte, indiquez comment vous utilisez la plateforme :
-              </p>
-            } @else {
-              <div class="modal-top-emoji">🎉</div>
-              <h3 class="role-modal-title">Bienvenue sur QuizzBoard !</h3>
-              <p class="role-modal-subtitle">
-                @if (pendingUser?.prenom) {
-                  Ravi de vous compter parmi nous, <strong>{{ pendingUser.prenom }}</strong> !<br>
-                }
-                Indiquez votre profil pour configurer votre tableau de bord sur mesure :
-              </p>
-            }
+            <div class="modal-top-emoji">🎉</div>
+            <h3 class="role-modal-title">Bienvenue sur QuizzBoard !</h3>
+            <p class="role-modal-subtitle">
+              @if (pendingUser?.prenom) {
+                Ravi de vous compter parmi nous, <strong>{{ pendingUser.prenom }}</strong> !<br>
+              }
+              Indiquez votre profil pour configurer votre tableau de bord sur mesure :
+            </p>
 
             <div class="role-cards-grid">
               <div
@@ -205,10 +194,6 @@ declare const google: any;
                 </div>
               </div>
             </div>
-
-            @if (isLegacyAccount) {
-              <p class="role-legacy-hint">Vous avez créé des quiz ou des cours ? Choisissez <strong>Formateur</strong> pour les retrouver.</p>
-            }
 
             <div class="role-modal-actions">
               <button
@@ -542,13 +527,6 @@ declare const google: any;
         }
       }
 
-      .role-legacy-hint {
-        font-size: 12px;
-        color: var(--color-text-secondary);
-        text-align: center;
-        margin: -4px 0 14px;
-      }
-
       .role-modal-actions {
         display: flex;
         flex-direction: column;
@@ -591,18 +569,12 @@ export class LoginComponent {
   isLoading = false;
   isGoogleLoading = false;
 
-  // Choix du rôle : nouveau compte Google ou compte importé de l'ancien QuizzBoard
+  // Choix du rôle : uniquement pour un nouveau compte Google (tout compte existant a déjà un rôle)
   showRoleModal = false;
-  roleModalSource: 'google' | 'password' = 'google';
   pendingGoogleCredential: string | null = null;
   pendingUser: any = null;
   selectedRole: 'CREATOR' | 'LEARNER' | null = null;
   isRoleSubmitting = false;
-
-  /** Un compte existant (id connu) qui doit confirmer son rôle, par opposition à une inscription Google. */
-  get isLegacyAccount(): boolean {
-    return !!this.pendingUser?.id;
-  }
 
   clearFieldError(field: string) {
     if (this.fieldErrors[field]) {
@@ -631,7 +603,7 @@ export class LoginComponent {
               next: (authRes: any) => {
                 this.isGoogleLoading = false;
                 if (authRes?.requiresRoleSelection) {
-                  this.openRoleModal('google', authRes.user);
+                  this.openRoleModal(authRes.user);
                   return;
                 }
                 this.navigateByRole(authRes.user?.role);
@@ -651,8 +623,7 @@ export class LoginComponent {
     }
   }
 
-  private openRoleModal(source: 'google' | 'password', user: any) {
-    this.roleModalSource = source;
+  private openRoleModal(user: any) {
     this.pendingUser = user;
     this.selectedRole = null;
     this.showRoleModal = true;
@@ -663,13 +634,8 @@ export class LoginComponent {
     const role = this.selectedRole;
     if (!role) return;
 
-    let request$;
-    if (this.roleModalSource === 'google') {
-      if (!this.pendingGoogleCredential) return;
-      request$ = this.authService.loginWithGoogle(this.pendingGoogleCredential, role);
-    } else {
-      request$ = this.authService.login(this.email, this.password, role);
-    }
+    if (!this.pendingGoogleCredential) return;
+    const request$ = this.authService.loginWithGoogle(this.pendingGoogleCredential, role);
 
     this.isRoleSubmitting = true;
     this.cdr.markForCheck();
@@ -752,11 +718,6 @@ export class LoginComponent {
       next: (res: any) => {
         this.isLoading = false;
         this.cdr.markForCheck();
-        // Compte importé de l'ancien QuizzBoard : le rôle doit être choisi avant la connexion
-        if (res?.requiresRoleSelection) {
-          this.openRoleModal('password', res.user);
-          return;
-        }
         this.navigateByRole(res.user?.role);
       },
       error: (err: any) => {

@@ -583,7 +583,7 @@ export class PricingComponent implements OnInit {
         this.router.navigate(['/inscription'], { queryParams: { plan: 'FREE' } });
         return;
       }
-      this.authService.updateSubscription('FREE').subscribe({ error: () => {} });
+      // Déjà connecté : on ouvre simplement l'espace (un abonné payant ne doit pas perdre son forfait par ce bouton)
       this.router.navigate([this.authService.dashboardUrl()]);
     }
   }

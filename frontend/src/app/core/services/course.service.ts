@@ -4,12 +4,16 @@ import { Course, CourseChapter, CourseAiGenerationOptions, CourseLevel } from '.
 import { environment } from '../../../environments/environment';
 import { reloadOnAccountChange } from '../utils/account-change.util';
 import { firstValueFrom } from 'rxjs';
+import { AuthService } from './auth.service';
+import { ToastService } from './toast.service';
 
 @Injectable({
   providedIn: 'root'
 })
 export class CourseService {
   private http = inject(HttpClient);
+  private authService = inject(AuthService);
+  private toast = inject(ToastService);
   private coursesState = signal<Course[]>([]);
   isLoading = signal<boolean>(true);
 
@@ -18,19 +22,35 @@ export class CourseService {
     reloadOnAccountChange(() => this.loadCourses());
   }
 
-  loadCourses(): void {
+  /** Cours publiés et, pour un utilisateur connecté, tous ses propres cours (y compris brouillons). */
+  async loadCourses(): Promise<void> {
     this.isLoading.set(true);
-    this.http.get<any>(`${environment.apiUrl}/courses`).subscribe({
-      next: (res) => {
-        this.isLoading.set(false);
+    try {
+      const [publicRes, mineRes] = await Promise.all([
+        firstValueFrom(this.http.get<any>(`${environment.apiUrl}/courses`)),
+        this.authService.getToken()
+          ? firstValueFrom(this.http.get<any>(`${environment.apiUrl}/courses`, { params: { my: 'true' } })).catch(() => null)
+          : Promise.resolve(null)
+      ]);
+      const asList = (res: any): Course[] => {
         const data = res?.data || res;
-        this.coursesState.set(Array.isArray(data) ? data : []);
-      },
-      error: () => {
-        this.isLoading.set(false);
-        this.coursesState.set([]);
-      }
-    });
+        return Array.isArray(data) ? data : [];
+      };
+      const mine = asList(mineRes);
+      const mineIds = new Set(mine.map(c => c.id));
+      this.coursesState.set([...mine, ...asList(publicRes).filter(c => !mineIds.has(c.id))]);
+    } catch {
+      this.coursesState.set([]);
+    } finally {
+      this.isLoading.set(false);
+    }
+  }
+
+  private replaceCourse(saved: Course): Course {
+    this.coursesState.update(list => list.some(c => c.id === saved.id)
+      ? list.map(c => c.id === saved.id ? saved : c)
+      : [saved, ...list]);
+    return saved;
   }
 
   getCourses() {
@@ -60,102 +80,69 @@ export class CourseService {
     return undefined;
   }
 
-  createCourse(course: Omit<Course, 'id' | 'createdAt'>): Course {
-    const tempId = 'crs-' + Date.now();
-    const newCourse: Course = {
-      ...course,
-      id: tempId,
-      createdAt: new Date().toISOString().split('T')[0]
-    };
-    this.coursesState.update(list => [newCourse, ...list]);
-
+  /** Enregistre le cours et renvoie le cours enregistré (erreur affichée et relancée en cas d'échec). */
+  async createCourse(course: Omit<Course, 'id' | 'createdAt'>): Promise<Course> {
     const payload = {
       ...course,
-      id: undefined,
-      chapters: course.chapters?.map(ch => ({
-        ...ch,
-        id: undefined
-      }))
+      chapters: course.chapters?.map((ch, index) => ({ ...ch, id: undefined, order: index + 1 }))
     };
+    try {
+      const res = await firstValueFrom(this.http.post<any>(`${environment.apiUrl}/courses`, payload));
+      const saved: Course = res?.data || res;
+      this.toast.success(`Cours « ${saved.title} » enregistré.`);
+      return this.replaceCourse(saved);
+    } catch (err) {
+      this.toast.apiError(err, 'Le cours n\'a pas pu être enregistré.');
+      throw err;
+    }
+  }
 
-    this.http.post<any>(`${environment.apiUrl}/courses`, payload).subscribe({
-      next: (res) => {
-        const saved = res?.data || res;
-        if (saved && saved.id) {
-          this.coursesState.update(list => list.map(c => c.id === tempId ? saved : c));
-        }
-      },
-      error: (err) => console.warn('Sauvegarde cours backend (fallback local actif):', err)
+  async updateCourse(id: string, updates: Partial<Course>): Promise<Course | null> {
+    const current = this.coursesState().find(c => c.id === id);
+    try {
+      const res = await firstValueFrom(this.http.put<any>(`${environment.apiUrl}/courses/${id}`, { ...current, ...updates }));
+      const saved: Course = res?.data || res;
+      return saved?.id ? this.replaceCourse(saved) : null;
+    } catch (err) {
+      this.toast.apiError(err, 'Les modifications du cours n\'ont pas pu être enregistrées.');
+      return null;
+    }
+  }
+
+  async deleteCourse(id: string): Promise<boolean> {
+    try {
+      await firstValueFrom(this.http.delete(`${environment.apiUrl}/courses/${id}`));
+      this.coursesState.update(list => list.filter(c => c.id !== id));
+      return true;
+    } catch (err) {
+      this.toast.apiError(err, 'Le cours n\'a pas pu être supprimé.');
+      return false;
+    }
+  }
+
+  async assignCourseToClass(courseId: string, classId: string, className: string): Promise<boolean> {
+    const course = this.coursesState().find(c => c.id === courseId);
+    if (!course) return false;
+    const ids = course.assignedClassIds || [];
+    if (ids.includes(classId)) return true;
+    const saved = await this.updateCourse(courseId, {
+      assignedClassIds: [...ids, classId],
+      assignedClassNames: [...(course.assignedClassNames || []), className]
     });
-
-    return newCourse;
+    return saved !== null;
   }
 
-  updateCourse(id: string, updates: Partial<Course>): void {
-    this.coursesState.update(list =>
-      list.map(c => c.id === id ? { ...c, ...updates } : c)
-    );
-
-    const updated = this.coursesState().find(c => c.id === id);
-    if (updated) {
-      this.http.put<Course>(`${environment.apiUrl}/courses/${id}`, updated).subscribe();
-    }
-  }
-
-  deleteCourse(id: string): void {
-    this.coursesState.update(list => list.filter(c => c.id !== id));
-    this.http.delete(`${environment.apiUrl}/courses/${id}`).subscribe();
-  }
-
-  assignCourseToClass(courseId: string, classId: string, className: string): void {
-    this.coursesState.update(list =>
-      list.map(c => {
-        if (c.id === courseId) {
-          const currentIds = c.assignedClassIds || [];
-          const currentNames = c.assignedClassNames || [];
-          if (!currentIds.includes(classId)) {
-            return {
-              ...c,
-              assignedClassIds: [...currentIds, classId],
-              assignedClassNames: [...currentNames, className]
-            };
-          }
-        }
-        return c;
-      })
-    );
-
-    const updated = this.coursesState().find(c => c.id === courseId);
-    if (updated) {
-      this.http.put<Course>(`${environment.apiUrl}/courses/${courseId}`, updated).subscribe({ error: () => {} });
-    }
-  }
-
-  unassignCourseFromClass(courseId: string, classId: string): void {
-    this.coursesState.update(list =>
-      list.map(c => {
-        if (c.id === courseId) {
-          const idx = (c.assignedClassIds || []).indexOf(classId);
-          if (idx !== -1) {
-            const nextIds = [...c.assignedClassIds];
-            const nextNames = [...c.assignedClassNames];
-            nextIds.splice(idx, 1);
-            nextNames.splice(idx, 1);
-            return {
-              ...c,
-              assignedClassIds: nextIds,
-              assignedClassNames: nextNames
-            };
-          }
-        }
-        return c;
-      })
-    );
-
-    const updated = this.coursesState().find(c => c.id === courseId);
-    if (updated) {
-      this.http.put<Course>(`${environment.apiUrl}/courses/${courseId}`, updated).subscribe({ error: () => {} });
-    }
+  async unassignCourseFromClass(courseId: string, classId: string): Promise<boolean> {
+    const course = this.coursesState().find(c => c.id === courseId);
+    if (!course) return false;
+    const idx = (course.assignedClassIds || []).indexOf(classId);
+    if (idx === -1) return true;
+    const nextIds = [...course.assignedClassIds];
+    const nextNames = [...(course.assignedClassNames || [])];
+    nextIds.splice(idx, 1);
+    nextNames.splice(idx, 1);
+    const saved = await this.updateCourse(courseId, { assignedClassIds: nextIds, assignedClassNames: nextNames });
+    return saved !== null;
   }
 
   // AI Course Generator Engine - Calls real backend /ai/generate-course with local fallback
@@ -187,8 +174,13 @@ export class CourseService {
         this.coursesState.update(list => [course, ...list.filter(c => c.id !== course.id)]);
         return course;
       }
-    } catch (err) {
-      console.warn('Appel AI backend generate-course échoué, bascule sur fallback local:', err);
+    } catch (err: any) {
+      // Refus métier (quota IA, session expirée...) : on l'affiche au lieu de fabriquer un cours local
+      if (err?.status && err.status >= 400 && err.status < 500) {
+        this.toast.apiError(err, 'La génération du cours a été refusée.');
+        throw err;
+      }
+      console.warn('Appel AI backend generate-course échoué, bascule sur la génération locale:', err);
     }
 
     // Zero-Crash Local Pedagogical Generation if backend unreachable
@@ -218,8 +210,7 @@ Dans cette section consacrée à **${opts.topic}**, nous explorons les piliers e
       });
     }
 
-    const fallbackCourse: Course = {
-      id: 'crs-ai-' + Date.now(),
+    const fallbackCourse: Omit<Course, 'id' | 'createdAt'> = {
       title: `Cours Magistral : ${opts.topic}`,
       description: `Support de cours complet généré par QuizzMind AI, structuré en ${chaptersCount} chapitres progressifs.`,
       category: opts.category || 'Informatique & Sciences',
@@ -227,7 +218,6 @@ Dans cette section consacrée à **${opts.topic}**, nous explorons les piliers e
       coverImage: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=800&q=80',
       creatorId: 'formateur',
       creatorName: 'Professeur',
-      createdAt: new Date().toISOString().split('T')[0],
       estimatedHours: Math.round(chaptersCount * 1.5),
       status: 'PUBLISHED',
       assignedClassIds: opts.targetClassId ? [opts.targetClassId] : [],
@@ -243,7 +233,7 @@ Dans cette section consacrée à **${opts.topic}**, nous explorons les piliers e
       chapters
     };
 
-    this.coursesState.update(list => [fallbackCourse, ...list]);
-    return fallbackCourse;
+    // Le cours généré localement est enregistré sur le serveur comme n'importe quel cours
+    return this.createCourse(fallbackCourse);
   }
 }

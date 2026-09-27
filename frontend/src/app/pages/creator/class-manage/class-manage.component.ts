@@ -16,6 +16,7 @@ import { QuizModalPlayerComponent } from '../../../shared/components/quiz-modal-
 import { PaginationComponent } from '../../../shared/components/pagination/pagination.component';
 import { ConfirmDialogService } from '../../../core/services/confirm-dialog.service';
 import { InvitationService } from '../../../core/services/invitation.service';
+import { extractFieldErrors } from '../../../core/utils/form-error.util';
 
 @Component({
   selector: 'app-class-manage',
@@ -1814,7 +1815,15 @@ export class ClassManageComponent {
   classes = this.classService.getClasses();
   allQuizzes = this.quizService.getQuizzes();
   allCourses = this.courseService.getCourses();
-  selectedClass: Classe | null = null;
+
+  // Classe ouverte dans la vue détail, toujours relue dans la liste à jour (état confirmé par le serveur)
+  private selectedClassId: string | null = null;
+  get selectedClass(): Classe | null {
+    return this.selectedClassId ? (this.classes().find(c => c.id === this.selectedClassId) ?? null) : null;
+  }
+  set selectedClass(c: Classe | null) {
+    this.selectedClassId = c?.id ?? null;
+  }
   activeTestQuiz: Quiz | null = null;
 
   searchQuery = '';
@@ -1846,7 +1855,7 @@ export class ClassManageComponent {
   newClassLevel = 'Licence 3';
   newClassCode = '';
   newClassDesc = '';
-  newClassPromotionId = 'promo-7';
+  newClassPromotionId = '';
 
   newStudentPrenom = '';
   newStudentNom = '';
@@ -1962,7 +1971,7 @@ export class ClassManageComponent {
     this.showCreateModal = true;
   }
 
-  submitCreateClass() {
+  async submitCreateClass() {
     this.fieldErrors = {};
     if (!this.newClassName.trim()) {
       this.fieldErrors['name'] = 'Le nom de la classe est obligatoire (ex: Licence 3 - Informatique).';
@@ -1977,27 +1986,26 @@ export class ClassManageComponent {
     if (Object.keys(this.fieldErrors).length > 0) return;
 
     this.isSubmitting = true;
-    setTimeout(() => {
-      this.isSubmitting = false;
-      const promo = this.promotionService.promotions().find(p => p.id === this.newClassPromotionId);
-      const newGroup = this.classService.addClass({
+    try {
+      // La fiche de la classe ne s'ouvre qu'une fois la classe enregistrée (avec son identifiant réel)
+      const newGroup = await this.classService.addClass({
         name: this.newClassName.trim(),
         level: this.newClassLevel.trim(),
         code: this.newClassCode.trim().toUpperCase(),
         description: this.newClassDesc.trim(),
         promotionId: this.newClassPromotionId,
-        promotionLabel: promo ? promo.label : 'Promotion 2025 - 2026',
-        creatorId: 'u1',
-        creatorName: 'Professeur',
         color: '#032447'
       });
-
       this.showCreateModal = false;
       this.selectedClass = newGroup;
-    }, 450);
+    } catch (err) {
+      this.fieldErrors = extractFieldErrors(err);
+    } finally {
+      this.isSubmitting = false;
+    }
   }
 
-  submitAddStudent() {
+  async submitAddStudent() {
     if (!this.selectedClass) return;
 
     this.studentFieldErrors = {};
@@ -2016,21 +2024,23 @@ export class ClassManageComponent {
     if (Object.keys(this.studentFieldErrors).length > 0) return;
 
     this.isSubmitting = true;
-    setTimeout(() => {
-      this.isSubmitting = false;
-      this.classService.addStudentToClass(this.selectedClass!.id, {
+    try {
+      await this.classService.addStudentToClass(this.selectedClass.id, {
         prenom: this.newStudentPrenom.trim(),
         nom: this.newStudentNom.trim(),
         email: this.newStudentEmail.trim(),
         matricule: this.newStudentMatricule.trim()
       });
-
       this.showAddStudentModal = false;
       this.newStudentPrenom = '';
       this.newStudentNom = '';
       this.newStudentEmail = '';
       this.newStudentMatricule = '';
-    }, 400);
+    } catch (err) {
+      this.studentFieldErrors = extractFieldErrors(err);
+    } finally {
+      this.isSubmitting = false;
+    }
   }
 
   async removeStudent(studentId: string) {
@@ -2043,8 +2053,8 @@ export class ClassManageComponent {
       variant: 'danger',
       icon: 'trash'
     });
-    if (!ok) return;
-    this.classService.removeStudentFromClass(this.selectedClass.id, studentId);
+    if (!ok || !this.selectedClass) return;
+    await this.classService.removeStudentFromClass(this.selectedClass.id, studentId);
   }
 
   getAssignedQuizzes(): Quiz[] {
@@ -2057,15 +2067,15 @@ export class ClassManageComponent {
     return this.allQuizzes().filter(q => !this.selectedClass?.assignedQuizIds.includes(q.id));
   }
 
-  assignQuiz(quizId: string) {
+  async assignQuiz(quizId: string) {
     if (!this.selectedClass) return;
-    this.classService.assignQuizToClass(this.selectedClass.id, quizId);
-    this.showAssignQuizModal = false;
+    const ok = await this.classService.assignQuizToClass(this.selectedClass.id, quizId);
+    if (ok) this.showAssignQuizModal = false;
   }
 
-  unassignQuiz(quizId: string) {
+  async unassignQuiz(quizId: string) {
     if (!this.selectedClass) return;
-    this.classService.unassignQuizFromClass(this.selectedClass.id, quizId);
+    await this.classService.unassignQuizFromClass(this.selectedClass.id, quizId);
   }
 
   getAssignedCourses(): Course[] {

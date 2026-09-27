@@ -5,7 +5,6 @@ import { SubscriptionService } from '../../../core/services/subscription.service
 import { AuthService } from '../../../core/services/auth.service';
 import { QuizService } from '../../../core/services/quiz.service';
 import { CourseService } from '../../../core/services/course.service';
-import { SubscriptionTier } from '../../../core/models/user.model';
 import { IconComponent } from '../../../shared/components/icon/icon.component';
 
 @Component({
@@ -190,26 +189,6 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
         </div>
       </div>
 
-      <!-- 5. DISCRETE TESTER BAR -->
-      <div class="card tester-card">
-        <span class="tester-title">Tester les vues forfaits :</span>
-        <div class="tester-btns">
-          <button 
-            type="button" 
-            class="pill-btn" 
-            [class.active]="authService.subscriptionTier() === 'FREE'"
-            (click)="switchTier('FREE')">
-            Plan FREE (0 F)
-          </button>
-          <button 
-            type="button" 
-            class="pill-btn" 
-            [class.active]="authService.subscriptionTier() === 'STARTER'"
-            (click)="switchTier('STARTER')">
-            Plan STARTER (999 F)
-          </button>
-        </div>
-      </div>
     </div>
   `,
   styles: [`
@@ -419,47 +398,6 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
         }
       }
     }
-
-    /* 5. TESTER CARD */
-    .tester-card {
-      padding: 10px 16px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 12px;
-      background: #FFFFFF;
-
-      .tester-title {
-        font-size: 12px;
-        font-weight: 700;
-        color: var(--color-text-secondary);
-      }
-
-      .tester-btns {
-        display: flex;
-        gap: 6px;
-
-        .pill-btn {
-          background: #FFFFFF;
-          border: 1px solid var(--color-border);
-          padding: 4px 12px;
-          border-radius: var(--radius-full);
-          font-size: 11.5px;
-          font-weight: 600;
-          color: var(--color-text-secondary);
-          cursor: pointer;
-          transition: all 0.15s ease;
-
-          &:hover { background: var(--color-background); }
-          &.active {
-            background: var(--color-navy);
-            color: #FFFFFF;
-            border-color: var(--color-navy);
-          }
-        }
-      }
-    }
   `]
 })
 export class CreatorSubscriptionComponent {
@@ -511,10 +449,6 @@ export class CreatorSubscriptionComponent {
     const max = this.authService.subscriptionTier() === 'STARTER' ? 100 : 5;
     return Math.min(100, Math.round((this.aiGenerationsUsed() / max) * 100));
   });
-
-  switchTier(tier: SubscriptionTier) {
-    this.authService.updateSubscription(tier).subscribe();
-  }
 
   downloadReceipt(id: string) {
     alert(`Téléchargement de la facture ${id} au format PDF.`);

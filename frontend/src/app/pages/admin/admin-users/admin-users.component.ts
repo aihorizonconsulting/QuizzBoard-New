@@ -2,6 +2,7 @@ import { Component, inject, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AdminService } from '../../../core/services/admin.service';
+import { extractFieldErrors } from '../../../core/utils/form-error.util';
 import { ConfirmDialogService } from '../../../core/services/confirm-dialog.service';
 import { User, UserRole, SubscriptionTier } from '../../../core/models/user.model';
 import { IconComponent } from '../../../shared/components/icon/icon.component';
@@ -924,7 +925,7 @@ export class AdminUsersComponent {
     }
   }
 
-  handleCreateUser() {
+  async handleCreateUser() {
     this.fieldErrors = {};
     if (!this.newUserData.prenom?.trim()) {
       this.fieldErrors['prenom'] = 'Le prénom est obligatoire.';
@@ -940,7 +941,11 @@ export class AdminUsersComponent {
 
     if (Object.keys(this.fieldErrors).length > 0) return;
 
-    this.adminService.createUser(this.newUserData);
-    this.showCreateModal = false;
+    try {
+      await this.adminService.createUser(this.newUserData);
+      this.showCreateModal = false;
+    } catch (err) {
+      this.fieldErrors = extractFieldErrors(err);
+    }
   }
 }

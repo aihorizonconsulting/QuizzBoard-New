@@ -107,6 +107,11 @@ export class SubscriptionService {
   }
 
   async loadInvoices(): Promise<void> {
+    // Les factures sont personnelles : rien à charger pour un visiteur non connecté (page Tarifs publique)
+    if (!this.authService.getToken()) {
+      this.invoices.set([]);
+      return;
+    }
     try {
       const response = await firstValueFrom(
         this.http.get<any>(`${environment.apiUrl}/payments/invoices`)
@@ -138,7 +143,7 @@ export class SubscriptionService {
     phoneNumber?: string
   ): Promise<boolean> {
     if (planId === 'FREE') {
-      this.authService.updateSubscription('FREE');
+      await firstValueFrom(this.authService.updateSubscription('FREE'));
       return true;
     }
 
@@ -176,7 +181,8 @@ export class SubscriptionService {
 
     const invoice = response?.data ?? response;
     if (invoice && (invoice.status === 'PAID' || invoice.id)) {
-      this.authService.updateSubscription('STARTER');
+      // Le forfait est activé par le serveur à la confirmation : on recharge le profil réel
+      await firstValueFrom(this.authService.loadCurrentUser()).catch(() => null);
       await this.loadInvoices();
       return invoice;
     }

@@ -1,15 +1,24 @@
 import { Injectable, signal, computed, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
 import { Promotion, PromotionStatus, PromotionPermissions } from '../models/promotion.model';
 import { environment } from '../../../environments/environment';
 import { reloadOnAccountChange } from '../utils/account-change.util';
+import { ToastService } from './toast.service';
 
+/**
+ * Promotions du formateur connecté. Le serveur est la seule source de vérité : chaque action attend
+ * sa réponse (aucun identifiant temporaire), puis la liste est rechargée car le serveur applique les
+ * règles métier (une seule promotion en cours, une seule active). En cas d'échec, l'erreur est affichée.
+ */
 @Injectable({
   providedIn: 'root'
 })
 export class PromotionService {
   private http = inject(HttpClient);
+  private toast = inject(ToastService);
   private readonly STORAGE_KEY = 'quizzboard_active_promotion_id';
+  private readonly baseUrl = `${environment.apiUrl}/promotions`;
 
   // State: All available promotions
   private promotionsState = signal<Promotion[]>([]);
@@ -24,13 +33,9 @@ export class PromotionService {
   activePromotion = computed<Promotion | null>(() => {
     const list = this.promotionsState();
     if (!list || list.length === 0) return null;
-    const id = this.activePromotionId();
-    const found = list.find(p => p.id === id);
+    const found = list.find(p => p.id === this.activePromotionId());
     if (found) return found;
-
-    // Fallback to the one marked isActive, or the first one in the list
-    const markedActive = list.find(p => p.isActive);
-    return markedActive || list[0] || null;
+    return list.find(p => p.isActive) || list[0] || null;
   });
 
   // Backward-compatibility aliases
@@ -49,44 +54,41 @@ export class PromotionService {
   isLoading = signal<boolean>(true);
 
   // Droits et permissions du contexte de travail actif
-  globalPermissions = computed<PromotionPermissions>(() => {
-    const active = this.activePromotion();
-    if (!active) {
-      return {
-        canPrepare: true,
-        canMutate: true,
-        canEvaluate: true,
-        canLaunchLive: true,
-        isReadOnly: false
-      };
-    }
-    return this.getPermissions(active);
-  });
+  globalPermissions = computed<PromotionPermissions>(() => this.getPermissions(this.activePromotion()));
 
   constructor() {
     this.loadPromotions();
     reloadOnAccountChange(() => this.loadPromotions(), () => this.promotionsState.set([]));
   }
 
-  loadPromotions(): void {
+  async loadPromotions(): Promise<void> {
     this.isLoading.set(true);
-    this.http.get<Promotion[]>(`${environment.apiUrl}/promotions`).subscribe({
-      next: (data) => {
-        this.isLoading.set(false);
-        this.promotionsState.set(data || []);
-        if (data && data.length > 0) {
-          const currentId = this.activePromotionId();
-          if (!currentId || !data.some(p => p.id === currentId)) {
-            const active = data.find(p => p.isActive) || data[0];
-            if (active) this.setActivePromotion(active.id);
-          }
-        }
-      },
-      error: () => {
-        this.isLoading.set(false);
-        this.promotionsState.set([]);
-      }
-    });
+    try {
+      const data = await firstValueFrom(this.http.get<Promotion[]>(this.baseUrl));
+      const list = (Array.isArray(data) ? data : []).map(p => this.normalize(p));
+      this.promotionsState.set(list);
+      // La promotion active enregistrée côté serveur fait foi ; à défaut on garde le choix local s'il existe encore
+      const serverActive = list.find(p => p.isActive);
+      const localId = this.activePromotionId();
+      const next = serverActive || list.find(p => p.id === localId) || list[0];
+      if (next) this.rememberActive(next.id);
+    } catch {
+      this.promotionsState.set([]);
+    } finally {
+      this.isLoading.set(false);
+    }
+  }
+
+  private normalize(p: Promotion): Promotion {
+    return {
+      ...p,
+      label: p.name,
+      isActive: !!p.isActive,
+      isCurrent: !!p.isActive,
+      classesCount: p.classesCount ?? 0,
+      studentsCount: p.studentsCount ?? 0,
+      quizzesCount: p.quizzesCount ?? 0
+    };
   }
 
   private getInitialPromotionId(): string {
@@ -99,25 +101,29 @@ export class PromotionService {
     return '';
   }
 
-  /**
-   * Sets a promotion as the single active working context.
-   * Automatically deactivates any previously active promotion.
-   */
-  setActivePromotion(promotionId: string): void {
-    if (!promotionId || promotionId === 'ALL') return;
-
-    this.promotionsState.update(list =>
-      list.map(p => ({
-        ...p,
-        isActive: p.id === promotionId,
-        isCurrent: p.id === promotionId
-      }))
-    );
-
+  private rememberActive(promotionId: string): void {
     this.activePromotionId.set(promotionId);
-
     if (typeof window !== 'undefined' && window.localStorage) {
       localStorage.setItem(this.STORAGE_KEY, promotionId);
+    }
+  }
+
+  /**
+   * Définit une promotion comme contexte de travail actif (enregistré sur le serveur).
+   * L'interface bascule immédiatement ; en cas d'échec l'ancien contexte est restauré.
+   */
+  async setActivePromotion(promotionId: string): Promise<void> {
+    if (!promotionId || promotionId === 'ALL') return;
+    const previousId = this.activePromotionId();
+    const previousList = this.promotionsState();
+    this.rememberActive(promotionId);
+    this.promotionsState.update(list => list.map(p => ({ ...p, isActive: p.id === promotionId, isCurrent: p.id === promotionId })));
+    try {
+      await firstValueFrom(this.http.put<Promotion>(`${this.baseUrl}/${promotionId}/activate`, {}));
+    } catch (err) {
+      this.promotionsState.set(previousList);
+      if (previousId) this.rememberActive(previousId);
+      this.toast.apiError(err, 'Impossible de changer de promotion active.');
     }
   }
 
@@ -125,7 +131,8 @@ export class PromotionService {
     return this.promotionsState().find(p => p.id === id);
   }
 
-  createPromotion(data: {
+  /** Crée la promotion sur le serveur et renvoie la promotion enregistrée (erreur affichée et relancée en cas d'échec). */
+  async createPromotion(data: {
     name: string;
     year: string;
     startDate: string;
@@ -133,118 +140,60 @@ export class PromotionService {
     status: PromotionStatus;
     description?: string;
     setAsActive?: boolean;
-  }): Promotion {
-    const slug = data.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
-    const newId = 'promo-' + Date.now().toString().slice(-4);
+  }): Promise<Promotion> {
     const shouldBeActive = data.setAsActive ?? (data.status === 'IN_PROGRESS');
-
-    const newPromotion: Promotion = {
-      id: newId,
-      code: 'P' + (this.promotionsState().length + 5),
-      name: data.name,
-      label: data.name,
-      year: data.year,
-      startDate: data.startDate,
-      endDate: data.endDate,
-      status: data.status,
-      isActive: shouldBeActive,
-      isCurrent: shouldBeActive,
-      classesCount: 0,
-      classesList: [],
-      studentsCount: 0,
-      quizzesCount: 0,
-      description: data.description,
-      createdAt: new Date().toISOString().split('T')[0]
-    };
-
-    this.promotionsState.update(list => {
-      let updated = list;
-      if (data.status === 'IN_PROGRESS') {
-        // Règle d'or : une seule promotion En cours à la fois.
-        // L'ancienne promotion En cours est automatiquement archivée.
-        updated = list.map(p => {
-          if (p.status === 'IN_PROGRESS') {
-            return { ...p, status: 'ARCHIVED' as PromotionStatus, isActive: false, isCurrent: false };
-          }
-          return { ...p, isActive: false, isCurrent: false };
-        });
-      } else if (shouldBeActive) {
-        updated = list.map(p => ({ ...p, isActive: false, isCurrent: false }));
-      }
-      return [newPromotion, ...updated];
-    });
-
-    if (shouldBeActive) {
-      this.setActivePromotion(newPromotion.id);
-    }
-
-    // Persister sur le backend Spring Boot
-    this.http.post<Promotion>(`${environment.apiUrl}/promotions`, newPromotion).subscribe({
-      next: (saved) => {
-        if (saved && saved.id) {
-          this.promotionsState.update(list => list.map(p => p.id === newId ? saved : p));
-        }
-      },
-      error: () => {}
-    });
-
-    return newPromotion;
-  }
-
-  updatePromotion(id: string, updates: Partial<Promotion>): void {
-    this.promotionsState.update(list =>
-      list.map(p => {
-        if (p.id === id) {
-          return { ...p, ...updates };
-        }
-        return p;
-      })
-    );
-
-    const updated = this.promotionsState().find(p => p.id === id);
-    if (updated) {
-      this.http.put<Promotion>(`${environment.apiUrl}/promotions/${id}`, updated).subscribe({
-        error: () => {}
-      });
+    try {
+      const saved = await firstValueFrom(this.http.post<Promotion>(this.baseUrl, {
+        name: data.name,
+        year: data.year,
+        startDate: data.startDate || null,
+        endDate: data.endDate || null,
+        status: data.status,
+        description: data.description,
+        isActive: shouldBeActive
+      }));
+      await this.loadPromotions();
+      if (shouldBeActive) this.rememberActive(saved.id);
+      this.toast.success(`Promotion « ${saved.name} » enregistrée.`);
+      return this.getPromotionById(saved.id) || this.normalize(saved);
+    } catch (err) {
+      this.toast.apiError(err, 'La promotion n\'a pas pu être enregistrée.');
+      throw err;
     }
   }
 
-  deletePromotion(id: string): void {
-    this.promotionsState.update(list => list.filter(p => p.id !== id));
-    this.http.delete(`${environment.apiUrl}/promotions/${id}`).subscribe({
-      error: () => {}
-    });
+  async updatePromotion(id: string, updates: Partial<Promotion>): Promise<Promotion | null> {
+    const current = this.getPromotionById(id);
+    if (!current) return null;
+    try {
+      const saved = await firstValueFrom(this.http.put<Promotion>(`${this.baseUrl}/${id}`, { ...current, ...updates }));
+      await this.loadPromotions();
+      return this.getPromotionById(saved.id) || this.normalize(saved);
+    } catch (err) {
+      this.toast.apiError(err, 'La promotion n\'a pas pu être mise à jour.');
+      return null;
+    }
   }
 
-  archivePromotion(promotionId: string): void {
-    const currentActiveId = this.activePromotionId();
-    const wasActive = currentActiveId === promotionId;
-
-    this.promotionsState.update(list =>
-      list.map(p => {
-        if (p.id === promotionId) {
-          return {
-            ...p,
-            status: 'ARCHIVED' as PromotionStatus,
-            isActive: false,
-            isCurrent: false
-          };
-        }
-        return p;
-      })
-    );
-
-    const archived = this.promotionsState().find(p => p.id === promotionId);
-    if (archived) {
-      this.http.put<Promotion>(`${environment.apiUrl}/promotions/${promotionId}`, archived).subscribe();
+  async deletePromotion(id: string): Promise<boolean> {
+    try {
+      await firstValueFrom(this.http.delete(`${this.baseUrl}/${id}`));
+      await this.loadPromotions();
+      return true;
+    } catch (err) {
+      this.toast.apiError(err, 'La promotion n\'a pas pu être supprimée.');
+      return false;
     }
+  }
 
-    // If we archived the active promotion, switch active to another non-archived promotion
+  async archivePromotion(promotionId: string): Promise<void> {
+    const wasActive = this.activePromotionId() === promotionId;
+    const updated = await this.updatePromotion(promotionId, { status: 'ARCHIVED' });
+    if (!updated) return;
+    // Si la promotion archivée était le contexte actif, on bascule sur une promotion encore ouverte
     if (wasActive) {
       const remaining = this.promotionsState().find(p => p.id !== promotionId && p.status !== 'ARCHIVED');
-      if (remaining) {
-        this.setActivePromotion(remaining.id);
-      }
+      if (remaining) await this.setActivePromotion(remaining.id);
     }
   }
 
@@ -294,7 +243,6 @@ export class PromotionService {
     };
   }
 
-
   /**
    * Retourne la seule et unique promotion actuellement En cours (si existante)
    */
@@ -303,51 +251,28 @@ export class PromotionService {
   }
 
   /**
-   * Modifie le statut d'une promotion avec contrôles stricts :
+   * Modifie le statut d'une promotion. Règles (appliquées par le serveur) :
    * 1. Une promotion ARCHIVÉE est verrouillée et ne peut plus changer de statut.
-   * 2. Une SEULE promotion peut être "En cours" à la fois. Tout passage en cours
-   *    archive automatiquement l'ancienne promotion en cours et devient le contexte actif.
+   * 2. Une SEULE promotion peut être "En cours" : démarrer une promotion archive l'ancienne
+   *    et la rend active.
    */
-  changePromotionStatus(promotionId: string, newStatus: PromotionStatus): void {
-    const current = this.promotionsState().find(p => p.id === promotionId);
+  async changePromotionStatus(promotionId: string, newStatus: PromotionStatus): Promise<void> {
+    const current = this.getPromotionById(promotionId);
     if (!current) return;
 
-    // Règle métier 1 : une promotion archivée est définitivement verrouillée
     if (current.status === 'ARCHIVED') {
-      console.warn(`[PromotionService] La promotion ${current.name} est ARCHIVÉE. Son statut ne peut plus être modifié.`);
+      this.toast.error(`La promotion « ${current.name} » est archivée : son statut ne peut plus être modifié.`);
       return;
     }
 
     if (newStatus === 'ARCHIVED') {
-      this.archivePromotion(promotionId);
+      await this.archivePromotion(promotionId);
       return;
     }
 
-    if (newStatus === 'IN_PROGRESS') {
-      // Règle métier 2 : UNE SEULE promotion En cours à la fois.
-      // L'ancienne promotion en cours est automatiquement archivée.
-      this.promotionsState.update(list =>
-        list.map(p => {
-          if (p.id === promotionId) {
-            return { ...p, status: 'IN_PROGRESS', isActive: true, isCurrent: true };
-          }
-          if (p.status === 'IN_PROGRESS') {
-            return { ...p, status: 'ARCHIVED' as PromotionStatus, isActive: false, isCurrent: false };
-          }
-          return p;
-        })
-      );
-      this.setActivePromotion(promotionId);
-      return;
+    const updated = await this.updatePromotion(promotionId, { status: newStatus });
+    if (updated && newStatus === 'IN_PROGRESS') {
+      this.rememberActive(promotionId);
     }
-
-    this.promotionsState.update(list =>
-      list.map(p => {
-        if (p.id === promotionId) {
-          return { ...p, status: newStatus };
-        }
-        return p;
-      })
-    );
   }
 }

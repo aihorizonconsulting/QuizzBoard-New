@@ -633,11 +633,11 @@
             <app-icon name="refresh-cw" [size]="14"></app-icon>
             <span>Nouveau</span>
           </button>
-          <button type="button" class="btn btn-primary" (click)="saveQuiz()">
+          <button type="button" class="btn btn-primary" (click)="saveQuiz()" [disabled]="isSaving">
             <app-icon name="check-circle" [size]="15" color="var(--color-navy)"></app-icon>
-            <span>{{ editingQuizId ? 'Enregistrer les Modifications' : 'Enregistrer dans Mes Quiz' }}</span>
+            <span>{{ isSaving ? 'Enregistrement...' : (editingQuizId ? 'Enregistrer les Modifications' : 'Enregistrer dans Mes Quiz') }}</span>
           </button>
-          <button type="button" class="btn btn-secondary" (click)="launchLiveNow()">
+          <button type="button" class="btn btn-secondary" (click)="launchLiveNow()" [disabled]="isSaving">
             <app-icon name="play" [size]="15" color="#FFFFFF"></app-icon>
             <span>Lancer la Session Live</span>
           </button>

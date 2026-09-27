@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -8,6 +8,7 @@ import { ConfirmDialogService } from '../../../core/services/confirm-dialog.serv
 import { Promotion, PromotionStatus } from '../../../core/models/promotion.model';
 import { Classe } from '../../../core/models/classe.model';
 import { IconComponent } from '../../../shared/components/icon/icon.component';
+import { extractFieldErrors } from '../../../core/utils/form-error.util';
 
 @Component({
   selector: 'app-promotions',
@@ -161,7 +162,7 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
                 <app-icon name="file-text" [size]="20" color="#166534"></app-icon>
               </div>
               <div class="stat-info">
-                <div class="stat-value">{{ selectedPromotion.quizzesCount || 4 }}</div>
+                <div class="stat-value">{{ selectedPromotion.quizzesCount }}</div>
                 <div class="stat-label">Quiz pédagogiques</div>
               </div>
             </div>
@@ -254,7 +255,7 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
               </span>
               <app-icon [name]="promotionService.isGlobalReadOnly() ? 'lock' : 'check-circle'" [size]="20" [color]="promotionService.isGlobalReadOnly() ? '#94A3B8' : '#16A34A'"></app-icon>
             </div>
-            @if (promotionService.activePromotion(); as activeP) {
+            @if (activePromotionWithStats(); as activeP) {
               <div class="active-promo-title">
                 {{ activeP.name }}
               </div>
@@ -1823,13 +1824,38 @@ export class PromotionsComponent {
   public classService = inject(ClasseService);
   public confirmService = inject(ConfirmDialogService);
 
-  promotions = this.promotionService.promotions;
+  // Promotions enrichies des statistiques réelles de leurs classes (classes, apprenants, quiz assignés)
+  promotions = computed<Promotion[]>(() => {
+    const classes = this.classService.getClasses()();
+    return this.promotionService.promotions().map(p => {
+      const own = classes.filter(c => c.promotionId === p.id);
+      const quizIds = new Set(own.flatMap(c => c.assignedQuizIds || []));
+      return {
+        ...p,
+        classesCount: own.length,
+        classesList: own.map(c => c.name),
+        studentsCount: own.reduce((acc, c) => acc + (c.studentsCount || 0), 0),
+        quizzesCount: quizIds.size
+      };
+    });
+  });
 
   // View state: Grille (4 par ligne) ou Liste
   viewMode: 'grid' | 'list' = 'grid';
 
-  // Promotion sélectionnée pour affichage de la page de détail (Focus view)
-  selectedPromotion: Promotion | null = null;
+  // Promotion sélectionnée pour affichage de la page de détail (Focus view), toujours relue dans la liste à jour
+  private selectedPromotionId: string | null = null;
+  get selectedPromotion(): Promotion | null {
+    return this.selectedPromotionId ? (this.promotions().find(p => p.id === this.selectedPromotionId) ?? null) : null;
+  }
+  set selectedPromotion(p: Promotion | null) {
+    this.selectedPromotionId = p?.id ?? null;
+  }
+
+  activePromotionWithStats(): Promotion | null {
+    const active = this.promotionService.activePromotion();
+    return active ? (this.promotions().find(p => p.id === active.id) ?? active) : null;
+  }
 
   selectedTab: 'ALL' | 'IN_PROGRESS' | 'UPCOMING' | 'ARCHIVED' = 'ALL';
   searchQuery: string = '';
@@ -2058,20 +2084,23 @@ export class PromotionsComponent {
     }
 
     this.isCreating = true;
-    setTimeout(() => {
-      this.isCreating = false;
-      const created = this.promotionService.createPromotion({
+    try {
+      // Le formulaire reste ouvert tant que le serveur n'a pas confirmé l'enregistrement
+      const created = await this.promotionService.createPromotion({
         name: this.newPromoName.trim(),
         year: this.newPromoYear.trim(),
-        startDate: this.newPromoStartDate || '2027-09-01',
-        endDate: this.newPromoEndDate || '2028-06-30',
+        startDate: this.newPromoStartDate,
+        endDate: this.newPromoEndDate,
         status: this.newPromoStatus,
         description: this.newPromoDesc.trim() || undefined,
         setAsActive: this.newPromoStatus === 'IN_PROGRESS' || this.setImmediatelyActive
       });
-
       this.showCreateModal = false;
       this.selectedPromotion = created;
-    }, 450);
+    } catch (err) {
+      this.fieldErrors = extractFieldErrors(err);
+    } finally {
+      this.isCreating = false;
+    }
   }
 }

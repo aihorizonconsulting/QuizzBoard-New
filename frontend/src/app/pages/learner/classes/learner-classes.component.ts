@@ -12,6 +12,7 @@ import { Course } from '../../../core/models/course.model';
 import { IconComponent } from '../../../shared/components/icon/icon.component';
 import { QuizModalPlayerComponent } from '../../../shared/components/quiz-modal-player/quiz-modal-player.component';
 import { PaginationComponent } from '../../../shared/components/pagination/pagination.component';
+import { apiErrorMessage } from '../../../core/services/toast.service';
 
 @Component({
   selector: 'app-learner-classes',
@@ -463,8 +464,8 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
 
             <div class="modal-foot">
               <button type="button" class="btn btn-outline btn-sm" (click)="showJoinModal = false">Annuler</button>
-              <button type="submit" class="btn btn-primary btn-sm">
-                Rejoindre la Classe
+              <button type="submit" class="btn btn-primary btn-sm" [disabled]="isJoining">
+                {{ isJoining ? 'Inscription...' : 'Rejoindre la Classe' }}
               </button>
             </div>
           </form>
@@ -1349,7 +1350,20 @@ export class LearnerClassesComponent {
   currentPage = 1;
   pageSize = 8;
 
-  selectedClass: Classe | null = null;
+  // Classe ouverte, relue dans la liste à jour (classes où l'apprenant est inscrit, fournies par le serveur)
+  private selectedClassId: string | null = null;
+  get selectedClass(): Classe | null {
+    return this.selectedClassId ? (this.allClasses().find(c => c.id === this.selectedClassId) ?? null) : null;
+  }
+  set selectedClass(c: Classe | null) {
+    this.selectedClassId = c?.id ?? null;
+    this.classQuizzes = [];
+    if (c) this.loadClassQuizzes(c.id);
+  }
+
+  // Quiz assignés à la classe ouverte (y compris privés), chargés depuis le serveur
+  classQuizzes: Quiz[] = [];
+  isJoining = false;
   activeTab: 'COURSES' | 'QUIZZES' | 'PEOPLE' = 'COURSES';
   activeTestQuiz: Quiz | null = null;
 
@@ -1358,9 +1372,17 @@ export class LearnerClassesComponent {
   joinError = '';
 
   enrolledClasses(): Classe[] {
-    // For demo / learner experience: returns the classes the learner belongs to
-    // or all available demo classes for the user's institution
+    // Le serveur ne renvoie que les classes dans lesquelles l'apprenant connecté est inscrit
     return this.allClasses();
+  }
+
+  private async loadClassQuizzes(classId: string): Promise<void> {
+    try {
+      const quizzes = await this.classeService.fetchClassQuizzes(classId);
+      if (this.selectedClassId === classId) this.classQuizzes = quizzes;
+    } catch {
+      this.classQuizzes = [];
+    }
   }
 
   filteredClasses(): Classe[] {
@@ -1390,8 +1412,7 @@ export class LearnerClassesComponent {
   }
 
   getAssignedQuizzes(): Quiz[] {
-    if (!this.selectedClass) return [];
-    return this.allQuizzes().filter(q => this.selectedClass?.assignedQuizIds.includes(q.id));
+    return this.selectedClass ? this.classQuizzes : [];
   }
 
   getAssignedCourses(): Course[] {
@@ -1405,7 +1426,7 @@ export class LearnerClassesComponent {
     this.showJoinModal = true;
   }
 
-  submitJoinClass() {
+  async submitJoinClass() {
     this.joinError = '';
     const code = this.joinCode.trim().toUpperCase();
     if (!code) {
@@ -1413,22 +1434,16 @@ export class LearnerClassesComponent {
       return;
     }
 
-    const found = this.allClasses().find(c => c.code.toUpperCase() === code);
-    if (!found) {
-      this.joinError = 'Code de classe introuvable. Veuillez vérifier le code communiqué par votre enseignant.';
-      return;
+    this.isJoining = true;
+    try {
+      const joined = await this.classeService.joinClassByCode(code);
+      this.showJoinModal = false;
+      this.selectedClass = joined;
+    } catch (err) {
+      this.joinError = apiErrorMessage(err, 'Impossible de rejoindre cette classe pour le moment.');
+    } finally {
+      this.isJoining = false;
     }
-
-    const currentStudent = this.authService.currentUser();
-    this.classeService.addStudentToClass(found.id, {
-      prenom: currentStudent?.prenom || 'Étudiant',
-      nom: currentStudent?.nom || '',
-      email: currentStudent?.email || 'etudiant@univ.edu',
-      matricule: 'ETU-' + Math.floor(1000 + Math.random() * 9000)
-    });
-
-    this.showJoinModal = false;
-    this.selectedClass = this.classeService.getClassById(found.id) || found;
   }
 
   levelLabel(level: string): string {

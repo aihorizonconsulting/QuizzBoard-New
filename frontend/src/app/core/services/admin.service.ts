@@ -1,5 +1,7 @@
 import { Injectable, signal, computed, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
+import { ToastService } from './toast.service';
 import { User, UserRole, SubscriptionTier } from '../models/user.model';
 import { AuditLog, SystemMetrics, PlatformSettings, TransactionRecord } from '../models/admin.model';
 import { environment } from '../../../environments/environment';
@@ -9,6 +11,7 @@ import { environment } from '../../../environments/environment';
 })
 export class AdminService {
   private http = inject(HttpClient);
+  private toast = inject(ToastService);
 
   // 1. UTILISATEURS (alimentés dynamiquement par le backend)
   private users = signal<User[]>([]);
@@ -128,122 +131,103 @@ export class AdminService {
   public getSettings() { return this.settings.asReadonly(); }
 
   // ACTIONS UTILISATEURS
-  toggleUserStatus(userId: string): void {
-    this.users.update(list =>
-      list.map(u => {
-        if (u.id === userId) {
-          const newStatus = u.status === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED';
-          this.logAction(
-            newStatus === 'SUSPENDED' ? 'Suspension de compte' : 'Réactivation de compte',
-            `${u.prenom} ${u.nom} (${u.email})`,
-            newStatus === 'SUSPENDED' ? 'WARNING' : 'INFO'
-          );
-          return { ...u, status: newStatus };
-        }
-        return u;
-      })
-    );
+  // Chaque action met à jour la liste d'après la réponse du serveur ; un échec est affiché (jamais silencieux).
 
-    this.http.put(`${environment.apiUrl}/admin/users/${userId}/toggle-active`, {}).subscribe({
-      error: () => {}
+  private replaceUser(saved: User | null | undefined): void {
+    if (saved && saved.id) {
+      this.users.update(list => list.map(u => u.id === saved.id ? { ...u, ...saved } : u));
+    }
+  }
+
+  toggleUserStatus(userId: string): void {
+    const user = this.users().find(u => u.id === userId);
+    this.http.put<User>(`${environment.apiUrl}/admin/users/${userId}/toggle-active`, {}).subscribe({
+      next: (saved) => {
+        this.replaceUser(this.unwrap(saved));
+        if (user) {
+          const suspended = this.unwrap(saved)?.status === 'SUSPENDED';
+          this.logAction(suspended ? 'Suspension de compte' : 'Réactivation de compte', `${user.prenom} ${user.nom} (${user.email})`, suspended ? 'WARNING' : 'INFO');
+        }
+      },
+      error: (err) => this.toast.apiError(err, 'Le statut du compte n\'a pas pu être modifié.')
     });
   }
 
   updateUserTier(userId: string, tier: SubscriptionTier): void {
-    this.users.update(list =>
-      list.map(u => {
-        if (u.id === userId) {
-          this.logAction(
-            `Modification Forfait vers ${tier}`,
-            `${u.prenom} ${u.nom} (${u.email})`,
-            'INFO'
-          );
-          return { ...u, subscriptionTier: tier };
-        }
-        return u;
-      })
-    );
-
-    this.http.put(`${environment.apiUrl}/admin/users/${userId}/tier?tier=${tier}`, {}).subscribe({
-      error: () => {}
+    const user = this.users().find(u => u.id === userId);
+    this.http.put<User>(`${environment.apiUrl}/admin/users/${userId}/tier?tier=${tier}`, {}).subscribe({
+      next: (saved) => {
+        this.replaceUser(this.unwrap(saved));
+        if (user) this.logAction(`Modification Forfait vers ${tier}`, `${user.prenom} ${user.nom} (${user.email})`, 'INFO');
+        this.toast.success(`Forfait ${tier} appliqué.`);
+      },
+      error: (err) => this.toast.apiError(err, 'Le forfait n\'a pas pu être modifié.')
     });
   }
 
   updateUserRole(userId: string, role: UserRole): void {
-    this.users.update(list =>
-      list.map(u => {
-        if (u.id === userId) {
-          this.logAction(
-            `Modification Rôle vers ${role}`,
-            `${u.prenom} ${u.nom} (${u.email})`,
-            role === 'ADMIN' ? 'CRITICAL' : 'INFO'
-          );
-          return { ...u, role: role };
-        }
-        return u;
-      })
-    );
-
-    this.http.put(`${environment.apiUrl}/admin/users/${userId}/role?role=${role}`, {}).subscribe({
-      error: () => {}
+    const user = this.users().find(u => u.id === userId);
+    this.http.put<User>(`${environment.apiUrl}/admin/users/${userId}/role?role=${role}`, {}).subscribe({
+      next: (saved) => {
+        this.replaceUser(this.unwrap(saved));
+        if (user) this.logAction(`Modification Rôle vers ${role}`, `${user.prenom} ${user.nom} (${user.email})`, role === 'ADMIN' ? 'CRITICAL' : 'INFO');
+        this.toast.success('Rôle mis à jour.');
+      },
+      error: (err) => this.toast.apiError(err, 'Le rôle n\'a pas pu être modifié.')
     });
   }
 
-  createUser(userData: Partial<User>): User {
-    const newUser: User = {
-      id: 'user-' + Date.now(),
+  /** Crée le compte sur le serveur ; renvoie le compte enregistré (erreur affichée et relancée en cas d'échec). */
+  async createUser(userData: Partial<User>): Promise<User> {
+    const payload = {
       prenom: userData.prenom || 'Nouveau',
       nom: userData.nom || 'Utilisateur',
-      email: userData.email || `user.${Date.now()}@quizzboard.com`,
+      email: userData.email,
       role: userData.role || 'CREATOR',
       subscriptionTier: userData.subscriptionTier || 'FREE',
       organization: userData.organization || 'Indépendant',
-      avatarUrl: userData.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
-      xpPoints: 0,
-      level: 1,
-      streakDays: 1,
-      followersCount: 0,
-      followingCount: 0,
-      createdAt: new Date().toISOString().split('T')[0],
-      status: 'ACTIVE',
-      phoneNumber: userData.phoneNumber || '+221 77 000 00 00'
+      avatarUrl: userData.avatarUrl,
+      phoneNumber: userData.phoneNumber
     };
-
-    this.users.update(list => [newUser, ...list]);
-    this.logAction('Création de compte administratif', `${newUser.prenom} ${newUser.nom} (${newUser.email}) - Rôle: ${newUser.role}`, 'INFO');
-
-    this.http.post<User>(`${environment.apiUrl}/admin/users`, newUser).subscribe({
-      next: (created) => {
-        if (created && created.id) {
-          this.users.update(list => list.map(u => u.id === newUser.id ? created : u));
-        }
-      },
-      error: () => {}
-    });
-
-    return newUser;
+    try {
+      const res = await firstValueFrom(this.http.post<User>(`${environment.apiUrl}/admin/users`, payload));
+      const created = this.unwrap<User>(res);
+      this.users.update(list => [created, ...list.filter(u => u.id !== created.id)]);
+      this.logAction('Création de compte administratif', `${created.prenom} ${created.nom} (${created.email}) - Rôle: ${created.role}`, 'INFO');
+      this.toast.success(`Compte ${created.email} créé.`);
+      return created;
+    } catch (err) {
+      this.toast.apiError(err, 'Le compte n\'a pas pu être créé.');
+      throw err;
+    }
   }
 
   deleteUser(userId: string): void {
     const user = this.users().find(u => u.id === userId);
-    if (user) {
-      this.logAction('Suppression définitive du compte', `${user.prenom} ${user.nom} (${user.email})`, 'CRITICAL');
-      this.users.update(list => list.filter(u => u.id !== userId));
-
-      this.http.delete(`${environment.apiUrl}/admin/users/${userId}`).subscribe({
-        error: () => {}
-      });
-    }
+    if (!user) return;
+    this.http.delete(`${environment.apiUrl}/admin/users/${userId}`).subscribe({
+      next: () => {
+        this.users.update(list => list.filter(u => u.id !== userId));
+        this.logAction('Suppression définitive du compte', `${user.prenom} ${user.nom} (${user.email})`, 'CRITICAL');
+      },
+      error: (err) => this.toast.apiError(err, 'Le compte n\'a pas pu être supprimé.')
+    });
   }
 
   // ACTIONS PARAMÈTRES
   updateSettings(updates: Partial<PlatformSettings>): void {
-    const next = { ...this.settings(), ...updates };
+    const previous = this.settings();
+    const next = { ...previous, ...updates };
     this.settings.set(next);
-    this.logAction('Mise à jour des paramètres plateforme', 'Configuration système enregistrée', 'WARNING');
-
     this.http.put<PlatformSettings>(`${environment.apiUrl}/subscriptions/settings`, next).subscribe({
-      error: () => {}
+      next: () => {
+        this.logAction('Mise à jour des paramètres plateforme', 'Configuration système enregistrée', 'WARNING');
+        this.toast.success('Paramètres enregistrés.');
+      },
+      error: (err) => {
+        this.settings.set(previous);
+        this.toast.apiError(err, 'Les paramètres n\'ont pas pu être enregistrés.');
+      }
     });
   }
 

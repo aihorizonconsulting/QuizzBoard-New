@@ -256,7 +256,7 @@ export class CourseListComponent {
     this.activeChapterIndex = Math.max(0, this.activeChapterIndex - 1);
   }
 
-  saveManualCourse() {
+  async saveManualCourse() {
     this.manualFieldErrors = {};
     if (!this.manualCourseTitle.trim()) {
       this.manualFieldErrors['title'] = 'Le titre du cours est obligatoire.';
@@ -292,7 +292,7 @@ export class CourseListComponent {
 
     this.isSavingManualCourse = true;
     try {
-      this.courseService.createCourse({
+      await this.courseService.createCourse({
         title: this.manualCourseTitle.trim(),
         description: this.manualCourseDesc.trim(),
         category: this.manualCourseCategory,
@@ -315,6 +315,8 @@ export class CourseListComponent {
       });
 
       this.closeManualCourseModal();
+    } catch {
+      // erreur déjà affichée : la fenêtre reste ouverte pour ne pas perdre la saisie
     } finally {
       this.isSavingManualCourse = false;
     }

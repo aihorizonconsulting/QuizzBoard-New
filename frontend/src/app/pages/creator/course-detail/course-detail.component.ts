@@ -6,6 +6,8 @@ import { CourseService } from '../../../core/services/course.service';
 import { ClasseService } from '../../../core/services/classe.service';
 import { QuizService } from '../../../core/services/quiz.service';
 import { LiveSessionService } from '../../../core/services/live-session.service';
+import { FileUploadService } from '../../../core/services/file-upload.service';
+import { ToastService } from '../../../core/services/toast.service';
 import { Course, CourseChapter, CourseLevel } from '../../../core/models/course.model';
 import { IconComponent } from '../../../shared/components/icon/icon.component';
 
@@ -34,6 +36,8 @@ export class CourseDetailComponent implements OnInit {
   private classeService = inject(ClasseService);
   private quizService = inject(QuizService);
   private liveService = inject(LiveSessionService);
+  private fileUploadService = inject(FileUploadService);
+  private toast = inject(ToastService);
 
   course = signal<Course | null>(null);
   selectedChapterIndex = 0; // 0..N, or -1 for final quiz
@@ -107,16 +111,19 @@ export class CourseDetailComponent implements OnInit {
     this.showEditCourseModal = true;
   }
 
-  onEditCertificateFileSelected(event: Event): void {
+  async onEditCertificateFileSelected(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
     if (input.files && input.files.length > 0) {
       const file = input.files[0];
-      this.editUploadedCertFileName = file.name;
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        this.editCertificateCustomTemplateUrl = e.target?.result as string;
-      };
-      reader.readAsDataURL(file);
+      try {
+        const url = await this.fileUploadService.uploadFileAndGetUrl(file, 'courses');
+        if (url) {
+          this.editCertificateCustomTemplateUrl = url;
+          this.editUploadedCertFileName = file.name;
+        }
+      } catch (err) {
+        this.toast.apiError(err, 'Le modèle de certificat n\'a pas pu être téléversé.');
+      }
     }
   }
 
@@ -126,10 +133,10 @@ export class CourseDetailComponent implements OnInit {
     this.editCertificateTemplateType = 'DEFAULT';
   }
 
-  saveCourseChanges(): void {
+  async saveCourseChanges(): Promise<void> {
     const c = this.course();
     if (!c) return;
-    this.courseService.updateCourse(c.id, {
+    const saved = await this.courseService.updateCourse(c.id, {
       title: this.editTitle.trim(),
       description: this.editDescription.trim(),
       category: this.editCategory.trim(),
@@ -140,7 +147,8 @@ export class CourseDetailComponent implements OnInit {
       certificateCustomTemplateUrl: this.editCertificateCustomTemplateUrl || undefined,
       certificateMinimumScore: this.editCertificateMinScore
     });
-    this.course.set(this.courseService.getCourseById(c.id) || null);
+    if (!saved) return; // erreur affichée, la fenêtre reste ouverte
+    this.course.set(saved);
     this.showEditCourseModal = false;
   }
 
@@ -148,12 +156,12 @@ export class CourseDetailComponent implements OnInit {
     this.showDeleteCourseModal = true;
   }
 
-  confirmDeleteCourse(): void {
+  async confirmDeleteCourse(): Promise<void> {
     const c = this.course();
     if (!c) return;
-    this.courseService.deleteCourse(c.id);
+    const deleted = await this.courseService.deleteCourse(c.id);
     this.showDeleteCourseModal = false;
-    this.router.navigate(['/app/courses']);
+    if (deleted) this.router.navigate(['/app/courses']);
   }
 
   // --- CHAPTER MANAGEMENT (ADD, EDIT, DELETE) ---
@@ -186,7 +194,7 @@ export class CourseDetailComponent implements OnInit {
     this.showChapterModal = true;
   }
 
-  saveChapter(): void {
+  async saveChapter(): Promise<void> {
     const c = this.course();
     if (!c) return;
 
@@ -222,15 +230,16 @@ export class CourseDetailComponent implements OnInit {
       this.selectedChapterIndex = updatedChapters.length - 1;
     }
 
-    this.courseService.updateCourse(c.id, {
+    const saved = await this.courseService.updateCourse(c.id, {
       chapters: updatedChapters,
       hasChapterQuizzes: updatedChapters.some(ch => ch.hasQuiz)
     });
-    this.course.set(this.courseService.getCourseById(c.id) || null);
+    if (!saved) return; // erreur affichée, la fenêtre reste ouverte
+    this.course.set(saved);
     this.showChapterModal = false;
   }
 
-  deleteChapter(index: number): void {
+  async deleteChapter(index: number): Promise<void> {
     const c = this.course();
     if (!c || c.chapters.length <= 1) return;
     if (!confirm(`Confirmer la suppression du chapitre "${c.chapters[index].title}" ?`)) return;
@@ -239,10 +248,11 @@ export class CourseDetailComponent implements OnInit {
       .filter((_, idx) => idx !== index)
       .map((ch, idx) => ({ ...ch, order: idx + 1 }));
 
-    this.courseService.updateCourse(c.id, {
+    const saved = await this.courseService.updateCourse(c.id, {
       chapters: updatedChapters
     });
-    this.course.set(this.courseService.getCourseById(c.id) || null);
+    if (!saved) return;
+    this.course.set(saved);
     if (this.selectedChapterIndex >= updatedChapters.length) {
       this.selectedChapterIndex = updatedChapters.length - 1;
     }
@@ -320,13 +330,12 @@ export class CourseDetailComponent implements OnInit {
     return (c.assignedClassIds || []).includes(classId);
   }
 
-  toggleAssignClass(c: Course, classId: string, className: string, event: Event) {
-    const checked = (event.target as HTMLInputElement).checked;
-    if (checked) {
-      this.courseService.assignCourseToClass(c.id, classId, className);
-    } else {
-      this.courseService.unassignCourseFromClass(c.id, classId);
-    }
+  async toggleAssignClass(c: Course, classId: string, className: string, event: Event) {
+    const checkbox = event.target as HTMLInputElement;
+    const ok = checkbox.checked
+      ? await this.courseService.assignCourseToClass(c.id, classId, className)
+      : await this.courseService.unassignCourseFromClass(c.id, classId);
+    if (!ok) checkbox.checked = !checkbox.checked;
     this.course.set(this.courseService.getCourseById(c.id) || null);
   }
 
@@ -383,7 +392,12 @@ export class CourseDetailComponent implements OnInit {
 
   async launchChapterQuizLive(ch: CourseChapter) {
     const c = this.course();
-    const createdQuiz = await this.quizService.createQuizAsync({
+    // Le chapitre ne stocke pas de questions : elles sont générées pour que le Live ait un vrai contenu
+    const questions = await this.quizService.generateQuizWithAiPrompt(
+      `${ch.title}${ch.summary ? ' : ' + ch.summary : ''}`, ch.quizQuestionsCount || 5);
+    let createdQuiz;
+    try {
+      createdQuiz = await this.quizService.createQuiz({
       title: ch.quizTitle || `Quiz ${ch.title}`,
       description: `Quiz de validation intermédiaire du ${ch.title}`,
       category: c?.category || 'Général',
@@ -392,17 +406,24 @@ export class CourseDetailComponent implements OnInit {
       creatorId: 'u-1',
       creatorName: 'Professeur',
       shareCode: 'CHQ-' + Math.floor(1000 + Math.random() * 9000),
-      questionsCount: ch.quizQuestionsCount || 5,
+      questionsCount: questions.length,
       coverImage: c?.coverImage || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=800&q=80',
-      questions: []
+      questions
     });
+    } catch {
+      return; // erreur déjà affichée (quota, session...)
+    }
 
     const sessionId = await this.liveService.launchLiveSession(createdQuiz);
     this.router.navigate(['/app/live/host', sessionId]);
   }
 
   async launchFinalQuizLive(c: Course) {
-    const createdQuiz = await this.quizService.createQuizAsync({
+    const questions = await this.quizService.generateQuizWithAiPrompt(
+      `Examen final du cours ${c.title}${c.description ? ' : ' + c.description : ''}`, c.finalQuizQuestionsCount || 10);
+    let createdQuiz;
+    try {
+      createdQuiz = await this.quizService.createQuiz({
       title: c.finalQuizTitle || `Examen Final : ${c.title}`,
       description: `Examen final de validation des compétences pour le cours "${c.title}"`,
       category: c.category,
@@ -411,10 +432,13 @@ export class CourseDetailComponent implements OnInit {
       creatorId: 'u-1',
       creatorName: 'Professeur',
       shareCode: 'EXAM-' + Math.floor(1000 + Math.random() * 9000),
-      questionsCount: c.finalQuizQuestionsCount || 10,
+      questionsCount: questions.length,
       coverImage: c.coverImage,
-      questions: []
+      questions
     });
+    } catch {
+      return; // erreur déjà affichée (quota, session...)
+    }
 
     const sessionId = await this.liveService.launchLiveSession(createdQuiz);
     this.router.navigate(['/app/live/host', sessionId]);

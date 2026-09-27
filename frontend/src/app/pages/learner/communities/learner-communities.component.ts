@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { CommunityService } from '../../../core/services/community.service';
 import { AuthService } from '../../../core/services/auth.service';
+import { ToastService } from '../../../core/services/toast.service';
 import { Community, ForumTopic } from '../../../core/models/community.model';
 import { extractFieldErrors, getGeneralErrorMessage } from '../../../core/utils/form-error.util';
 import { IconComponent } from '../../../shared/components/icon/icon.component';
@@ -1224,6 +1225,7 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
 export class LearnerCommunitiesComponent {
   private commService = inject(CommunityService);
   public authService = inject(AuthService);
+  private toast = inject(ToastService);
 
   allCommunities = this.commService.getCommunities();
 
@@ -1255,8 +1257,8 @@ export class LearnerCommunitiesComponent {
   }
 
   isMember(comm: Community): boolean {
-    const currentUserId = this.authService.currentUser()?.id || 'user-learner-1';
-    return (comm.members || []).some(m => m.userId === currentUserId) || comm.id === 'comm-info-2026';
+    const currentUserId = this.authService.currentUser()?.id;
+    return !!currentUserId && (comm.members || []).some(m => m.userId === currentUserId);
   }
 
   myCommunities(): Community[] {
@@ -1294,6 +1296,18 @@ export class LearnerCommunitiesComponent {
   }
 
   joinCommunity(comm: Community) {
+    // L'adhésion est enregistrée sur le serveur (via le code d'accès de la communauté)
+    if (!this.isMember(comm)) {
+      this.commService.joinCommunityApi(comm.accessCode).subscribe({
+        next: (joined) => this.addLocalMembership(joined),
+        error: (err) => this.toast.apiError(err, 'Impossible de rejoindre cette communauté pour le moment.')
+      });
+      return;
+    }
+    this.openCommunity(this.commService.getCommunityById(comm.id) || comm);
+  }
+
+  private addLocalMembership(comm: Community) {
     const user = this.authService.currentUser();
     this.commService.joinCommunity(comm.id, {
       userId: user?.id || 'user-learner-1',
@@ -1357,7 +1371,7 @@ export class LearnerCommunitiesComponent {
 
     this.commService.joinCommunityApi(code).subscribe({
       next: (found) => {
-        this.joinCommunity(found);
+        this.addLocalMembership(found);
         this.showCodeModal = false;
         this.joinError = '';
       },

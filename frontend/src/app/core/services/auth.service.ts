@@ -1,8 +1,11 @@
 import { Injectable, signal, computed, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, tap, catchError, of, throwError, map } from 'rxjs';
+import { Router } from '@angular/router';
+import { Observable, tap, map } from 'rxjs';
 import { User, UserRole, SubscriptionTier } from '../models/user.model';
 import { environment } from '../../../environments/environment';
+import { SESSION_EXPIRED_EVENT } from '../interceptors/api-response.interceptor';
+import { ToastService } from './toast.service';
 
 export interface AuthResponse {
   token?: string;
@@ -25,6 +28,8 @@ export interface SignupRequest {
 })
 export class AuthService {
   private http = inject(HttpClient);
+  private router = inject(Router);
+  private toast = inject(ToastService);
   private readonly TOKEN_KEY = 'quizzboard_token';
   private readonly STORAGE_KEY = 'quizzboard_current_user';
   
@@ -45,12 +50,17 @@ export class AuthService {
   });
 
   constructor() {
+    if (typeof window !== 'undefined') {
+      window.addEventListener(SESSION_EXPIRED_EVENT, () => this.handleSessionExpired());
+    }
     // Si un jeton existe déjà, rafraîchir les données utilisateur depuis le backend
     if (this.getToken()) {
       this.loadCurrentUser().subscribe({
-        error: () => {
-          // Si le jeton est expiré ou invalide, nettoyer
-          this.logout();
+        error: (err) => {
+          // Jeton expiré ou invalide : fin de session propre (retour à la connexion si on est dans l'espace connecté)
+          if (err?.status === 401 || err?.status === 403 || err?.status === 404) {
+            this.handleSessionExpired();
+          }
         }
       });
     }
@@ -79,17 +89,12 @@ export class AuthService {
 
   /**
    * Connexion avec email et mot de passe via l'API Spring Boot.
-   * Le rôle n'est envoyé que par un compte importé qui doit choisir son rôle
-   * (réponse précédente avec requiresRoleSelection = true).
    */
-  login(email: string, password: string, role?: UserRole): Observable<AuthResponse> {
-    const payload: { email: string; password: string; role?: UserRole } = {
+  login(email: string, password: string): Observable<AuthResponse> {
+    const payload = {
       email: email.trim().toLowerCase(),
       password
     };
-    if (role) {
-      payload.role = role;
-    }
     return this.http.post<AuthResponse>(`${environment.apiUrl}/auth/login`, payload).pipe(
       tap(response => {
         if (!response.requiresRoleSelection && response.token && response.user) {
@@ -176,29 +181,34 @@ export class AuthService {
 
 
   /**
-   * Mise à niveau de l'abonnement vers STARTER ou FREE
+   * Retour au forfait gratuit. Les forfaits payants s'activent côté serveur à la confirmation
+   * du paiement : le profil est alors rechargé avec loadCurrentUser().
    */
   updateSubscription(tier: SubscriptionTier): Observable<any> {
-    const current = this.currentUser();
     return this.http.post(`${environment.apiUrl}/subscriptions/subscribe`, {
       tier,
       billingCycle: 'MONTHLY'
     }).pipe(
       tap(() => {
+        const current = this.currentUser();
         if (current) {
-          const updated: User = { ...current, subscriptionTier: tier };
-          this.setCurrentUser(updated);
+          this.setCurrentUser({ ...current, subscriptionTier: tier });
         }
-      }),
-      catchError(err => {
-        // Optimistic update en fallback
-        if (current) {
-          const updated: User = { ...current, subscriptionTier: tier };
-          this.setCurrentUser(updated);
-        }
-        return of(null);
       })
     );
+  }
+
+  /** Jeton refusé par l'API : on termine la session proprement au lieu de laisser l'interface « connectée ». */
+  private handleSessionExpired(): void {
+    const wasLoggedIn = this.currentUser() !== null;
+    this.logout();
+    if (!wasLoggedIn) return;
+    this.toast.error('Votre session a expiré. Reconnectez-vous pour continuer : les modifications non enregistrées doivent être refaites.');
+    // window.location plutôt que router.url : au démarrage de l'application le routeur n'a pas encore navigué
+    const url = typeof window !== 'undefined' ? window.location.pathname : (this.router.url || '');
+    if (url.startsWith('/app') || url.startsWith('/admin')) {
+      this.router.navigate(['/connexion']);
+    }
   }
 
   /**

@@ -8,9 +8,10 @@ import { CourseService } from '../../../core/services/course.service';
 import { ClasseService } from '../../../core/services/classe.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { FileUploadService } from '../../../core/services/file-upload.service';
-import { Question, Choice } from '../../../core/models/quiz.model';
+import { Question, Choice, Quiz } from '../../../core/models/quiz.model';
 import { Course, CourseChapter } from '../../../core/models/course.model';
 import { IconComponent } from '../../../shared/components/icon/icon.component';
+import { apiErrorMessage } from '../../../core/services/toast.service';
 
 export interface AttachedFile {
   name: string;
@@ -84,6 +85,7 @@ export class QuizCreateComponent implements OnInit {
   openDropdown: 'count' | 'timer' | 'diff' | 'chapters' | 'class' | null = null;
 
   fieldErrors: Record<string, string> = {};
+  isSaving = false;
 
   clearFieldError(field: string): void {
     if (this.fieldErrors[field]) {
@@ -101,21 +103,33 @@ export class QuizCreateComponent implements OnInit {
 
     const editId = this.route.snapshot.paramMap.get('id') || this.route.snapshot.queryParamMap.get('edit');
     if (editId) {
-      const q = this.quizService.getQuizById(editId);
-      if (q) {
-        this.editingQuizId = q.id;
-        this.quizTitle = q.title;
-        this.quizCategory = q.category;
-        this.difficulty = q.difficulty;
-        this.coverImageUrl = q.coverImage || '';
-        this.creationMethod = 'MANUAL';
-        const qList = q.questions || [];
-        this.questionsCount = qList.length || 5;
-        this.timePerQuestion = qList[0]?.timeLimitSeconds || 30;
-        this.questions = JSON.parse(JSON.stringify(qList));
-        this.promptText = q.description || '';
+      // Le quiz n'est pas forcément déjà chargé (lien direct, rechargement de page) : on le relit sur le serveur
+      const local = this.quizService.getQuizById(editId);
+      if (local) {
+        this.loadQuizForEdit(local);
+      } else {
+        this.quizService.fetchQuizByCodeOrPin(editId).then(q => {
+          if (q) {
+            this.loadQuizForEdit(q);
+            this.cdr.markForCheck();
+          }
+        });
       }
     }
+  }
+
+  private loadQuizForEdit(q: Quiz): void {
+    this.editingQuizId = q.id;
+    this.quizTitle = q.title;
+    this.quizCategory = q.category;
+    this.difficulty = q.difficulty;
+    this.coverImageUrl = q.coverImage || '';
+    this.creationMethod = 'MANUAL';
+    const qList = q.questions || [];
+    this.questionsCount = qList.length || 5;
+    this.timePerQuestion = qList[0]?.timeLimitSeconds || 30;
+    this.questions = JSON.parse(JSON.stringify(qList));
+    this.promptText = q.description || '';
   }
 
   setCreationMethod(method: 'AI' | 'MANUAL') {
@@ -474,16 +488,22 @@ export class QuizCreateComponent implements OnInit {
     this.questions.push(newQ);
   }
 
-  onCertificateFileSelected(event: Event): void {
+  async onCertificateFileSelected(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
     if (input.files && input.files.length > 0) {
       const file = input.files[0];
-      this.uploadedCertificateFileName = file.name;
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        this.courseCertificateCustomTemplateUrl = e.target?.result as string;
-      };
-      reader.readAsDataURL(file);
+      // Téléversé (URL courte) plutôt qu'enregistré en data URL : la colonne du cours est limitée à 255 caractères
+      try {
+        const url = await this.fileUploadService.uploadFileAndGetUrl(file, 'courses');
+        if (url) {
+          this.courseCertificateCustomTemplateUrl = url;
+          this.uploadedCertificateFileName = file.name;
+        }
+      } catch (err) {
+        this.fieldErrors = { ...this.fieldErrors, prompt: apiErrorMessage(err, "Le modèle de certificat n'a pas pu être téléversé.") };
+      } finally {
+        this.cdr.markForCheck();
+      }
     }
   }
 
@@ -507,7 +527,8 @@ export class QuizCreateComponent implements OnInit {
     this.showCertPreviewModal = false;
   }
 
-  saveQuiz() {
+  async saveQuiz() {
+    if (this.isSaving) return;
     this.clearFieldError('title');
     if (!this.quizTitle.trim()) {
       this.fieldErrors['title'] = 'Le titre du quiz est obligatoire pour enregistrer.';
@@ -524,20 +545,23 @@ export class QuizCreateComponent implements OnInit {
     const creatorId = currentUser?.id || currentUser?.email || 'formateur';
     const creatorName = currentUser ? `${currentUser.prenom} ${currentUser.nom}`.trim() : 'Formateur QuizzBoard';
 
-    if (this.editingQuizId) {
-      this.quizService.updateQuiz(this.editingQuizId, {
-        title: this.quizTitle,
-        category: this.quizCategory,
-        difficulty: this.difficulty,
-        coverImage: finalCoverImage,
-        questionsCount: this.questions.length,
-        questions: this.questions
-      });
-      this.router.navigate(['/app/quizzes']);
-      return;
-    }
+    // On ne quitte la page qu'après confirmation du serveur : en cas d'échec le quiz reste à l'écran
+    this.isSaving = true;
+    try {
+      if (this.editingQuizId) {
+        const updated = await this.quizService.updateQuiz(this.editingQuizId, {
+          title: this.quizTitle,
+          category: this.quizCategory,
+          difficulty: this.difficulty,
+          coverImage: finalCoverImage,
+          questionsCount: this.questions.length,
+          questions: this.questions
+        });
+        if (updated) this.router.navigate(['/app/quizzes']);
+        return;
+      }
 
-    this.quizService.createQuiz({
+      await this.quizService.createQuiz({
       title: this.quizTitle,
       description: this.promptText ? `Quiz créé sur le thème : "${this.promptText.slice(0, 80)}"` : `Évaluation interactive en ${this.quizCategory}`,
       category: this.quizCategory,
@@ -550,17 +574,26 @@ export class QuizCreateComponent implements OnInit {
       coverImage: finalCoverImage,
       questions: this.questions
     });
-
-    this.router.navigate(['/app/quizzes']);
+      this.router.navigate(['/app/quizzes']);
+    } catch (err) {
+      this.fieldErrors = { ...this.fieldErrors, title: apiErrorMessage(err, "Le quiz n'a pas pu être enregistré. Vos questions sont conservées : réessayez.") };
+    } finally {
+      this.isSaving = false;
+      this.cdr.markForCheck();
+    }
   }
 
   async launchLiveNow() {
+    if (this.isSaving) return;
     const finalCoverImage = this.coverImageUrl || this.suggestCoverImage(this.promptText || this.quizTitle, this.quizCategory);
     const currentUser = this.authService.currentUser();
     const creatorId = currentUser?.id || currentUser?.email || 'formateur';
     const creatorName = currentUser ? `${currentUser.prenom} ${currentUser.nom}`.trim() : 'Formateur QuizzBoard';
 
-    const created = await this.quizService.createQuizAsync({
+    this.isSaving = true;
+    let created;
+    try {
+      created = await this.quizService.createQuiz({
       title: this.quizTitle,
       description: `Session live animée avec QuizzMind`,
       category: this.quizCategory,
@@ -573,6 +606,13 @@ export class QuizCreateComponent implements OnInit {
       coverImage: finalCoverImage,
       questions: this.questions
     });
+    } catch (err) {
+      this.fieldErrors = { ...this.fieldErrors, title: apiErrorMessage(err, "Le quiz n'a pas pu être enregistré : le Live n'a pas été lancé.") };
+      return;
+    } finally {
+      this.isSaving = false;
+      this.cdr.markForCheck();
+    }
 
     const sessionId = await this.liveService.launchLiveSession(created);
     this.router.navigate(['/app/live/host', sessionId]);
