@@ -110,16 +110,8 @@ public class AuthServiceImpl implements AuthService {
             throw new BadRequestException("password", "Le mot de passe saisi est incorrect pour ce compte. Veuillez vérifier votre saisie ou réinitialiser votre mot de passe.");
         }
 
-        // 4. Compte importé de l'ancien QuizzBoard : aucun jeton tant que le rôle n'est pas choisi
-        if (user.needsRoleSelection()) {
-            if (request.role() == null) {
-                return AuthResponse.roleRequired(userMapper.toDto(user));
-            }
-            user.setRole(SelfAssignedRole.require(request.role()));
-            user.setRoleSelected(true);
-            user = userRepository.save(user);
-        }
-
+        // Tout compte enregistré a déjà un rôle (y compris les comptes importés de l'ancien
+        // QuizzBoard, dont le rôle a été déduit de leur usage) : connexion directe, sans choix du rôle.
         String jwtToken = jwtUtils.generateToken(user.getEmail(), user.getRole().name());
         String refreshToken = jwtUtils.generateRefreshToken(user.getEmail());
 

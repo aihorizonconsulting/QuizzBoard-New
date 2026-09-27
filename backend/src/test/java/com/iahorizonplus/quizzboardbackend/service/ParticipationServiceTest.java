@@ -46,8 +46,16 @@ class ParticipationServiceTest {
 
     @BeforeEach
     void setUp() {
-        Question q1 = Question.builder().id("q1").points(50).build();
-        Question q2 = Question.builder().id("q2").points(50).build();
+        Question q1 = Question.builder().id("q1").points(80)
+                .choices(new ArrayList<>(List.of(
+                        Choice.builder().id("q1-ok").text("Bonne").isCorrect(true).build(),
+                        Choice.builder().id("q1-ko").text("Mauvaise").isCorrect(false).build())))
+                .build();
+        Question q2 = Question.builder().id("q2").points(20)
+                .choices(new ArrayList<>(List.of(
+                        Choice.builder().id("q2-ok").text("Bonne").isCorrect(true).build(),
+                        Choice.builder().id("q2-ko").text("Mauvaise").isCorrect(false).build())))
+                .build();
 
         sampleQuiz = Quiz.builder()
                 .id("quiz-100")
@@ -69,8 +77,9 @@ class ParticipationServiceTest {
                 .participantEmail("khadija@quizzboard.com")
                 .build();
 
-        ParticipantAnswer ans1 = ParticipantAnswer.builder().pointsEarned(50).isCorrect(true).build();
-        ParticipantAnswer ans2 = ParticipantAnswer.builder().pointsEarned(30).isCorrect(true).build();
+        // Le navigateur prétend 2 bonnes réponses (50 + 30 pts) : le serveur recalcule depuis le quiz
+        ParticipantAnswer ans1 = ParticipantAnswer.builder().questionId("q1").selectedChoiceIds(List.of("q1-ok")).pointsEarned(50).isCorrect(true).build();
+        ParticipantAnswer ans2 = ParticipantAnswer.builder().questionId("q2").selectedChoiceIds(List.of("q2-ko")).pointsEarned(30).isCorrect(true).build();
         List<ParticipantAnswer> answers = List.of(ans1, ans2);
 
         Certificate certificate = Certificate.builder()
@@ -88,6 +97,9 @@ class ParticipationServiceTest {
         assertThat(result.getScore()).isEqualTo(80);
         assertThat(result.getMaxScore()).isEqualTo(100);
         assertThat(result.getPercentage()).isEqualTo(80.0);
+        assertThat(ans1.isCorrect()).isTrue();
+        assertThat(ans2.isCorrect()).isFalse();
+        assertThat(ans2.getPointsEarned()).isZero();
         assertThat(result.isCertificateEligible()).isTrue();
         assertThat(result.getCertificateId()).isEqualTo("cert-1");
 
@@ -123,15 +135,16 @@ class ParticipationServiceTest {
                 .participantEmail("ousmane@quizzboard.com")
                 .build();
 
-        ParticipantAnswer ans = ParticipantAnswer.builder().pointsEarned(40).isCorrect(true).build();
-        List<ParticipantAnswer> answers = List.of(ans);
+        ParticipantAnswer wrong = ParticipantAnswer.builder().questionId("q1").selectedChoiceIds(List.of("q1-ko")).pointsEarned(80).isCorrect(true).build();
+        ParticipantAnswer right = ParticipantAnswer.builder().questionId("q2").selectedChoiceIds(List.of("q2-ok")).build();
+        List<ParticipantAnswer> answers = List.of(wrong, right);
 
         when(quizRepository.findById("quiz-100")).thenReturn(Optional.of(sampleQuiz));
         when(participationRepository.save(any(Participation.class))).thenAnswer(inv -> inv.getArgument(0));
 
         Participation result = participationService.submitParticipation(participation, answers);
 
-        assertThat(result.getPercentage()).isEqualTo(40.0);
+        assertThat(result.getPercentage()).isEqualTo(20.0);
         assertThat(result.isCertificateEligible()).isFalse();
         assertThat(result.getCertificateId()).isNull();
 
@@ -140,8 +153,8 @@ class ParticipationServiceTest {
                 eq("ousmane@quizzboard.com"),
                 eq("Ousmane Kane"),
                 eq("Evaluation Spring Boot"),
-                eq(40.0),
-                eq(40),
+                eq(20.0),
+                eq(20),
                 eq(100),
                 eq(1),
                 eq(1),

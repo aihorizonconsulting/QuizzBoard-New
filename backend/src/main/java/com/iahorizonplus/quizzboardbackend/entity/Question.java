@@ -2,6 +2,7 @@ package com.iahorizonplus.quizzboardbackend.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
+import org.hibernate.annotations.SQLOrder;
 import lombok.*;
 
 import java.util.ArrayList;
@@ -48,6 +49,7 @@ public class Question {
     private Quiz quiz;
 
     @OneToMany(mappedBy = "question", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    @SQLOrder("order_index asc")
     @Builder.Default
     private List<Choice> choices = new ArrayList<>();
 }

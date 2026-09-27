@@ -122,7 +122,7 @@ class AuthServiceTest {
     @Test
     @DisplayName("Login: Connexion réussie avec mot de passe valide")
     void login_Success() {
-        LoginRequest request = new LoginRequest("amadou@quizzboard.com", "Password123!", null);
+        LoginRequest request = new LoginRequest("amadou@quizzboard.com", "Password123!");
 
         when(userRepository.findByEmail("amadou@quizzboard.com")).thenReturn(Optional.of(sampleUser));
         when(passwordEncoder.matches("Password123!", "encodedPassword")).thenReturn(true);
@@ -139,59 +139,24 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("Login: Compte importé sans rôle confirmé -> sélection du rôle demandée, aucun jeton émis")
-    void login_LegacyUserWithoutRole_RequiresRoleSelection() {
-        sampleUser.setRoleSelected(false);
-        LoginRequest request = new LoginRequest("amadou@quizzboard.com", "Password123!", null);
+    @DisplayName("Login: Un compte qui a déjà un rôle (ex. compte importé) se connecte sans choisir de rôle, à chaque connexion")
+    void login_UserWithRole_NeverAsksForRole() {
+        sampleUser.setRole(UserRole.LEARNER);
+        LoginRequest request = new LoginRequest("amadou@quizzboard.com", "Password123!");
 
         when(userRepository.findByEmail("amadou@quizzboard.com")).thenReturn(Optional.of(sampleUser));
         when(passwordEncoder.matches("Password123!", "encodedPassword")).thenReturn(true);
-        when(userMapper.toDto(sampleUser)).thenReturn(sampleUserDto);
-
-        AuthResponse response = authService.login(request);
-
-        assertThat(response.requiresRoleSelection()).isTrue();
-        assertThat(response.token()).isNull();
-        assertThat(response.refreshToken()).isNull();
-        verify(userRepository, never()).save(any(User.class));
-        verify(jwtUtils, never()).generateToken(anyString(), anyString());
-    }
-
-    @Test
-    @DisplayName("Login: Compte importé qui choisit son rôle -> rôle enregistré et jeton émis")
-    void login_LegacyUserChoosesRole_SavesRoleAndIssuesToken() {
-        sampleUser.setRoleSelected(false);
-        LoginRequest request = new LoginRequest("amadou@quizzboard.com", "Password123!", UserRole.LEARNER);
-
-        when(userRepository.findByEmail("amadou@quizzboard.com")).thenReturn(Optional.of(sampleUser));
-        when(passwordEncoder.matches("Password123!", "encodedPassword")).thenReturn(true);
-        when(userRepository.save(sampleUser)).thenReturn(sampleUser);
         when(userMapper.toDto(sampleUser)).thenReturn(sampleUserDto);
         when(jwtUtils.generateToken("amadou@quizzboard.com", "LEARNER")).thenReturn("jwt-learner");
         when(jwtUtils.generateRefreshToken("amadou@quizzboard.com")).thenReturn("jwt-refresh");
 
-        AuthResponse response = authService.login(request);
+        AuthResponse first = authService.login(request);
+        AuthResponse second = authService.login(request);
 
-        assertThat(response.token()).isEqualTo("jwt-learner");
+        assertThat(first.requiresRoleSelection()).isFalse();
+        assertThat(second.requiresRoleSelection()).isFalse();
+        assertThat(second.token()).isEqualTo("jwt-learner");
         assertThat(sampleUser.getRole()).isEqualTo(UserRole.LEARNER);
-        assertThat(sampleUser.isRoleSelected()).isTrue();
-        verify(userRepository).save(sampleUser);
-    }
-
-    @Test
-    @DisplayName("Login: Un compte importé ne peut pas se donner le rôle ADMIN")
-    void login_LegacyUserChoosesAdmin_ThrowsBadRequestException() {
-        sampleUser.setRoleSelected(false);
-        LoginRequest request = new LoginRequest("amadou@quizzboard.com", "Password123!", UserRole.ADMIN);
-
-        when(userRepository.findByEmail("amadou@quizzboard.com")).thenReturn(Optional.of(sampleUser));
-        when(passwordEncoder.matches("Password123!", "encodedPassword")).thenReturn(true);
-
-        assertThatThrownBy(() -> authService.login(request))
-                .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("Rôle invalide");
-
-        assertThat(sampleUser.getRole()).isEqualTo(UserRole.CREATOR);
         verify(userRepository, never()).save(any(User.class));
     }
 
@@ -216,7 +181,7 @@ class AuthServiceTest {
     @Test
     @DisplayName("Login: Échec si mauvais mot de passe avec rejet BadRequestException")
     void login_InvalidCredentials_ThrowsBadRequestException() {
-        LoginRequest request = new LoginRequest("amadou@quizzboard.com", "WrongPassword", null);
+        LoginRequest request = new LoginRequest("amadou@quizzboard.com", "WrongPassword");
 
         when(userRepository.findByEmail("amadou@quizzboard.com")).thenReturn(Optional.of(sampleUser));
         when(passwordEncoder.matches("WrongPassword", "encodedPassword")).thenReturn(false);

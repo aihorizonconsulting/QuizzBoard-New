@@ -12,7 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -34,28 +34,41 @@ public class ParticipationServiceImpl implements ParticipationService {
         participation.setQuizId(quiz.getId());
         participation.setQuizTitle(quiz.getTitle());
 
-        // Attach answers
-        if (answers != null && !answers.isEmpty()) {
+        // Réponses : justesse et points recalculés à partir du quiz enregistré (jamais les valeurs du navigateur)
+        List<Question> questions = quiz.getQuestions() != null ? quiz.getQuestions() : List.of();
+        List<ParticipantAnswer> safeAnswers = answers != null ? answers : new ArrayList<>();
+        if (!questions.isEmpty()) {
+            Map<String, Question> questionsById = new HashMap<>();
+            for (Question q : questions) {
+                questionsById.put(q.getId(), q);
+            }
             int totalPoints = 0;
-            int maxPoints = 0;
-
-            for (ParticipantAnswer ans : answers) {
+            for (ParticipantAnswer ans : safeAnswers) {
                 ans.setParticipation(participation);
+                Question question = questionsById.get(ans.getQuestionId());
+                boolean correct = question != null && isCorrectSelection(question, ans.getSelectedChoiceIds());
+                ans.setCorrect(correct);
+                ans.setPointsEarned(correct ? question.getPoints() : 0);
                 totalPoints += ans.getPointsEarned();
             }
-
-            // Calculate max potential points from quiz questions
-            if (quiz.getQuestions() != null && !quiz.getQuestions().isEmpty()) {
-                maxPoints = quiz.getQuestions().stream().mapToInt(Question::getPoints).sum();
-            } else {
-                maxPoints = Math.max(totalPoints, 100);
-            }
-
+            int maxPoints = questions.stream().mapToInt(Question::getPoints).sum();
             participation.setScore(totalPoints);
             participation.setMaxScore(maxPoints > 0 ? maxPoints : 100);
             double pct = maxPoints > 0 ? Math.round(((double) totalPoints / maxPoints * 100.0) * 10.0) / 10.0 : 0.0;
             participation.setPercentage(pct);
-            participation.setAnswers(answers);
+            participation.setAnswers(safeAnswers);
+        } else if (!safeAnswers.isEmpty()) {
+            // Quiz sans questions en base (ancien contenu) : rien à vérifier, on conserve les points transmis
+            int totalPoints = 0;
+            for (ParticipantAnswer ans : safeAnswers) {
+                ans.setParticipation(participation);
+                totalPoints += ans.getPointsEarned();
+            }
+            int maxPoints = Math.max(totalPoints, 100);
+            participation.setScore(totalPoints);
+            participation.setMaxScore(maxPoints);
+            participation.setPercentage(Math.round(((double) totalPoints / maxPoints * 100.0) * 10.0) / 10.0);
+            participation.setAnswers(safeAnswers);
         }
 
         // Check certificate eligibility (>= 70%)
@@ -134,6 +147,18 @@ public class ParticipationServiceImpl implements ParticipationService {
         }
 
         return saved;
+    }
+
+    /** Réponse juste : au moins un choix sélectionné et tous les choix sélectionnés sont corrects. */
+    private boolean isCorrectSelection(Question question, List<String> selectedChoiceIds) {
+        if (selectedChoiceIds == null || selectedChoiceIds.isEmpty()) {
+            return false;
+        }
+        Set<String> correctIds = new HashSet<>();
+        for (Choice choice : question.getChoices()) {
+            if (choice.isCorrect()) correctIds.add(choice.getId());
+        }
+        return !correctIds.isEmpty() && correctIds.containsAll(selectedChoiceIds);
     }
 
     @Override

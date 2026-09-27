@@ -1,5 +1,6 @@
 package com.iahorizonplus.quizzboardbackend.entity;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -49,4 +50,15 @@ public class Promotion {
 
     @CreationTimestamp
     private LocalDateTime createdAt;
+
+    // Exposé en "isActive" (nom utilisé par le frontend) : sans cela Jackson publie "active"
+    @JsonProperty("isActive")
+    public boolean isActive() {
+        return isActive;
+    }
+
+    @JsonProperty("isActive")
+    public void setActive(boolean active) {
+        this.isActive = active;
+    }
 }

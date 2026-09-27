@@ -79,6 +79,8 @@ Les limites métier sont appliquées strictement côté backend :
 | **Sessions Live** | Jusqu'à 25 participants | Jusqu'à 300 participants |
 | **Certificats Officiels** | ❌ Non inclus | ✅ Inclus avec QR Code |
 
+Seuls les quiz et communautés créés sur la plateforme actuelle comptent dans ces quotas : les contenus importés de l'ancien QuizzBoard ne bloquent pas leurs auteurs. Un forfait payant ne s'active qu'après confirmation d'un paiement réel (ou par un administrateur dans *Admin > Utilisateurs*).
+
 ---
 
 ## 📊 Éradication des Données Statiques

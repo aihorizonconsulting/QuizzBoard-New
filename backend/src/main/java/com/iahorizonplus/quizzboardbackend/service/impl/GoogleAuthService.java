@@ -69,19 +69,9 @@ public class GoogleAuthService {
 
         Optional<User> existingUserOpt = userRepository.findByEmail(email);
 
-        // 1. Utilisateur existant : connexion directe (rôle déjà établi)
+        // 1. Utilisateur existant : connexion directe (rôle déjà établi, jamais redemandé)
         if (existingUserOpt.isPresent()) {
             User existingUser = existingUserOpt.get();
-
-            // Compte importé de l'ancien QuizzBoard : le rôle doit être choisi avant d'obtenir un jeton
-            if (existingUser.needsRoleSelection()) {
-                if (request.role() == null) {
-                    return AuthResponse.roleRequired(userMapper.toDto(existingUser));
-                }
-                existingUser.setRole(SelfAssignedRole.require(request.role()));
-                existingUser.setRoleSelected(true);
-            }
-
             existingUser.setGoogleSub(googleSub);
             if (existingUser.getAvatarUrl() == null || existingUser.getAvatarUrl().isEmpty()) {
                 existingUser.setAvatarUrl(pictureUrl);

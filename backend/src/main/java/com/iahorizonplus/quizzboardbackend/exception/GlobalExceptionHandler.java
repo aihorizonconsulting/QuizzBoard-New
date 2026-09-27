@@ -253,6 +253,22 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(response, HttpStatus.FORBIDDEN);
     }
 
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDataIntegrity(org.springframework.dao.DataIntegrityViolationException ex, HttpServletRequest request) {
+        log.warn("409 Conflit d'intégrité sur {} : {}", request.getRequestURI(), ex.getMostSpecificCause().getMessage());
+
+        ApiResponse<Void> response = ApiResponse.<Void>builder()
+                .status(HttpStatus.CONFLICT.value())
+                .success(false)
+                .message("Enregistrement impossible : une donnée identique existe déjà ou une information obligatoire est manquante.")
+                .links(List.of(LinkDto.of("self", request.getRequestURI(), request.getMethod())))
+                .path(request.getRequestURI())
+                .timestamp(LocalDateTime.now())
+                .build();
+
+        return new ResponseEntity<>(response, HttpStatus.CONFLICT);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGlobalException(Exception ex, HttpServletRequest request) {
         log.error("500 Erreur serveur sur {} : {}", request.getRequestURI(), ex.getMessage(), ex);

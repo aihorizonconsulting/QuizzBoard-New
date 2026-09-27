@@ -3,6 +3,7 @@ package com.iahorizonplus.quizzboardbackend.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.SQLOrder;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -82,6 +83,7 @@ public class Course {
     private Integer certificateMinimumScore = 80;
 
     @OneToMany(mappedBy = "course", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @SQLOrder("order_index asc")
     @Builder.Default
     private List<CourseChapter> chapters = new ArrayList<>();
 

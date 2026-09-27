@@ -70,7 +70,6 @@ public class AdminServiceImpl implements AdminService {
                 .orElseThrow(() -> new ResourceNotFoundException("Utilisateur non trouvé: " + userId));
         UserRole oldRole = user.getRole();
         user.setRole(role);
-        user.setRoleSelected(true); // rôle fixé par l'administrateur : plus de choix à la connexion
         User saved = userRepository.save(user);
 
         logAction("SYSTEM_ADMIN", "UPDATE_ROLE", user.getEmail(), "Rôle modifié de " + oldRole + " à " + role);
@@ -118,7 +117,6 @@ public class AdminServiceImpl implements AdminService {
         user.setEmail(user.getEmail().trim().toLowerCase());
         user.setPassword(passwordEncoder.encode(pwd));
         if (user.getRole() == null) user.setRole(UserRole.CREATOR);
-        user.setRoleSelected(true);
         if (user.getSubscriptionTier() == null) user.setSubscriptionTier(SubscriptionTier.FREE);
         user.setEmailVerified(true);
         user.setStatus("ACTIVE");

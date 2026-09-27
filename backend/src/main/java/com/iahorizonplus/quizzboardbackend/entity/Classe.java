@@ -61,4 +61,9 @@ public class Classe {
 
     @CreationTimestamp
     private LocalDateTime createdAt;
+
+    // Nombre d'élèves affiché par le frontend (cartes et statistiques de classe)
+    public int getStudentsCount() {
+        return students != null ? students.size() : 0;
+    }
 }

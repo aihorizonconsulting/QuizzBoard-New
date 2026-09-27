@@ -31,7 +31,7 @@ public class PromotionController {
     public ResponseEntity<ApiResponse<List<Promotion>>> getMyPromotions(
             @AuthenticationPrincipal UserPrincipal currentUser,
             HttpServletRequest request) {
-        String email = currentUser != null ? currentUser.getEmail() : "anonymous";
+        String email = currentUser != null ? currentUser.getEmail() : null;
         List<Promotion> promotions = promotionService.getPromotions(email);
         List<LinkDto> links = List.of(
                 LinkDto.of("self", request.getRequestURI(), "GET"),
@@ -59,7 +59,7 @@ public class PromotionController {
             @Valid @RequestBody Promotion promotion,
             @AuthenticationPrincipal UserPrincipal currentUser,
             HttpServletRequest request) {
-        String email = currentUser != null ? currentUser.getEmail() : "default-creator";
+        String email = currentUser != null ? currentUser.getEmail() : null;
         Promotion created = promotionService.createPromotion(email, promotion);
         List<LinkDto> links = getPromotionLinks(created.getId());
         return new ResponseEntity<>(
@@ -76,7 +76,7 @@ public class PromotionController {
             @Valid @RequestBody Promotion promotion,
             @AuthenticationPrincipal UserPrincipal currentUser,
             HttpServletRequest request) {
-        String email = currentUser != null ? currentUser.getEmail() : "default-creator";
+        String email = currentUser != null ? currentUser.getEmail() : null;
         Promotion updated = promotionService.updatePromotion(id, promotion, email);
         List<LinkDto> links = getPromotionLinks(id);
         return ResponseEntity.ok(
@@ -84,11 +84,27 @@ public class PromotionController {
         );
     }
 
+    @PutMapping("/{id}/activate")
+    @PreAuthorize("hasRole('CREATOR') or hasRole('ADMIN')")
+    @Operation(summary = "Définir la promotion comme contexte de travail actif")
+    public ResponseEntity<ApiResponse<Promotion>> activatePromotion(
+            @PathVariable String id,
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            HttpServletRequest request) {
+        Promotion activated = promotionService.activatePromotion(id, currentUser != null ? currentUser.getEmail() : null);
+        return ResponseEntity.ok(
+                ApiResponse.ok(activated, "Promotion définie comme contexte actif.", getPromotionLinks(id), request.getRequestURI())
+        );
+    }
+
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('CREATOR') or hasRole('ADMIN')")
     @Operation(summary = "Supprimer une promotion")
-    public ResponseEntity<ApiResponse<Void>> deletePromotion(@PathVariable String id, HttpServletRequest request) {
-        promotionService.deletePromotion(id);
+    public ResponseEntity<ApiResponse<Void>> deletePromotion(
+            @PathVariable String id,
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            HttpServletRequest request) {
+        promotionService.deletePromotion(id, currentUser != null ? currentUser.getEmail() : null);
         List<LinkDto> links = List.of(
                 LinkDto.of("collection", "/api/v1/promotions", "GET")
         );

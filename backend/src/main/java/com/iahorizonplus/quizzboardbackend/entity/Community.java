@@ -1,5 +1,6 @@
 package com.iahorizonplus.quizzboardbackend.entity;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -59,6 +60,43 @@ public class Community {
     @Builder.Default
     private List<Meeting> meetings = new ArrayList<>();
 
+    // Membres (lecture seule : ils sont gérés par CommunityMemberRepository via community_id)
+    @OneToMany(fetch = FetchType.LAZY)
+    @JoinColumn(name = "communityId", referencedColumnName = "id", insertable = false, updatable = false)
+    @Builder.Default
+    private List<CommunityMember> members = new ArrayList<>();
+
     @CreationTimestamp
     private LocalDateTime createdAt;
+
+    // Compteurs et nom "isPrivate" attendus par le frontend (sinon Jackson publie "private" et aucun compteur)
+    @JsonProperty("isPrivate")
+    public boolean isPrivate() {
+        return isPrivate;
+    }
+
+    @JsonProperty("isPrivate")
+    public void setPrivate(boolean isPrivate) {
+        this.isPrivate = isPrivate;
+    }
+
+    public int getMembersCount() {
+        return members != null ? members.size() : 0;
+    }
+
+    public int getTopicsCount() {
+        return topics != null ? topics.size() : 0;
+    }
+
+    public int getResourcesCount() {
+        return resources != null ? resources.size() : 0;
+    }
+
+    public int getMeetingsCount() {
+        return meetings != null ? meetings.size() : 0;
+    }
+
+    public int getQuizzesCount() {
+        return sharedQuizIds != null ? sharedQuizIds.size() : 0;
+    }
 }

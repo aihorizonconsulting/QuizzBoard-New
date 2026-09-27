@@ -3,6 +3,7 @@ package com.iahorizonplus.quizzboardbackend.controller;
 import com.iahorizonplus.quizzboardbackend.dto.response.ApiResponse;
 import com.iahorizonplus.quizzboardbackend.dto.response.LinkDto;
 import com.iahorizonplus.quizzboardbackend.entity.Classe;
+import com.iahorizonplus.quizzboardbackend.entity.Quiz;
 import com.iahorizonplus.quizzboardbackend.entity.Student;
 import com.iahorizonplus.quizzboardbackend.security.UserPrincipal;
 import com.iahorizonplus.quizzboardbackend.service.ClasseService;
@@ -18,6 +19,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/classes")
@@ -28,15 +30,16 @@ public class ClasseController {
     private final ClasseService classeService;
 
     @GetMapping
-    @Operation(summary = "Lister les classes du créateur connecté")
+    @Operation(summary = "Lister les classes du formateur connecté, ou celles où l'apprenant connecté est inscrit")
     public ResponseEntity<ApiResponse<List<Classe>>> getMyClasses(
+            @RequestParam(required = false) String promotionId,
             @AuthenticationPrincipal UserPrincipal currentUser,
             HttpServletRequest request) {
-        String email = currentUser != null ? currentUser.getEmail() : null;
-        List<Classe> classes = classeService.getClasses(email, null);
+        List<Classe> classes = classeService.getClasses(email(currentUser), promotionId);
         List<LinkDto> links = List.of(
                 LinkDto.of("self", request.getRequestURI(), "GET"),
-                LinkDto.of("create", "/api/v1/classes", "POST", "Créer une nouvelle classe")
+                LinkDto.of("create", "/api/v1/classes", "POST", "Créer une nouvelle classe"),
+                LinkDto.of("join", "/api/v1/classes/join", "POST", "Rejoindre une classe avec son code")
         );
         return ResponseEntity.ok(
                 ApiResponse.ok(classes, "Liste des classes récupérée avec succès.", links, request.getRequestURI())
@@ -60,12 +63,23 @@ public class ClasseController {
             @Valid @RequestBody Classe classe,
             @AuthenticationPrincipal UserPrincipal currentUser,
             HttpServletRequest request) {
-        String email = currentUser != null ? currentUser.getEmail() : null;
-        Classe created = classeService.createClasse(email, classe);
+        Classe created = classeService.createClasse(email(currentUser), classe);
         List<LinkDto> links = getClasseLinks(created.getId());
         return new ResponseEntity<>(
                 ApiResponse.created(created, "Classe créée avec succès.", links, request.getRequestURI()),
                 HttpStatus.CREATED
+        );
+    }
+
+    @PostMapping("/join")
+    @Operation(summary = "Rejoindre une classe avec son code (apprenant connecté)")
+    public ResponseEntity<ApiResponse<Classe>> joinClasse(
+            @RequestBody Map<String, String> body,
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            HttpServletRequest request) {
+        Classe classe = classeService.joinClasseByCode(body != null ? body.get("code") : null, email(currentUser));
+        return ResponseEntity.ok(
+                ApiResponse.ok(classe, "Vous avez rejoint la classe « " + classe.getName() + " ».", getClasseLinks(classe.getId()), request.getRequestURI())
         );
     }
 
@@ -75,8 +89,9 @@ public class ClasseController {
     public ResponseEntity<ApiResponse<Classe>> updateClasse(
             @PathVariable String id,
             @Valid @RequestBody Classe classe,
+            @AuthenticationPrincipal UserPrincipal currentUser,
             HttpServletRequest request) {
-        Classe updated = classeService.updateClasse(id, classe);
+        Classe updated = classeService.updateClasse(id, classe, email(currentUser));
         List<LinkDto> links = getClasseLinks(id);
         return ResponseEntity.ok(
                 ApiResponse.ok(updated, "Classe mise à jour avec succès.", links, request.getRequestURI())
@@ -86,8 +101,11 @@ public class ClasseController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('CREATOR') or hasRole('ADMIN')")
     @Operation(summary = "Supprimer une classe")
-    public ResponseEntity<ApiResponse<Void>> deleteClasse(@PathVariable String id, HttpServletRequest request) {
-        classeService.deleteClasse(id);
+    public ResponseEntity<ApiResponse<Void>> deleteClasse(
+            @PathVariable String id,
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            HttpServletRequest request) {
+        classeService.deleteClasse(id, email(currentUser));
         List<LinkDto> links = List.of(
                 LinkDto.of("collection", "/api/v1/classes", "GET")
         );
@@ -116,8 +134,9 @@ public class ClasseController {
     public ResponseEntity<ApiResponse<Student>> addStudent(
             @PathVariable String id,
             @Valid @RequestBody Student student,
+            @AuthenticationPrincipal UserPrincipal currentUser,
             HttpServletRequest request) {
-        Student created = classeService.addStudentToClasse(id, student);
+        Student created = classeService.addStudentToClasse(id, student, email(currentUser));
         List<LinkDto> links = List.of(
                 LinkDto.of("self", "/api/v1/classes/" + id + "/students/" + created.getId(), "GET"),
                 LinkDto.of("classe", "/api/v1/classes/" + id, "GET"),
@@ -135,8 +154,9 @@ public class ClasseController {
     public ResponseEntity<ApiResponse<Void>> removeStudent(
             @PathVariable String id,
             @PathVariable String studentId,
+            @AuthenticationPrincipal UserPrincipal currentUser,
             HttpServletRequest request) {
-        classeService.removeStudentFromClasse(id, studentId);
+        classeService.removeStudentFromClasse(id, studentId, email(currentUser));
         List<LinkDto> links = List.of(
                 LinkDto.of("students", "/api/v1/classes/" + id + "/students", "GET")
         );
@@ -145,12 +165,57 @@ public class ClasseController {
         );
     }
 
+    @GetMapping("/{id}/quizzes")
+    @Operation(summary = "Lister les quiz assignés à une classe (formateur ou élève inscrit)")
+    public ResponseEntity<ApiResponse<List<Quiz>>> getClasseQuizzes(
+            @PathVariable String id,
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            HttpServletRequest request) {
+        List<Quiz> quizzes = classeService.getQuizzesOfClasse(id, email(currentUser));
+        return ResponseEntity.ok(
+                ApiResponse.ok(quizzes, "Quiz de la classe récupérés avec succès.", getClasseLinks(id), request.getRequestURI())
+        );
+    }
+
+    @PutMapping("/{id}/quizzes/{quizId}")
+    @PreAuthorize("hasRole('CREATOR') or hasRole('ADMIN')")
+    @Operation(summary = "Assigner un quiz à une classe")
+    public ResponseEntity<ApiResponse<Classe>> assignQuiz(
+            @PathVariable String id,
+            @PathVariable String quizId,
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            HttpServletRequest request) {
+        Classe classe = classeService.assignQuizToClass(id, quizId, email(currentUser));
+        return ResponseEntity.ok(
+                ApiResponse.ok(classe, "Quiz assigné à la classe avec succès.", getClasseLinks(id), request.getRequestURI())
+        );
+    }
+
+    @DeleteMapping("/{id}/quizzes/{quizId}")
+    @PreAuthorize("hasRole('CREATOR') or hasRole('ADMIN')")
+    @Operation(summary = "Retirer un quiz d'une classe")
+    public ResponseEntity<ApiResponse<Classe>> unassignQuiz(
+            @PathVariable String id,
+            @PathVariable String quizId,
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            HttpServletRequest request) {
+        Classe classe = classeService.unassignQuizFromClass(id, quizId, email(currentUser));
+        return ResponseEntity.ok(
+                ApiResponse.ok(classe, "Quiz retiré de la classe avec succès.", getClasseLinks(id), request.getRequestURI())
+        );
+    }
+
+    private static String email(UserPrincipal currentUser) {
+        return currentUser != null ? currentUser.getEmail() : null;
+    }
+
     private List<LinkDto> getClasseLinks(String classeId) {
         return List.of(
                 LinkDto.of("self", "/api/v1/classes/" + classeId, "GET"),
                 LinkDto.of("update", "/api/v1/classes/" + classeId, "PUT"),
                 LinkDto.of("delete", "/api/v1/classes/" + classeId, "DELETE"),
                 LinkDto.of("students", "/api/v1/classes/" + classeId + "/students", "GET", "Étudiants de la classe"),
+                LinkDto.of("quizzes", "/api/v1/classes/" + classeId + "/quizzes", "GET", "Quiz assignés à la classe"),
                 LinkDto.of("collection", "/api/v1/classes", "GET")
         );
     }

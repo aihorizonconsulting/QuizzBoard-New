@@ -1,6 +1,7 @@
 package com.iahorizonplus.quizzboardbackend.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -39,4 +40,16 @@ public class ParticipantAnswer {
     @JoinColumn(name = "participation_id")
     @JsonIgnore
     private Participation participation;
+
+    // Exposé en "isCorrect" (nom utilisé par le frontend) : sans cela Jackson lit/écrit "correct"
+    // et la valeur envoyée par le frontend était ignorée (toujours false en base)
+    @JsonProperty("isCorrect")
+    public boolean isCorrect() {
+        return isCorrect;
+    }
+
+    @JsonProperty("isCorrect")
+    public void setCorrect(boolean correct) {
+        this.isCorrect = correct;
+    }
 }

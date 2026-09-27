@@ -2,6 +2,7 @@ package com.iahorizonplus.quizzboardbackend.config;
 
 import com.iahorizonplus.quizzboardbackend.security.JwtAuthenticationEntryPoint;
 import com.iahorizonplus.quizzboardbackend.security.JwtAuthenticationFilter;
+import jakarta.servlet.DispatcherType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -55,6 +56,9 @@ public class SecurityConfig {
             .exceptionHandling(ex -> ex.authenticationEntryPoint(unauthorizedHandler))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
+                // 0. Page d'erreur interne : sans cela un refus 403 (ou une 404) est réécrit en 401 lors du
+                //    renvoi vers /error, et le frontend croit la session expirée
+                .dispatcherTypeMatchers(DispatcherType.ERROR, DispatcherType.FORWARD).permitAll()
                 // 1. Endpoints Publics (Authentification, Swagger, WebSockets, Exploration publique)
                 .requestMatchers("/auth/**", "/public/**", "/platform/**").permitAll()
                 .requestMatchers(

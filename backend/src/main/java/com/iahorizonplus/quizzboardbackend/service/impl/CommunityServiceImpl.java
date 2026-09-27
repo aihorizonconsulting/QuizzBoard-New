@@ -54,7 +54,7 @@ public class CommunityServiceImpl implements CommunityService {
         // === Enforcement des quotas par forfait ===
         User creator = userRepository.findById(creatorId)
                 .orElseThrow(() -> new ResourceNotFoundException("Créateur non trouvé : " + creatorId));
-        long existingCount = communityRepository.countByCreatorId(creatorId);
+        long existingCount = communityRepository.countCreatedOnPlatformByCreatorId(creatorId);
 
         if (creator.getSubscriptionTier() == SubscriptionTier.FREE && existingCount >= 1) {
             throw new BadRequestException("plan",

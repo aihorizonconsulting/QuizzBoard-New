@@ -2,6 +2,7 @@ package com.iahorizonplus.quizzboardbackend.service;
 
 import com.iahorizonplus.quizzboardbackend.entity.*;
 import com.iahorizonplus.quizzboardbackend.exception.ResourceNotFoundException;
+import com.iahorizonplus.quizzboardbackend.repository.ClasseRepository;
 import com.iahorizonplus.quizzboardbackend.repository.QuizRepository;
 import com.iahorizonplus.quizzboardbackend.repository.UserRepository;
 import com.iahorizonplus.quizzboardbackend.service.impl.QuizServiceImpl;
@@ -30,6 +31,9 @@ class QuizServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private ClasseRepository classeRepository;
 
     @InjectMocks
     private QuizServiceImpl quizService;
@@ -78,7 +82,7 @@ class QuizServiceTest {
     @DisplayName("Création d'un Quiz : Association bidirectionnelle des questions/choix et génération de code")
     void createQuiz_Success() {
         when(userRepository.findById("creator-free")).thenReturn(Optional.of(freeCreator));
-        when(quizRepository.findByCreatorIdOrderByCreatedAtDesc("creator-free")).thenReturn(List.of());
+        when(quizRepository.countCreatedOnPlatformByCreatorId("creator-free")).thenReturn(0L);
         when(quizRepository.save(any(Quiz.class))).thenAnswer(inv -> inv.getArgument(0));
 
         Quiz created = quizService.createQuiz(sampleQuiz, "creator-free", "Fatou Sow");
@@ -98,8 +102,8 @@ class QuizServiceTest {
     @DisplayName("Contrôle de Quota FREE : Rejet si l'utilisateur possède déjà 3 quiz")
     void createQuiz_FreeUserQuotaReached_ThrowsIllegalStateException() {
         when(userRepository.findById("creator-free")).thenReturn(Optional.of(freeCreator));
-        List<Quiz> existingThreeQuizzes = List.of(new Quiz(), new Quiz(), new Quiz());
-        when(quizRepository.findByCreatorIdOrderByCreatedAtDesc("creator-free")).thenReturn(existingThreeQuizzes);
+
+        when(quizRepository.countCreatedOnPlatformByCreatorId("creator-free")).thenReturn(3L);
 
         assertThatThrownBy(() -> quizService.createQuiz(sampleQuiz, "creator-free", "Fatou Sow"))
                 .isInstanceOf(IllegalStateException.class)
@@ -118,6 +122,53 @@ class QuizServiceTest {
 
         assertThat(created).isNotNull();
         verify(quizRepository).save(any(Quiz.class));
+    }
+
+    @Test
+    @DisplayName("Modification d'un Quiz : les questions existantes gardent leur id, les nouvelles sont créées")
+    void updateQuiz_KeepsExistingQuestionIds() {
+        Question existingQuestion = sampleQuiz.getQuestions().get(0);
+        existingQuestion.setId("q-existant");
+        existingQuestion.setQuiz(sampleQuiz);
+        existingQuestion.getChoices().get(0).setId("c-dakar");
+        sampleQuiz.setId("quiz-1");
+        sampleQuiz.setCreatorId("creator-free");
+        when(quizRepository.findById("quiz-1")).thenReturn(Optional.of(sampleQuiz));
+        when(quizRepository.save(any(Quiz.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Question edited = Question.builder().id("q-existant").text("Capitale du Sénégal ?").points(100)
+                .choices(new ArrayList<>(List.of(
+                        Choice.builder().id("c-dakar").text("Dakar").isCorrect(true).build(),
+                        Choice.builder().id("c2").text("Saint-Louis").isCorrect(false).build())))
+                .build();
+        Question added = Question.builder().id("custom-q-123").text("Nouvelle question").points(100)
+                .choices(new ArrayList<>(List.of(Choice.builder().id("c1").text("Oui").isCorrect(true).build())))
+                .build();
+        Quiz payload = Quiz.builder().questions(new ArrayList<>(List.of(edited, added))).build();
+
+        Quiz updated = quizService.updateQuiz("quiz-1", payload, "creator-free");
+
+        assertThat(updated.getQuestions()).hasSize(2);
+        assertThat(updated.getQuestions().get(0)).isSameAs(existingQuestion);
+        assertThat(updated.getQuestions().get(0).getText()).isEqualTo("Capitale du Sénégal ?");
+        assertThat(updated.getQuestions().get(0).getChoices().get(0).getId()).isEqualTo("c-dakar");
+        assertThat(updated.getQuestions().get(0).getChoices().get(1).getText()).isEqualTo("Saint-Louis");
+        assertThat(updated.getQuestions().get(1).getId()).isNull();
+        assertThat(updated.getQuestions().get(1).getQuiz()).isSameAs(updated);
+        assertThat(updated.getTitle()).isEqualTo("Quiz Géographie");
+    }
+
+    @Test
+    @DisplayName("Modification d'un Quiz : refusée à un formateur qui n'en est pas l'auteur")
+    void updateQuiz_OtherCreator_ThrowsSecurityException() {
+        sampleQuiz.setId("quiz-1");
+        sampleQuiz.setCreatorId("creator-free");
+        when(quizRepository.findById("quiz-1")).thenReturn(Optional.of(sampleQuiz));
+        when(userRepository.findById("creator-starter")).thenReturn(Optional.of(starterCreator));
+
+        assertThatThrownBy(() -> quizService.updateQuiz("quiz-1", new Quiz(), "creator-starter"))
+                .isInstanceOf(SecurityException.class);
+        verify(quizRepository, never()).save(any(Quiz.class));
     }
 
     @Test

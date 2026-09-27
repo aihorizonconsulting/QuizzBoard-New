@@ -81,21 +81,7 @@ public class QuizController {
             @Valid @RequestBody Quiz quiz,
             @AuthenticationPrincipal UserPrincipal currentUser,
             HttpServletRequest request) {
-        // Assainir les IDs générés côté client pour permettre à Hibernate UUID de générer des identifiants valides
-        quiz.setId(null);
-        if (quiz.getQuestions() != null) {
-            for (com.iahorizonplus.quizzboardbackend.entity.Question q : quiz.getQuestions()) {
-                q.setId(null);
-                q.setQuiz(quiz);
-                if (q.getChoices() != null) {
-                    for (com.iahorizonplus.quizzboardbackend.entity.Choice c : q.getChoices()) {
-                        c.setId(null);
-                        c.setQuestion(q);
-                    }
-                }
-            }
-        }
-
+        // Les identifiants temporaires du frontend sont ignorés par le service (générés par la base)
         String creatorId = currentUser != null ? currentUser.getId() : "anonymous";
         String creatorName = currentUser != null ? currentUser.getName() : "Anonyme";
         Quiz created = quizService.createQuiz(quiz, creatorId, creatorName);
@@ -160,8 +146,9 @@ public class QuizController {
     public ResponseEntity<ApiResponse<Quiz>> assignClasses(
             @PathVariable String id,
             @RequestBody List<String> classIds,
+            @AuthenticationPrincipal UserPrincipal currentUser,
             HttpServletRequest request) {
-        Quiz updated = quizService.assignClasses(id, classIds);
+        Quiz updated = quizService.assignClasses(id, classIds, currentUser != null ? currentUser.getId() : null);
         List<LinkDto> links = getQuizLinks(id);
         return ResponseEntity.ok(
                 ApiResponse.ok(updated, "Classes assignées au quiz avec succès.", links, request.getRequestURI())

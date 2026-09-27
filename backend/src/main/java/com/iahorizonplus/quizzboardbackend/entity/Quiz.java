@@ -3,6 +3,7 @@ package com.iahorizonplus.quizzboardbackend.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.SQLOrder;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
@@ -73,6 +74,7 @@ public class Quiz {
     private Double averageScorePercent = 0.0;
 
     @OneToMany(mappedBy = "quiz", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @SQLOrder("order_index asc")
     @Builder.Default
     private List<Question> questions = new ArrayList<>();
 
@@ -81,4 +83,9 @@ public class Quiz {
 
     @UpdateTimestamp
     private LocalDateTime updatedAt;
+
+    // Nombre de questions affiché par le frontend (cartes et listes de quiz)
+    public int getQuestionsCount() {
+        return questions != null ? questions.size() : 0;
+    }
 }

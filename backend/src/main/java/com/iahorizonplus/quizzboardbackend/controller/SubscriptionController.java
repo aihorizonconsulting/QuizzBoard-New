@@ -80,6 +80,10 @@ public class SubscriptionController {
         } catch (IllegalArgumentException ex) {
             throw new BadRequestException("tier", "Forfait invalide. Valeurs acceptées : FREE, STARTER, LEARNER_PLUS.");
         }
+        // Un forfait payant n'est activé que par la confirmation d'un paiement réel (PayDunya, Wave, Orange Money)
+        if (tier != SubscriptionTier.FREE) {
+            throw new BadRequestException("tier", "Le forfait " + tier.name() + " s'active uniquement après paiement : utilisez le bouton de paiement de la page Tarifs.");
+        }
 
         subscriptionService.upgradeUserTier(currentUser.getId(), tier);
         Map<String, Object> data = Map.of("tier", tier.name());

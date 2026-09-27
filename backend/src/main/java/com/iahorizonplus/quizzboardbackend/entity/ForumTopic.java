@@ -1,6 +1,7 @@
 package com.iahorizonplus.quizzboardbackend.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -56,4 +57,27 @@ public class ForumTopic {
 
     @CreationTimestamp
     private LocalDateTime createdAt;
+
+    public int getCommentsCount() {
+        return comments != null ? comments.size() : 0;
+    }
+
+    // Noms "isPinned", "isLocked", "isReported" attendus par le frontend (sinon "pinned", "locked"...)
+    @JsonProperty("isPinned")
+    public boolean isPinned() { return isPinned; }
+
+    @JsonProperty("isPinned")
+    public void setPinned(boolean pinned) { this.isPinned = pinned; }
+
+    @JsonProperty("isLocked")
+    public boolean isLocked() { return isLocked; }
+
+    @JsonProperty("isLocked")
+    public void setLocked(boolean locked) { this.isLocked = locked; }
+
+    @JsonProperty("isReported")
+    public boolean isReported() { return isReported; }
+
+    @JsonProperty("isReported")
+    public void setReported(boolean reported) { this.isReported = reported; }
 }

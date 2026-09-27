@@ -6,10 +6,10 @@ import java.util.List;
 
 public interface PromotionService {
     List<Promotion> getPromotions(String creatorEmail);
-    Promotion getActivePromotion();
     Promotion getPromotionById(String id);
     Promotion createPromotion(String creatorEmail, Promotion promotion);
-    Promotion updatePromotion(String id, Promotion promotion, String creatorEmail);
-    Promotion setActivePromotion(String promotionId);
-    void deletePromotion(String promotionId);
+    Promotion updatePromotion(String id, Promotion promotion, String actorEmail);
+    /** Définit la promotion comme contexte de travail actif du formateur (une seule active à la fois). */
+    Promotion activatePromotion(String id, String actorEmail);
+    void deletePromotion(String promotionId, String actorEmail);
 }

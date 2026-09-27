@@ -10,8 +10,8 @@ public interface QuizService {
     Quiz getQuizById(String id);
     Quiz getQuizByShareCodeOrPin(String codeOrPin);
     Quiz createQuiz(Quiz quiz, String creatorId, String creatorName);
-    Quiz updateQuiz(String id, Quiz quiz, String creatorId);
-    void deleteQuiz(String id, String creatorId);
-    Quiz toggleVisibility(String id, String creatorId);
-    Quiz assignClasses(String quizId, List<String> classIds);
+    Quiz updateQuiz(String id, Quiz quiz, String actorId);
+    void deleteQuiz(String id, String actorId);
+    Quiz toggleVisibility(String id, String actorId);
+    Quiz assignClasses(String quizId, List<String> classIds, String actorId);
 }

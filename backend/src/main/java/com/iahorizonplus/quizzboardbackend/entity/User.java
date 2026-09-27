@@ -1,5 +1,7 @@
 package com.iahorizonplus.quizzboardbackend.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -29,19 +31,14 @@ public class User {
     @Column(nullable = false, unique = true, length = 150)
     private String email;
 
+    // Jamais renvoyé dans les réponses JSON (ex. liste des utilisateurs de l'administration)
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     @Column(nullable = true)
     private String password;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private UserRole role;
-
-    // false pour les comptes importés de l'ancien QuizzBoard : l'utilisateur doit
-    // choisir son rôle à sa prochaine connexion. Le défaut SQL (false) s'applique
-    // aux lignes existantes et importées ; les nouveaux comptes sont créés à true.
-    @Builder.Default
-    @Column(nullable = false, columnDefinition = "boolean default false")
-    private boolean roleSelected = true;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -82,10 +79,13 @@ public class User {
     @Builder.Default
     private boolean emailVerified = false;
 
+    @JsonIgnore
     private String emailVerificationToken;
 
     // Réinitialisation de mot de passe
+    @JsonIgnore
     private String passwordResetToken;
+    @JsonIgnore
     private LocalDateTime passwordResetTokenExpiry;
 
     @CreationTimestamp
@@ -101,10 +101,6 @@ public class User {
 
     public boolean isActive() {
         return "ACTIVE".equalsIgnoreCase(this.status);
-    }
-
-    public boolean needsRoleSelection() {
-        return role != UserRole.ADMIN && !roleSelected;
     }
 
     public void setActive(boolean active) {

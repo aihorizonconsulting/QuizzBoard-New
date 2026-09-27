@@ -4,6 +4,7 @@ import com.iahorizonplus.quizzboardbackend.entity.Course;
 import com.iahorizonplus.quizzboardbackend.entity.CourseChapter;
 import com.iahorizonplus.quizzboardbackend.entity.SubscriptionTier;
 import com.iahorizonplus.quizzboardbackend.entity.User;
+import com.iahorizonplus.quizzboardbackend.entity.UserRole;
 import com.iahorizonplus.quizzboardbackend.exception.ResourceNotFoundException;
 import com.iahorizonplus.quizzboardbackend.repository.CourseChapterRepository;
 import com.iahorizonplus.quizzboardbackend.repository.CourseRepository;
@@ -14,7 +15,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -78,33 +82,86 @@ public class CourseServiceImpl implements CourseService {
     @Transactional
     public Course updateCourse(String id, Course updated, String creatorId) {
         Course existing = getCourseById(id);
-        if (!existing.getCreatorId().equals(creatorId)) {
-            throw new SecurityException("Vous n'êtes pas autorisé à modifier ce cours");
+        assertCanManage(existing, creatorId, "modifier ce cours");
+
+        // Mise à jour partielle : un champ absent du payload ne vide jamais la valeur existante
+        if (updated.getTitle() != null && !updated.getTitle().isBlank()) existing.setTitle(updated.getTitle().trim());
+        if (updated.getDescription() != null) existing.setDescription(updated.getDescription());
+        if (updated.getCategory() != null && !updated.getCategory().isBlank()) existing.setCategory(updated.getCategory());
+        if (updated.getLevel() != null) existing.setLevel(updated.getLevel());
+        if (updated.getEstimatedHours() > 0) existing.setEstimatedHours(updated.getEstimatedHours());
+        if (updated.getStatus() != null && !updated.getStatus().isBlank()) existing.setStatus(updated.getStatus());
+        if (updated.getCoverImage() != null) existing.setCoverImage(updated.getCoverImage());
+        if (updated.getAssignedClassIds() != null) existing.setAssignedClassIds(new ArrayList<>(updated.getAssignedClassIds()));
+        if (updated.getAssignedClassNames() != null) existing.setAssignedClassNames(new ArrayList<>(updated.getAssignedClassNames()));
+        existing.setHasCertificate(updated.isHasCertificate());
+        existing.setHasChapterQuizzes(updated.isHasChapterQuizzes());
+        existing.setHasFinalQuiz(updated.isHasFinalQuiz());
+        if (updated.getFinalQuizTitle() != null) existing.setFinalQuizTitle(updated.getFinalQuizTitle());
+        if (updated.getFinalQuizQuestionsCount() != null) existing.setFinalQuizQuestionsCount(updated.getFinalQuizQuestionsCount());
+        if (updated.getCertificateTemplateType() != null) existing.setCertificateTemplateType(updated.getCertificateTemplateType());
+        if (updated.getCertificateCustomTemplateUrl() != null) existing.setCertificateCustomTemplateUrl(updated.getCertificateCustomTemplateUrl());
+        if (updated.getCertificateMinimumScore() != null) existing.setCertificateMinimumScore(updated.getCertificateMinimumScore());
+
+        if (updated.getChapters() != null && !updated.getChapters().isEmpty()) {
+            mergeChapters(existing, updated.getChapters());
         }
 
-        existing.setTitle(updated.getTitle());
-        existing.setDescription(updated.getDescription());
-        existing.setCategory(updated.getCategory());
-        existing.setLevel(updated.getLevel());
-        existing.setEstimatedHours(updated.getEstimatedHours());
-        existing.setStatus(updated.getStatus());
-        existing.setCoverImage(updated.getCoverImage());
-        existing.setAssignedClassIds(updated.getAssignedClassIds());
-        existing.setAssignedClassNames(updated.getAssignedClassNames());
-        existing.setHasCertificate(updated.isHasCertificate());
-        existing.setCertificateMinimumScore(updated.getCertificateMinimumScore());
-
         return courseRepository.save(existing);
+    }
+
+    /**
+     * Ajout, modification et suppression de chapitres : les chapitres existants gardent leur id,
+     * ceux portant un identifiant temporaire du frontend sont créés.
+     */
+    private void mergeChapters(Course course, List<CourseChapter> incoming) {
+        Map<String, CourseChapter> current = new HashMap<>();
+        for (CourseChapter ch : course.getChapters()) {
+            if (ch.getId() != null) current.put(ch.getId(), ch);
+        }
+        List<CourseChapter> result = new ArrayList<>();
+        int index = 0;
+        for (CourseChapter in : incoming) {
+            if (in == null) continue;
+            index++;
+            CourseChapter target = in.getId() != null ? current.remove(in.getId()) : null;
+            if (target == null) {
+                target = new CourseChapter();
+                target.setCourse(course);
+            }
+            target.setOrder(index);
+            target.setTitle(in.getTitle() != null && !in.getTitle().isBlank() ? in.getTitle().trim() : "Chapitre " + index);
+            target.setSummary(in.getSummary());
+            target.setContent(in.getContent());
+            target.setEstimatedMinutes(in.getEstimatedMinutes() > 0 ? in.getEstimatedMinutes() : 30);
+            target.setHasQuiz(in.isHasQuiz());
+            target.setQuizTitle(in.getQuizTitle());
+            target.setQuizQuestionsCount(in.getQuizQuestionsCount());
+            result.add(target);
+        }
+        course.getChapters().clear();
+        course.getChapters().addAll(result);
     }
 
     @Override
     @Transactional
     public void deleteCourse(String id, String creatorId) {
         Course existing = getCourseById(id);
-        if (!existing.getCreatorId().equals(creatorId)) {
-            throw new SecurityException("Vous n'êtes pas autorisé à supprimer ce cours");
-        }
+        assertCanManage(existing, creatorId, "supprimer ce cours");
         courseRepository.delete(existing);
+    }
+
+    /** L'auteur du cours ou un administrateur (modération) peuvent le gérer. */
+    private void assertCanManage(Course course, String actorId, String action) {
+        if (actorId != null && actorId.equals(course.getCreatorId())) {
+            return;
+        }
+        boolean admin = actorId != null && userRepository.findById(actorId)
+                .map(u -> u.getRole() == UserRole.ADMIN)
+                .orElse(false);
+        if (!admin) {
+            throw new SecurityException("Vous n'êtes pas autorisé à " + action);
+        }
     }
 
     @Override

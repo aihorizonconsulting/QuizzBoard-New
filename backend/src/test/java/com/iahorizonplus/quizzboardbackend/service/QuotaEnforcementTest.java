@@ -76,8 +76,7 @@ class QuotaEnforcementTest {
     @DisplayName("Quota Quiz FREE : Rejet immédiat si un utilisateur FREE tente de créer un 4ème quiz")
     void quizQuota_FreeTierExceeded_ThrowsIllegalStateException() {
         when(userRepository.findById("usr-free")).thenReturn(Optional.of(freeUser));
-        when(quizRepository.findByCreatorIdOrderByCreatedAtDesc("usr-free"))
-                .thenReturn(List.of(new Quiz(), new Quiz(), new Quiz()));
+        when(quizRepository.countCreatedOnPlatformByCreatorId("usr-free")).thenReturn(3L);
 
         Quiz newQuiz = Quiz.builder().title("Quiz 4").build();
 
@@ -92,7 +91,7 @@ class QuotaEnforcementTest {
     @DisplayName("Quota Communauté FREE : Rejet si un utilisateur FREE tente de créer une 2ème communauté")
     void communityQuota_FreeTierExceeded_ThrowsBadRequestException() {
         when(userRepository.findById("usr-free")).thenReturn(Optional.of(freeUser));
-        when(communityRepository.countByCreatorId("usr-free")).thenReturn(1L);
+        when(communityRepository.countCreatedOnPlatformByCreatorId("usr-free")).thenReturn(1L);
 
         Community community = Community.builder().name("Communauté Dev").category("Tech").build();
 
@@ -107,7 +106,7 @@ class QuotaEnforcementTest {
     @DisplayName("Quota Communauté STARTER : Rejet si un utilisateur STARTER tente de créer une 11ème communauté")
     void communityQuota_StarterTierExceeded_ThrowsBadRequestException() {
         when(userRepository.findById("usr-starter")).thenReturn(Optional.of(starterUser));
-        when(communityRepository.countByCreatorId("usr-starter")).thenReturn(10L);
+        when(communityRepository.countCreatedOnPlatformByCreatorId("usr-starter")).thenReturn(10L);
 
         Community community = Community.builder().name("Communauté 11").category("Science").build();
 
