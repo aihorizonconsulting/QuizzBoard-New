@@ -3,12 +3,15 @@ package com.iahorizonplus.quizzboardbackend.controller;
 import com.iahorizonplus.quizzboardbackend.dto.response.ApiResponse;
 import com.iahorizonplus.quizzboardbackend.dto.response.LinkDto;
 import com.iahorizonplus.quizzboardbackend.entity.Certificate;
+import com.iahorizonplus.quizzboardbackend.exception.UnauthorizedException;
+import com.iahorizonplus.quizzboardbackend.security.UserPrincipal;
 import com.iahorizonplus.quizzboardbackend.service.CertificateService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -31,6 +34,21 @@ public class CertificateController {
         );
         return ResponseEntity.ok(
                 ApiResponse.ok(cert, "Certificat vérifié et certifié authentique.", links, request.getRequestURI())
+        );
+    }
+
+    @GetMapping("/my")
+    @Operation(summary = "Lister les certificats de l'utilisateur connecté")
+    public ResponseEntity<ApiResponse<List<Certificate>>> getMyCertificates(
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            HttpServletRequest request) {
+        if (currentUser == null) {
+            throw new UnauthorizedException("Connectez-vous pour consulter vos certificats.");
+        }
+        List<Certificate> certificates = certificateService.getCertificatesOfUser(currentUser.getId());
+        return ResponseEntity.ok(
+                ApiResponse.ok(certificates, "Certificats de l'utilisateur récupérés avec succès.",
+                        List.of(LinkDto.of("self", request.getRequestURI(), "GET")), request.getRequestURI())
         );
     }
 

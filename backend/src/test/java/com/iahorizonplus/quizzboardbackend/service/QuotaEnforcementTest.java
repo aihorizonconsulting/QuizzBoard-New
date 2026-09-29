@@ -1,5 +1,6 @@
 package com.iahorizonplus.quizzboardbackend.service;
 
+import com.iahorizonplus.quizzboardbackend.repository.PlatformSettingsRepository;
 import com.iahorizonplus.quizzboardbackend.dto.request.AiQuizGenerateRequest;
 import com.iahorizonplus.quizzboardbackend.entity.*;
 import com.iahorizonplus.quizzboardbackend.exception.BadRequestException;
@@ -40,6 +41,9 @@ class QuotaEnforcementTest {
 
     @Mock
     private CourseRepository courseRepository;
+
+    @Mock
+    private PlatformSettingsRepository settingsRepository;
 
     @InjectMocks
     private QuizServiceImpl quizService;
@@ -120,8 +124,10 @@ class QuotaEnforcementTest {
     @Test
     @DisplayName("Quota IA FREE : Rejet si un utilisateur FREE dépasse 5 requêtes IA mensuelles")
     void aiQuota_FreeTierExceeded_ThrowsBadRequestException() {
+        // 5 générations IA déjà consommées ce mois-ci (compteur mensuel du compte)
+        freeUser.setAiGenerationsPeriod(java.time.YearMonth.now().toString());
+        freeUser.setAiGenerationsCount(5);
         when(userRepository.findByEmail("free@quizzboard.com")).thenReturn(Optional.of(freeUser));
-        when(courseRepository.countByCreatorIdAndCreatedAtAfter(eq("usr-free"), any())).thenReturn(5L);
 
         AiQuizGenerateRequest request = new AiQuizGenerateRequest("Intelligence Artificielle", 5, "MEDIUM");
 
@@ -133,8 +139,9 @@ class QuotaEnforcementTest {
     @Test
     @DisplayName("Quota IA STARTER : Rejet si un utilisateur STARTER dépasse 100 requêtes IA mensuelles")
     void aiQuota_StarterTierExceeded_ThrowsBadRequestException() {
+        starterUser.setAiGenerationsPeriod(java.time.YearMonth.now().toString());
+        starterUser.setAiGenerationsCount(100);
         when(userRepository.findByEmail("starter@quizzboard.com")).thenReturn(Optional.of(starterUser));
-        when(courseRepository.countByCreatorIdAndCreatedAtAfter(eq("usr-starter"), any())).thenReturn(100L);
 
         AiQuizGenerateRequest request = new AiQuizGenerateRequest("Cloud Computing", 10, "HARD");
 

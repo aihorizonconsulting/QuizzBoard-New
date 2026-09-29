@@ -7,6 +7,7 @@ import com.iahorizonplus.quizzboardbackend.entity.Quiz;
 import com.iahorizonplus.quizzboardbackend.entity.Student;
 import com.iahorizonplus.quizzboardbackend.security.UserPrincipal;
 import com.iahorizonplus.quizzboardbackend.service.ClasseService;
+import com.iahorizonplus.quizzboardbackend.service.impl.LearningStatsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -28,6 +29,13 @@ import java.util.Map;
 public class ClasseController {
 
     private final ClasseService classeService;
+    private final LearningStatsService learningStatsService;
+
+    /** Ajoute aux élèves leurs résultats réels sur les quiz de la classe (moyenne et quiz joués). */
+    private Classe withResults(Classe classe) {
+        learningStatsService.fillStudentResults(List.of(classe));
+        return classe;
+    }
 
     @GetMapping
     @Operation(summary = "Lister les classes du formateur connecté, ou celles où l'apprenant connecté est inscrit")
@@ -36,6 +44,7 @@ public class ClasseController {
             @AuthenticationPrincipal UserPrincipal currentUser,
             HttpServletRequest request) {
         List<Classe> classes = classeService.getClasses(email(currentUser), promotionId);
+        learningStatsService.fillStudentResults(classes);
         List<LinkDto> links = List.of(
                 LinkDto.of("self", request.getRequestURI(), "GET"),
                 LinkDto.of("create", "/api/v1/classes", "POST", "Créer une nouvelle classe"),
@@ -49,7 +58,7 @@ public class ClasseController {
     @GetMapping("/{id}")
     @Operation(summary = "Obtenir les détails d'une classe par identifiant")
     public ResponseEntity<ApiResponse<Classe>> getClasseById(@PathVariable String id, HttpServletRequest request) {
-        Classe classe = classeService.getClasseById(id);
+        Classe classe = withResults(classeService.getClasseById(id));
         List<LinkDto> links = getClasseLinks(classe.getId());
         return ResponseEntity.ok(
                 ApiResponse.ok(classe, "Détails de la classe récupérés avec succès.", links, request.getRequestURI())
@@ -77,7 +86,7 @@ public class ClasseController {
             @RequestBody Map<String, String> body,
             @AuthenticationPrincipal UserPrincipal currentUser,
             HttpServletRequest request) {
-        Classe classe = classeService.joinClasseByCode(body != null ? body.get("code") : null, email(currentUser));
+        Classe classe = withResults(classeService.joinClasseByCode(body != null ? body.get("code") : null, email(currentUser)));
         return ResponseEntity.ok(
                 ApiResponse.ok(classe, "Vous avez rejoint la classe « " + classe.getName() + " ».", getClasseLinks(classe.getId()), request.getRequestURI())
         );
@@ -91,7 +100,7 @@ public class ClasseController {
             @Valid @RequestBody Classe classe,
             @AuthenticationPrincipal UserPrincipal currentUser,
             HttpServletRequest request) {
-        Classe updated = classeService.updateClasse(id, classe, email(currentUser));
+        Classe updated = withResults(classeService.updateClasse(id, classe, email(currentUser)));
         List<LinkDto> links = getClasseLinks(id);
         return ResponseEntity.ok(
                 ApiResponse.ok(updated, "Classe mise à jour avec succès.", links, request.getRequestURI())
@@ -185,7 +194,7 @@ public class ClasseController {
             @PathVariable String quizId,
             @AuthenticationPrincipal UserPrincipal currentUser,
             HttpServletRequest request) {
-        Classe classe = classeService.assignQuizToClass(id, quizId, email(currentUser));
+        Classe classe = withResults(classeService.assignQuizToClass(id, quizId, email(currentUser)));
         return ResponseEntity.ok(
                 ApiResponse.ok(classe, "Quiz assigné à la classe avec succès.", getClasseLinks(id), request.getRequestURI())
         );
@@ -199,7 +208,7 @@ public class ClasseController {
             @PathVariable String quizId,
             @AuthenticationPrincipal UserPrincipal currentUser,
             HttpServletRequest request) {
-        Classe classe = classeService.unassignQuizFromClass(id, quizId, email(currentUser));
+        Classe classe = withResults(classeService.unassignQuizFromClass(id, quizId, email(currentUser)));
         return ResponseEntity.ok(
                 ApiResponse.ok(classe, "Quiz retiré de la classe avec succès.", getClasseLinks(id), request.getRequestURI())
         );

@@ -36,8 +36,8 @@ class SmtpEmailServiceTest {
     @BeforeEach
     void setUp() {
         ReflectionTestUtils.setField(emailService, "fromEmail", "QuizzBoard <test@quizzboard.com>");
-        ReflectionTestUtils.setField(emailService, "appBaseUrl", "https://dev.quizzboard.com");
-        ReflectionTestUtils.setField(emailService, "resetPasswordBaseUrl", "https://dev.quizzboard.com/reinitialisation-mot-de-passe?token=");
+        ReflectionTestUtils.setField(emailService, "appBaseUrl", "https://quizzboard.com");
+        ReflectionTestUtils.setField(emailService, "resetPasswordBaseUrl", "https://quizzboard.com/reinitialisation-mot-de-passe?token=");
         message = new MimeMessage((Session) null);
         when(mailSender.createMimeMessage()).thenReturn(message);
     }
@@ -53,6 +53,25 @@ class SmtpEmailServiceTest {
         assertThat(html).contains("Bases de données SQL", "Awa Diop");
         // Le bloc « Certificat Officiel Débloqué » a été retiré de l'email de résultat
         assertThat(html).doesNotContain("Certificat Officiel", "CERT-123", "Consulter mon certificat");
+    }
+
+    @Test
+    @DisplayName("Liens des emails : adresse publique du site, jamais localhost ni dev (résultat, paiement, cours)")
+    void emailLinksUsePublicAppUrl() throws Exception {
+        emailService.sendQuizCompletedEmail("awa@example.com", "Awa Diop", "SQL", 90.0, 18, 20, 1, 3, true, "CERT-1", null);
+        String result = findHtml(message.getContent());
+        assertThat(result).contains("href=\"https://quizzboard.com").doesNotContain("localhost", "dev.quizzboard");
+        message = new MimeMessage((Session) null);
+        when(mailSender.createMimeMessage()).thenReturn(message);
+        emailService.sendPaymentSuccessEmail("awa@example.com", "Awa Diop", "STARTER", 999.0, "PD-1");
+        String payment = findHtml(message.getContent());
+        assertThat(payment).contains("https://quizzboard.com/app/subscription").doesNotContain("localhost", "dev.quizzboard");
+
+        message = new MimeMessage((Session) null);
+        when(mailSender.createMimeMessage()).thenReturn(message);
+        emailService.sendCourseCompletedEmail("awa@example.com", "Awa Diop", "Docker", 5, true, "CERT-2");
+        String course = findHtml(message.getContent());
+        assertThat(course).contains("https://quizzboard.com/app/learner/certificates").doesNotContain("localhost", "dev.quizzboard");
     }
 
     private static String findHtml(Object content) throws Exception {

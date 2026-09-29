@@ -16,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -43,7 +44,8 @@ public class PaymentController {
     }
 
     @PostMapping("/callback")
-    @Operation(summary = "Webhook / Callback de notification des passerelles Wave et Orange Money")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Validation manuelle d'un paiement par un administrateur (aucune passerelle ne l'appelle : non signé, donc jamais public)")
     public ResponseEntity<ApiResponse<Invoice>> handleCallback(@RequestBody PaymentCallbackRequest callback) {
         Invoice invoice = paymentService.handlePaymentCallback(callback);
         List<LinkDto> links = List.of(

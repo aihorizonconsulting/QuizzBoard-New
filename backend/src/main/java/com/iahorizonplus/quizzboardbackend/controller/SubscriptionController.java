@@ -2,6 +2,7 @@ package com.iahorizonplus.quizzboardbackend.controller;
 
 import com.iahorizonplus.quizzboardbackend.dto.response.ApiResponse;
 import com.iahorizonplus.quizzboardbackend.dto.response.LinkDto;
+import com.iahorizonplus.quizzboardbackend.dto.response.PlanUsageResponse;
 import com.iahorizonplus.quizzboardbackend.entity.PlatformSettings;
 import com.iahorizonplus.quizzboardbackend.entity.SubscriptionTier;
 import com.iahorizonplus.quizzboardbackend.exception.BadRequestException;
@@ -47,6 +48,20 @@ public class SubscriptionController {
                 new LinkDto("upgrade", "/api/v1/payments/initiate", "POST", "application/json")
         );
         return ResponseEntity.ok(ApiResponse.ok(data, "Forfait utilisateur récupéré", links, "/api/v1/subscriptions/current"));
+    }
+
+    @GetMapping("/usage")
+    @Operation(summary = "Consommation du forfait (quiz, communautés, IA, joueurs Live) selon les quotas appliqués")
+    public ResponseEntity<ApiResponse<PlanUsageResponse>> getUsage(@AuthenticationPrincipal UserPrincipal currentUser) {
+        if (currentUser == null) {
+            throw new UnauthorizedException("Vous devez être connecté pour consulter votre forfait.");
+        }
+        PlanUsageResponse usage = subscriptionService.getUsage(currentUser.getId());
+        List<LinkDto> links = List.of(
+                new LinkDto("self", "/api/v1/subscriptions/usage", "GET", "application/json"),
+                new LinkDto("upgrade", "/api/v1/payments/initiate", "POST", "application/json")
+        );
+        return ResponseEntity.ok(ApiResponse.ok(usage, "Consommation du forfait", links, "/api/v1/subscriptions/usage"));
     }
 
     @GetMapping("/settings")

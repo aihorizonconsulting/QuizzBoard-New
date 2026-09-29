@@ -26,6 +26,7 @@ public class AdminServiceImpl implements AdminService {
     private final AuditLogRepository auditLogRepository;
     private final QuestionRepository questionRepository;
     private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
+    private final LearningStatsService learningStatsService;
 
     @Override
     @Transactional(readOnly = true)
@@ -58,9 +59,11 @@ public class AdminServiceImpl implements AdminService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public List<User> getAllUsers() {
-        return userRepository.findAll();
+        List<User> users = userRepository.findAll();
+        learningStatsService.refreshUsersStats(users);
+        return users;
     }
 
     @Override
@@ -83,6 +86,9 @@ public class AdminServiceImpl implements AdminService {
                 .orElseThrow(() -> new ResourceNotFoundException("Utilisateur non trouvé: " + userId));
         SubscriptionTier oldTier = user.getSubscriptionTier();
         user.setSubscriptionTier(tier);
+        // Forfait attribué par un administrateur : sans date de fin (une ancienne échéance de paiement
+        // dépassée l'aurait sinon ramené aussitôt au forfait FREE)
+        user.setSubscriptionExpiresAt(null);
         User saved = userRepository.save(user);
 
         logAction("SYSTEM_ADMIN", "UPDATE_TIER", user.getEmail(), "Forfait modifié de " + oldTier + " à " + tier);

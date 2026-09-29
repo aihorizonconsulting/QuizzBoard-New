@@ -4,6 +4,7 @@ import com.iahorizonplus.quizzboardbackend.entity.*;
 import com.iahorizonplus.quizzboardbackend.exception.BadRequestException;
 import com.iahorizonplus.quizzboardbackend.exception.ResourceNotFoundException;
 import com.iahorizonplus.quizzboardbackend.repository.ClasseRepository;
+import com.iahorizonplus.quizzboardbackend.repository.PlatformSettingsRepository;
 import com.iahorizonplus.quizzboardbackend.repository.QuizRepository;
 import com.iahorizonplus.quizzboardbackend.repository.UserRepository;
 import com.iahorizonplus.quizzboardbackend.service.QuizService;
@@ -20,12 +21,12 @@ import java.util.*;
 @Slf4j
 public class QuizServiceImpl implements QuizService {
 
-    static final int FREE_QUIZ_LIMIT = 3;
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final QuizRepository quizRepository;
     private final UserRepository userRepository;
     private final ClasseRepository classeRepository;
+    private final PlatformSettingsRepository settingsRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -73,13 +74,14 @@ public class QuizServiceImpl implements QuizService {
             quiz.setCreatorId(creator.getId());
             quiz.setCreatorName(creatorName != null ? creatorName : creator.getName());
 
-            // Limite du forfait FREE (3 quiz), les ADMINS et abonnements payants sont exemptés.
-            // Seuls les quiz créés sur la plateforme actuelle comptent : les quiz importés de
-            // l'ancien QuizzBoard ne bloquent pas leurs auteurs.
+            // Limite du forfait FREE (réglable dans Admin > Paramètres), les ADMINS et abonnements payants
+            // sont exemptés. Seuls les quiz créés sur la plateforme actuelle comptent : les quiz importés
+            // de l'ancien QuizzBoard ne bloquent pas leurs auteurs.
             if (creator.getRole() != UserRole.ADMIN && creator.getSubscriptionTier() == SubscriptionTier.FREE) {
+                int limit = freeQuizLimit();
                 long createdOnPlatform = quizRepository.countCreatedOnPlatformByCreatorId(creator.getId());
-                if (createdOnPlatform >= FREE_QUIZ_LIMIT) {
-                    throw new IllegalStateException("Limite du forfait DÉCOUVERTE atteinte (3 quiz maximum). Passez au forfait STARTER pour des quiz illimités !");
+                if (createdOnPlatform >= limit) {
+                    throw new IllegalStateException("Limite du forfait DÉCOUVERTE atteinte (" + limit + " quiz maximum). Passez au forfait STARTER pour des quiz illimités !");
                 }
             }
         } else {
@@ -157,6 +159,12 @@ public class QuizServiceImpl implements QuizService {
         assertCanManage(quiz, actorId, "assigner ce quiz");
         syncClassAssignments(quiz, classIds != null ? classIds : List.of());
         return quizRepository.save(quiz);
+    }
+
+    private int freeQuizLimit() {
+        return settingsRepository.findById("default-settings")
+                .map(PlatformSettings::getFreeMaxQuizzes)
+                .orElse(PlatformSettings.builder().build().getFreeMaxQuizzes());
     }
 
     private void applyDefaults(Quiz quiz) {

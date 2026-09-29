@@ -66,6 +66,14 @@ services:
       - REDIS_PORT=6379
       - CORS_ORIGINS=${CORS_ORIGINS:-https://dev.quizzboard.com,http://dev.quizzboard.com,http://localhost:4201,http://127.0.0.1:4201}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-385748483146-1r3b7ab8tmhetu1t4pshvelc35lalabg.apps.googleusercontent.com}
+      # Adresses publiques de l'environnement de dev (non modifiables par un fichier .env)
+      - APP_URL=https://dev.quizzboard.com
+      - RESET_PASSWORD_URL=https://dev.quizzboard.com/reinitialisation-mot-de-passe?token=
+      - INVITATION_BASE_URL=https://dev.quizzboard.com/invitation/
+      - STORAGE_BASE_URL=https://dev.quizzboard.com/api/v1/files
+      - PAYDUNYA_RETURN_URL=https://dev.quizzboard.com/app/subscription/callback
+      - PAYDUNYA_CANCEL_URL=https://dev.quizzboard.com/app/subscription/callback?status=cancelled
+      - PAYDUNYA_CALLBACK_URL=https://dev.quizzboard.com/api/v1/payments/paydunya/ipn
     ports:
       - "127.0.0.1:8081:8080"
     volumes:

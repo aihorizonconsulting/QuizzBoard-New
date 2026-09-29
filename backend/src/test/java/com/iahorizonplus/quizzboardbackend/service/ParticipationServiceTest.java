@@ -1,5 +1,6 @@
 package com.iahorizonplus.quizzboardbackend.service;
 
+import com.iahorizonplus.quizzboardbackend.service.impl.LearningStatsService;
 import com.iahorizonplus.quizzboardbackend.entity.*;
 import com.iahorizonplus.quizzboardbackend.exception.ResourceNotFoundException;
 import com.iahorizonplus.quizzboardbackend.external.SmtpEmailService;
@@ -38,6 +39,9 @@ class ParticipationServiceTest {
 
     @Mock
     private SmtpEmailService smtpEmailService;
+
+    @Mock
+    private LearningStatsService learningStatsService;
 
     @InjectMocks
     private ParticipationServiceImpl participationService;
@@ -103,10 +107,9 @@ class ParticipationServiceTest {
         assertThat(result.isCertificateEligible()).isTrue();
         assertThat(result.getCertificateId()).isEqualTo("cert-1");
 
-        // Vérification de la mise à jour des statistiques du quiz
-        assertThat(sampleQuiz.getParticipationsCount()).isEqualTo(1);
-        assertThat(sampleQuiz.getAverageScorePercent()).isEqualTo(80.0);
-        verify(quizRepository).save(sampleQuiz);
+        // Statistiques du quiz et XP du joueur recalculées à partir des participations terminées
+        verify(learningStatsService).refreshQuizStats(sampleQuiz);
+        verify(learningStatsService).refreshUserStatsById("user-1");
 
         // Vérification de l'envoi d'email avec rang (mode public / className null)
         verify(smtpEmailService).sendQuizCompletedEmail(
@@ -190,7 +193,7 @@ class ParticipationServiceTest {
 
         when(quizRepository.findById("quiz-100")).thenReturn(Optional.of(sampleQuiz));
         when(participationRepository.save(any(Participation.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(participationRepository.findByQuizIdAndClassIdOrderByScoreDesc("quiz-100", "class-science-1"))
+        when(participationRepository.findByQuizIdAndClassIdAndStatusOrderByScoreDesc("quiz-100", "class-science-1", "COMPLETED"))
                 .thenReturn(List.of(p1, p2));
 
         Participation result = participationService.submitParticipation(p2, List.of());
@@ -227,7 +230,7 @@ class ParticipationServiceTest {
         when(participationRepository.findById("part-public-1")).thenReturn(Optional.of(p));
         when(quizRepository.findById("quiz-100")).thenReturn(Optional.of(sampleQuiz));
         when(participationRepository.save(any(Participation.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(participationRepository.findByQuizIdOrderByScoreDesc("quiz-100")).thenReturn(List.of(p));
+        when(participationRepository.findByQuizIdAndStatusOrderByScoreDesc("quiz-100", "COMPLETED")).thenReturn(List.of(p));
         when(smtpEmailService.isDeliveryEnabled()).thenReturn(true);
 
         boolean sent = participationService.sendParticipationEmail("part-public-1", "public.player@example.com");

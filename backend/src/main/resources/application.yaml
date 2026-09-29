@@ -67,9 +67,13 @@ app:
     refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000}
   cors:
     allowed-origins: ${CORS_ORIGINS:http://localhost:4200,http://localhost:80,http://127.0.0.1:4200}
+  # Adresse publique du site, utilisée dans les liens envoyés par email et le paiement simulé
+  url: ${APP_URL:http://localhost:4200}
   mail:
     from: ${MAIL_FROM:QuizzBoard Support <no-reply@quizzboard.com>}
     reset-password-url: ${RESET_PASSWORD_URL:http://localhost:4200/reinitialisation-mot-de-passe?token=}
+  invitation:
+    base-url: ${INVITATION_BASE_URL:http://localhost:4200/invitation/}
   google:
     client-id: ${GOOGLE_CLIENT_ID:google-client-id-placeholder}
   payment:
@@ -93,7 +97,7 @@ app:
       public-key: ${PAYDUNYA_PUBLIC_KEY:}
       token: ${PAYDUNYA_TOKEN:}
       mode: ${PAYDUNYA_MODE:sandbox}
-      cancel-url: ${PAYDUNYA_CANCEL_URL:http://localhost:4200/tarifs?status=cancelled}
+      cancel-url: ${PAYDUNYA_CANCEL_URL:http://localhost:4200/app/subscription/callback?status=cancelled}
       return-url: ${PAYDUNYA_RETURN_URL:http://localhost:4200/app/subscription/callback}
       callback-url: ${PAYDUNYA_CALLBACK_URL:http://localhost:8080/api/v1/payments/paydunya/ipn}
   ai:

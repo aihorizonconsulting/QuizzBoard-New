@@ -1,5 +1,7 @@
 package com.iahorizonplus.quizzboardbackend.service;
 
+import com.iahorizonplus.quizzboardbackend.service.impl.LearningStatsService;
+import com.iahorizonplus.quizzboardbackend.service.impl.PlatformAccessService;
 import com.iahorizonplus.quizzboardbackend.dto.request.LoginRequest;
 import com.iahorizonplus.quizzboardbackend.dto.request.SignupRequest;
 import com.iahorizonplus.quizzboardbackend.dto.response.AuthResponse;
@@ -51,6 +53,12 @@ class AuthServiceTest {
 
     @Mock
     private SmtpEmailService smtpEmailService;
+
+    @Mock
+    private LearningStatsService learningStatsService;
+
+    @Mock
+    private PlatformAccessService platformAccessService;
 
     @InjectMocks
     private AuthServiceImpl authService;

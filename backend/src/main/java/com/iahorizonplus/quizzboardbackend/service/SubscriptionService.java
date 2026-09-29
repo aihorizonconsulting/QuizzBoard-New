@@ -1,5 +1,6 @@
 package com.iahorizonplus.quizzboardbackend.service;
 
+import com.iahorizonplus.quizzboardbackend.dto.response.PlanUsageResponse;
 import com.iahorizonplus.quizzboardbackend.entity.Invoice;
 import com.iahorizonplus.quizzboardbackend.entity.PlatformSettings;
 import com.iahorizonplus.quizzboardbackend.entity.SubscriptionTier;
@@ -12,4 +13,6 @@ public interface SubscriptionService {
     List<Invoice> getUserInvoices(String userId);
     PlatformSettings getPlatformSettings();
     PlatformSettings updatePlatformSettings(PlatformSettings settings);
+    /** Consommation du forfait de l'utilisateur, calculée avec les mêmes règles que les quotas appliqués. */
+    PlanUsageResponse getUsage(String userId);
 }

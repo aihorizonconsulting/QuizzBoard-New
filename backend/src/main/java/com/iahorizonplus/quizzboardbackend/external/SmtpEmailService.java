@@ -38,11 +38,18 @@ public class SmtpEmailService {
     @Value("${app.mail.from:QuizzBoard Support <no-reply@quizzboard.com>}")
     private String fromEmail;
 
-    @Value("${app.url:https://dev.quizzboard.com}")
+    // Adresse publique du site (APP_URL) : https://quizzboard.com en production, https://dev.quizzboard.com en dev
+    @Value("${app.url:http://localhost:4200}")
     private String appBaseUrl;
 
-    @Value("${app.mail.reset-password-url:https://dev.quizzboard.com/reinitialisation-mot-de-passe?token=}")
+    @Value("${app.mail.reset-password-url:http://localhost:4200/reinitialisation-mot-de-passe?token=}")
     private String resetPasswordBaseUrl;
+
+    /** Les liens des modèles d'email pointent vers l'adresse publique du site (jamais localhost ou dev en production). */
+    private String withAppUrl(String html) {
+        String base = appBaseUrl.endsWith("/") ? appBaseUrl.substring(0, appBaseUrl.length() - 1) : appBaseUrl;
+        return html.replace("http://localhost:4200", base);
+    }
 
     private String resolveFromEmail() {
         if (fromEmail != null && !fromEmail.isBlank() && !fromEmail.contains("no-reply@quizzboard.com")) {
@@ -139,7 +146,7 @@ public class SmtpEmailService {
                 </html>
             """.formatted(userName, resetLink, resetLink, resetLink);
 
-            helper.setText(htmlContent, true);
+            helper.setText(withAppUrl(htmlContent), true);
             mailSender.send(message);
             log.info("Email de réinitialisation SMTP envoyé avec succès à {}", toEmail);
         } catch (MessagingException e) {
@@ -176,7 +183,7 @@ public class SmtpEmailService {
                 </html>
             """.formatted(userName, role);
 
-            helper.setText(htmlContent, true);
+            helper.setText(withAppUrl(htmlContent), true);
             mailSender.send(message);
             log.info("Email de bienvenue envoyé à {}", toEmail);
         } catch (Exception e) {
@@ -344,7 +351,7 @@ public class SmtpEmailService {
                     appBaseUrl
             );
 
-            helper.setText(htmlContent, true);
+            helper.setText(withAppUrl(htmlContent), true);
             mailSender.send(message);
             log.info("Email de résultat de quiz envoyé avec succès à {} (Score: {}%, Rang: #{})", toEmail, percentage, rank);
         } catch (Exception e) {
@@ -387,7 +394,7 @@ public class SmtpEmailService {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
-            helper.setFrom(fromEmail);
+            helper.setFrom(resolveFromEmail());
             helper.setTo(toEmail);
             helper.setSubject("Félicitations ! Cours Terminé : " + courseTitle + " 🎓");
 
@@ -442,7 +449,7 @@ public class SmtpEmailService {
                 </html>
             """.formatted(learnerName, totalChapters, courseTitle, certificateHtml);
 
-            helper.setText(htmlContent, true);
+            helper.setText(withAppUrl(htmlContent), true);
             mailSender.send(message);
             log.info("Email de fin de cours envoyé à {}", toEmail);
         } catch (Exception e) {
@@ -467,7 +474,7 @@ public class SmtpEmailService {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
-            helper.setFrom(fromEmail);
+            helper.setFrom(resolveFromEmail());
             helper.setTo(toEmail);
             helper.setSubject("Invitation à rejoindre " + resourceName + " sur QuizzBoard ✉️");
 
@@ -533,7 +540,7 @@ public class SmtpEmailService {
                 </html>
             """.formatted(inviterName, resourceTypeLabel, resourceName, customMsgHtml, inviteUrl);
 
-            helper.setText(htmlContent, true);
+            helper.setText(withAppUrl(htmlContent), true);
             mailSender.send(message);
             log.info("Email d'invitation envoyé à {}", toEmail);
         } catch (Exception e) {
@@ -552,7 +559,7 @@ public class SmtpEmailService {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
-            helper.setFrom(fromEmail);
+            helper.setFrom(resolveFromEmail());
             helper.setTo(toEmail);
             helper.setSubject("QuizzBoard - Votre mot de passe a été modifié 🔒");
 
@@ -586,7 +593,7 @@ public class SmtpEmailService {
                 </html>
             """.formatted(userName);
 
-            helper.setText(htmlContent, true);
+            helper.setText(withAppUrl(htmlContent), true);
             mailSender.send(message);
             log.info("Email de confirmation de mot de passe envoyé à {}", toEmail);
         } catch (Exception e) {
@@ -605,7 +612,7 @@ public class SmtpEmailService {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
-            helper.setFrom(fromEmail);
+            helper.setFrom(resolveFromEmail());
             helper.setTo(toEmail);
             helper.setSubject("Paiement Confirmé - Votre abonnement " + planName + " est actif ! 🎉");
 
@@ -650,7 +657,7 @@ public class SmtpEmailService {
                 </html>
             """.formatted(userName, amountFcfa, planName, reference, planName, amountFcfa);
 
-            helper.setText(htmlContent, true);
+            helper.setText(withAppUrl(htmlContent), true);
             mailSender.send(message);
             log.info("Email de confirmation de paiement envoyé à {}", toEmail);
         } catch (Exception e) {
@@ -673,7 +680,7 @@ public class SmtpEmailService {
             log.info("Lancement test SMTP vers {} via {}:{} avec compte {}", toEmail, smtpHost, smtpPort, smtpUsername);
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-            helper.setFrom(fromEmail);
+            helper.setFrom(resolveFromEmail());
             helper.setTo(toEmail);
             helper.setSubject("Test SMTP QuizzBoard Réussi ! 🚀");
             helper.setText("""

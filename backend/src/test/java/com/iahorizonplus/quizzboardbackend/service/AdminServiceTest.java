@@ -1,5 +1,6 @@
 package com.iahorizonplus.quizzboardbackend.service;
 
+import com.iahorizonplus.quizzboardbackend.service.impl.LearningStatsService;
 import com.iahorizonplus.quizzboardbackend.entity.*;
 import com.iahorizonplus.quizzboardbackend.exception.BadRequestException;
 import com.iahorizonplus.quizzboardbackend.exception.ResourceNotFoundException;
@@ -49,6 +50,9 @@ class AdminServiceTest {
 
     @Mock
     private PasswordEncoder passwordEncoder;
+
+    @Mock
+    private LearningStatsService learningStatsService;
 
     @InjectMocks
     private AdminServiceImpl adminService;
@@ -107,12 +111,15 @@ class AdminServiceTest {
     @Test
     @DisplayName("Modification du forfait utilisateur vers STARTER")
     void testUpdateUserTier() {
+        // Ancien abonné dont le paiement a expiré : le forfait accordé par l'admin ne doit pas être annulé aussitôt
+        sampleUser.setSubscriptionExpiresAt(java.time.LocalDateTime.now().minusDays(3));
         when(userRepository.findById("user-123")).thenReturn(Optional.of(sampleUser));
         when(userRepository.save(any(User.class))).thenAnswer(i -> i.getArgument(0));
 
         User updated = adminService.updateUserTier("user-123", SubscriptionTier.STARTER);
 
         assertThat(updated.getSubscriptionTier()).isEqualTo(SubscriptionTier.STARTER);
+        assertThat(updated.getSubscriptionExpiresAt()).isNull();
         verify(auditLogRepository, times(1)).save(any(AuditLog.class));
     }
 

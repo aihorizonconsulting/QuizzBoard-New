@@ -1,5 +1,6 @@
 package com.iahorizonplus.quizzboardbackend.service;
 
+import com.iahorizonplus.quizzboardbackend.repository.PlatformSettingsRepository;
 import com.iahorizonplus.quizzboardbackend.entity.*;
 import com.iahorizonplus.quizzboardbackend.exception.ResourceNotFoundException;
 import com.iahorizonplus.quizzboardbackend.repository.ClasseRepository;
@@ -34,6 +35,9 @@ class QuizServiceTest {
 
     @Mock
     private ClasseRepository classeRepository;
+
+    @Mock
+    private PlatformSettingsRepository settingsRepository;
 
     @InjectMocks
     private QuizServiceImpl quizService;

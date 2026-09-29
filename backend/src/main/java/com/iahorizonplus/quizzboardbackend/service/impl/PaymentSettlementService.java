@@ -2,6 +2,7 @@ package com.iahorizonplus.quizzboardbackend.service.impl;
 
 import com.iahorizonplus.quizzboardbackend.entity.*;
 import com.iahorizonplus.quizzboardbackend.exception.ResourceNotFoundException;
+import com.iahorizonplus.quizzboardbackend.external.SmtpEmailService;
 import com.iahorizonplus.quizzboardbackend.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +21,7 @@ public class PaymentSettlementService {
     private final InvoiceRepository invoiceRepository;
     private final NotificationRepository notificationRepository;
     private final AuditLogRepository auditLogRepository;
+    private final SmtpEmailService smtpEmailService;
 
     @Transactional
     public Invoice settleSuccessfulPayment(String reference) {
@@ -27,6 +29,16 @@ public class PaymentSettlementService {
 
         TransactionRecord transaction = transactionRepository.findByReference(reference)
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction introuvable avec la référence : " + reference));
+
+        // Idempotent : le retour du navigateur et la notification IPN de PayDunya confirment tous les deux
+        // le même paiement ; il ne doit produire qu'une facture et qu'un mois d'abonnement.
+        if (transaction.getStatus() == PaymentStatus.PAID) {
+            Invoice existing = invoiceRepository.findFirstByReference(reference).orElse(null);
+            if (existing != null) {
+                log.info("Paiement {} déjà réglé : facture existante renvoyée.", reference);
+                return existing;
+            }
+        }
 
         transaction.setStatus(PaymentStatus.PAID);
         transactionRepository.save(transaction);
@@ -76,6 +88,10 @@ public class PaymentSettlementService {
                 .severity("INFO")
                 .build();
         auditLogRepository.save(logEntry);
+
+        // Confirmation par email (le modèle existait mais n'était jamais envoyé)
+        smtpEmailService.sendPaymentSuccessEmail(user.getEmail(), user.getPrenom() + " " + user.getNom(),
+                learnerPlan ? "Apprenant Plus" : "STARTER", transaction.getAmountFcfa(), transaction.getReference());
 
         log.info("L'utilisateur {} est désormais passé au forfait {} jusqu'au {}.", user.getEmail(), targetTier, user.getSubscriptionExpiresAt());
         return savedInvoice;

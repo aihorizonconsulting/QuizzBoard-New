@@ -76,6 +76,12 @@ public class User {
     @Builder.Default
     private String status = "ACTIVE"; // ACTIVE, SUSPENDED
 
+    // Générations IA consommées sur le mois aiGenerationsPeriod (AAAA-MM) : quota mensuel du forfait
+    @Builder.Default
+    private Integer aiGenerationsCount = 0;
+
+    private String aiGenerationsPeriod;
+
     @Builder.Default
     private boolean emailVerified = false;
 

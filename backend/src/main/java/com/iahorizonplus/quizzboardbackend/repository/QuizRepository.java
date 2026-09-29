@@ -13,6 +13,7 @@ import java.util.Optional;
 @Repository
 public interface QuizRepository extends JpaRepository<Quiz, String> {
     List<Quiz> findByCreatorIdOrderByCreatedAtDesc(String creatorId);
+    long countByCreatorId(String creatorId);
     List<Quiz> findByVisibilityAndStatus(String visibility, QuizStatus status);
     Optional<Quiz> findByShareCode(String shareCode);
     Optional<Quiz> findByPin(String pin);

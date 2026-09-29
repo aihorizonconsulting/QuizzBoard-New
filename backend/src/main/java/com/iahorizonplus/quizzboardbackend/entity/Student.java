@@ -32,9 +32,12 @@ public class Student {
     private String matricule;
     private String avatarUrl;
 
+    // Résultats calculés à la lecture à partir des participations (LearningStatsService), jamais stockés
+    @Transient
     @Builder.Default
     private Double averageScorePercent = 0.0;
 
+    @Transient
     @Builder.Default
     private Integer quizzesCompletedCount = 0;
 

@@ -1,8 +1,11 @@
 package com.iahorizonplus.quizzboardbackend.service.impl;
 
+import com.iahorizonplus.quizzboardbackend.dto.response.PlanUsageResponse;
 import com.iahorizonplus.quizzboardbackend.entity.*;
 import com.iahorizonplus.quizzboardbackend.exception.ResourceNotFoundException;
+import com.iahorizonplus.quizzboardbackend.repository.CommunityRepository;
 import com.iahorizonplus.quizzboardbackend.repository.InvoiceRepository;
+import com.iahorizonplus.quizzboardbackend.repository.QuizRepository;
 import com.iahorizonplus.quizzboardbackend.repository.PlatformSettingsRepository;
 import com.iahorizonplus.quizzboardbackend.repository.UserRepository;
 import com.iahorizonplus.quizzboardbackend.service.SubscriptionService;
@@ -22,6 +25,11 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     private final UserRepository userRepository;
     private final InvoiceRepository invoiceRepository;
     private final PlatformSettingsRepository settingsRepository;
+    private final QuizRepository quizRepository;
+    private final CommunityRepository communityRepository;
+
+    static final int STARTER_MAX_COMMUNITIES = 10;
+    static final int STARTER_MAX_LIVE_PARTICIPANTS = 300;
 
     @Override
     @Transactional
@@ -61,6 +69,37 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     public PlatformSettings updatePlatformSettings(PlatformSettings settings) {
         settings.setId("default-settings");
         return settingsRepository.save(settings);
+    }
+
+    @Override
+    @Transactional
+    public PlanUsageResponse getUsage(String userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Utilisateur introuvable"));
+        expireIfNeeded(user);
+        PlatformSettings settings = getPlatformSettings();
+        boolean admin = user.getRole() == UserRole.ADMIN;
+        boolean free = user.getSubscriptionTier() == SubscriptionTier.FREE;
+
+        long quizzesCreated = quizRepository.countCreatedOnPlatformByCreatorId(userId);
+        long quizzesImported = Math.max(0, quizRepository.countByCreatorId(userId) - quizzesCreated);
+        Integer quizzesLimit = (!admin && free) ? settings.getFreeMaxQuizzes() : null;
+
+        long communitiesCreated = communityRepository.countCreatedOnPlatformByCreatorId(userId);
+        Integer communitiesLimit = free ? 1 : (user.getSubscriptionTier() == SubscriptionTier.STARTER ? STARTER_MAX_COMMUNITIES : null);
+
+        return new PlanUsageResponse(
+                user.getSubscriptionTier(),
+                user.getSubscriptionExpiresAt(),
+                quizzesCreated,
+                quizzesImported,
+                quizzesLimit,
+                communitiesCreated,
+                communitiesLimit,
+                AiServiceImpl.aiCreditsUsedThisMonth(user),
+                AiServiceImpl.monthlyAiLimit(user, settings),
+                free ? settings.getFreeMaxLiveParticipants() : STARTER_MAX_LIVE_PARTICIPANTS
+        );
     }
 
     private void expireIfNeeded(User user) {

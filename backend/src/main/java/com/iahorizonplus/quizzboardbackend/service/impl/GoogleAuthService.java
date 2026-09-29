@@ -33,6 +33,8 @@ public class GoogleAuthService {
     private final UserRepository userRepository;
     private final JwtUtils jwtUtils;
     private final UserMapper userMapper;
+    private final LearningStatsService learningStatsService;
+    private final PlatformAccessService platformAccessService;
 
     @Value("${app.google.client-id:google-client-id-placeholder}")
     private String googleClientId;
@@ -72,11 +74,13 @@ public class GoogleAuthService {
         // 1. Utilisateur existant : connexion directe (rôle déjà établi, jamais redemandé)
         if (existingUserOpt.isPresent()) {
             User existingUser = existingUserOpt.get();
+            platformAccessService.assertLoginAllowed(existingUser);
             existingUser.setGoogleSub(googleSub);
             if (existingUser.getAvatarUrl() == null || existingUser.getAvatarUrl().isEmpty()) {
                 existingUser.setAvatarUrl(pictureUrl);
             }
             User savedUser = userRepository.save(existingUser);
+            learningStatsService.refreshUserStats(savedUser);
             String jwtToken = jwtUtils.generateToken(savedUser.getEmail(), savedUser.getRole().name());
             String refreshToken = jwtUtils.generateRefreshToken(savedUser.getEmail());
             return new AuthResponse(jwtToken, refreshToken, userMapper.toDto(savedUser));

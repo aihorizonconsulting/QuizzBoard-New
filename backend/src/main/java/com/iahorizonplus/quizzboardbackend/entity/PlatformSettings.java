@@ -1,5 +1,6 @@
 package com.iahorizonplus.quizzboardbackend.entity;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -51,4 +52,21 @@ public class PlatformSettings {
 
     @Builder.Default
     private boolean requireEmailVerification = false;
+
+    @JsonProperty("isMaintenanceMode")
+    public boolean isMaintenanceMode() {
+        return isMaintenanceMode;
+    }
+
+    @JsonProperty("isMaintenanceMode")
+    public void setMaintenanceMode(boolean maintenanceMode) {
+        this.isMaintenanceMode = maintenanceMode;
+    }
+
+    // Signataire affiché sur les certificats des apprenants (modifiable dans Admin > Paramètres)
+    @Builder.Default
+    private String certificateSignatoryName = "La Direction Pédagogique";
+
+    @Builder.Default
+    private String certificateSignatoryTitle = "QuizzBoard Academy";
 }

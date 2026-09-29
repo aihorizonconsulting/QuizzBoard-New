@@ -42,6 +42,8 @@ public class AuthServiceImpl implements AuthService {
     private final UserMapper userMapper;
     private final GoogleAuthService googleAuthService;
     private final SmtpEmailService smtpEmailService;
+    private final LearningStatsService learningStatsService;
+    private final PlatformAccessService platformAccessService;
 
     @Override
     @Transactional
@@ -110,8 +112,12 @@ public class AuthServiceImpl implements AuthService {
             throw new BadRequestException("password", "Le mot de passe saisi est incorrect pour ce compte. Veuillez vérifier votre saisie ou réinitialiser votre mot de passe.");
         }
 
+        // Mode maintenance : seuls les administrateurs peuvent se connecter
+        platformAccessService.assertLoginAllowed(user);
+
         // Tout compte enregistré a déjà un rôle (y compris les comptes importés de l'ancien
         // QuizzBoard, dont le rôle a été déduit de leur usage) : connexion directe, sans choix du rôle.
+        learningStatsService.refreshUserStats(user);
         String jwtToken = jwtUtils.generateToken(user.getEmail(), user.getRole().name());
         String refreshToken = jwtUtils.generateRefreshToken(user.getEmail());
 
@@ -167,6 +173,7 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Utilisateur introuvable."));
         expireSubscriptionIfNeeded(user);
+        learningStatsService.refreshUserStats(user);
         return userMapper.toDto(user);
     }
 

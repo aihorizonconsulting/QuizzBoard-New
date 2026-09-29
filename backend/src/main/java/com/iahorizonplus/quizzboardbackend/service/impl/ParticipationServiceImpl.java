@@ -23,6 +23,7 @@ public class ParticipationServiceImpl implements ParticipationService {
     private final QuizRepository quizRepository;
     private final CertificateService certificateService;
     private final SmtpEmailService smtpEmailService;
+    private final LearningStatsService learningStatsService;
 
     @Override
     @Transactional
@@ -81,14 +82,11 @@ public class ParticipationServiceImpl implements ParticipationService {
             saved.setId(java.util.UUID.randomUUID().toString());
         }
 
-        // Update Quiz Stats
-        int count = quiz.getParticipationsCount() != null ? quiz.getParticipationsCount() : 0;
-        double currentAvg = quiz.getAverageScorePercent() != null ? quiz.getAverageScorePercent() : 0.0;
-        double newAvg = Math.round(((currentAvg * count + saved.getPercentage()) / (count + 1)) * 10.0) / 10.0;
-
-        quiz.setParticipationsCount(count + 1);
-        quiz.setAverageScorePercent(newAvg);
-        quizRepository.save(quiz);
+        // Statistiques recalculées sur les participations terminées : compteurs du quiz, XP / niveau / série du joueur
+        learningStatsService.refreshQuizStats(quiz);
+        if (saved.getUserId() != null) {
+            learningStatsService.refreshUserStatsById(saved.getUserId());
+        }
 
         // Auto-generate certificate if eligible
         String certCode = null;
@@ -108,9 +106,9 @@ public class ParticipationServiceImpl implements ParticipationService {
         try {
             List<Participation> rankingList;
             if (saved.getClassId() != null && !saved.getClassId().isBlank()) {
-                rankingList = participationRepository.findByQuizIdAndClassIdOrderByScoreDesc(quiz.getId(), saved.getClassId());
+                rankingList = participationRepository.findByQuizIdAndClassIdAndStatusOrderByScoreDesc(quiz.getId(), saved.getClassId(), LearningStatsService.COMPLETED);
             } else {
-                rankingList = participationRepository.findByQuizIdOrderByScoreDesc(quiz.getId());
+                rankingList = participationRepository.findByQuizIdAndStatusOrderByScoreDesc(quiz.getId(), LearningStatsService.COMPLETED);
             }
             totalPlayers = Math.max(1, rankingList.size());
             for (int i = 0; i < rankingList.size(); i++) {
@@ -164,13 +162,16 @@ public class ParticipationServiceImpl implements ParticipationService {
     @Override
     @Transactional(readOnly = true)
     public List<Participation> getParticipationsByQuiz(String quizId) {
-        return participationRepository.findByQuizIdOrderByScoreDesc(quizId);
+        // Classement : participations terminées uniquement (pas les tentatives abandonnées)
+        return participationRepository.findByQuizIdAndStatusOrderByScoreDesc(quizId, LearningStatsService.COMPLETED);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<Participation> getParticipationsByUser(String userId) {
-        return participationRepository.findByUserIdOrderByCompletedAtDesc(userId);
+        // Historique : quiz terminés uniquement (les tentatives abandonnées importées ne sont pas des résultats),
+        // y compris ceux joués avec l'email du compte sans être connecté
+        return learningStatsService.completedParticipationsOfUserId(userId);
     }
 
     @Override
@@ -203,9 +204,9 @@ public class ParticipationServiceImpl implements ParticipationService {
         try {
             List<Participation> rankingList;
             if (participation.getClassId() != null && !participation.getClassId().isBlank()) {
-                rankingList = participationRepository.findByQuizIdAndClassIdOrderByScoreDesc(participation.getQuizId(), participation.getClassId());
+                rankingList = participationRepository.findByQuizIdAndClassIdAndStatusOrderByScoreDesc(participation.getQuizId(), participation.getClassId(), LearningStatsService.COMPLETED);
             } else {
-                rankingList = participationRepository.findByQuizIdOrderByScoreDesc(participation.getQuizId());
+                rankingList = participationRepository.findByQuizIdAndStatusOrderByScoreDesc(participation.getQuizId(), LearningStatsService.COMPLETED);
             }
             totalPlayers = Math.max(1, rankingList.size());
             for (int i = 0; i < rankingList.size(); i++) {

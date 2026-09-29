@@ -329,6 +329,169 @@ class PersistenceFlowIntegrationTest {
     }
 
     @Test
+    void dashboardStats_XpAndStudentResults_UseCompletedParticipationsOnly() throws Exception {
+        User creator = newUser(UserRole.CREATOR);
+        JsonNode quiz = send(post("/quizzes", quizPayload("Quiz stats", 2), creator).andExpect(status().isCreated())).at("/data");
+        String quizId = quiz.at("/id").asText();
+        String code = "ST-" + UUID.randomUUID().toString().substring(0, 6).toUpperCase();
+        JsonNode classe = send(post("/classes", Map.of("name", "Classe stats", "code", code, "level", "L3"), creator).andExpect(status().isCreated())).at("/data");
+        mvc.perform(put("/classes/" + classe.at("/id").asText() + "/quizzes/" + quizId).header("Authorization", token(creator))).andExpect(status().isOk());
+
+        // Tentatives abandonnées importées de l'ancien QuizzBoard (0 %) : ne doivent rien fausser
+        for (int i = 0; i < 3; i++) {
+            jdbc.update("insert into participations (id, quiz_id, participant_name, score, max_score, percentage, status, time_total_seconds, certificate_eligible) values (?,?,?,?,?,?,?,?,?)",
+                    "legacy-" + UUID.randomUUID(), quizId, "Abandon " + i, 0, 200, 0.0, "IN_PROGRESS", 0, false);
+        }
+
+        User learner = newUser(UserRole.LEARNER);
+        post("/classes/join", Map.of("code", code), learner).andExpect(status().isOk());
+        JsonNode full = send(getAs("/quizzes/" + quizId, learner)).at("/data");
+        List<Map<String, Object>> allGood = new ArrayList<>();
+        for (JsonNode q : full.at("/questions")) {
+            String good = q.at("/choices/0/isCorrect").asBoolean() ? q.at("/choices/0/id").asText() : q.at("/choices/1/id").asText();
+            allGood.add(Map.of("questionId", q.at("/id").asText(), "selectedChoiceIds", List.of(good), "timeSpentSeconds", 3));
+        }
+        post("/participations", Map.of("quizId", quizId, "participantName", "Apprenant", "status", "COMPLETED", "timeTotalSeconds", 6, "answers", allGood), learner)
+                .andExpect(status().isCreated()); // 100 %
+        Map<String, Object> half = Map.of("questionId", full.at("/questions/0/id").asText(), "selectedChoiceIds",
+                List.of(full.at("/questions/0/choices/0/isCorrect").asBoolean() ? full.at("/questions/0/choices/0/id").asText() : full.at("/questions/0/choices/1/id").asText()), "timeSpentSeconds", 3);
+        post("/participations", Map.of("quizId", quizId, "participantName", "Invité", "participantEmail", "invite@test.local", "status", "COMPLETED", "timeTotalSeconds", 6, "answers", List.of(half)), null)
+                .andExpect(status().isCreated()); // 50 %
+
+        JsonNode stats = send(getAs("/quizzes/creator-stats", creator)).at("/data");
+        assertThat(stats.at("/totalParticipants").asInt()).isEqualTo(2);
+        assertThat(stats.at("/abandonedAttempts").asInt()).isEqualTo(3);
+        assertThat(stats.at("/averageScore").asDouble()).isEqualTo(75.0);
+        assertThat(stats.at("/successRate").asDouble()).isEqualTo(50.0);
+        assertThat(stats.at("/completedQuizzes").asInt()).isEqualTo(1);
+        assertThat(stats.at("/distribution/excellent").asInt()).isEqualTo(1);
+        assertThat(stats.at("/distribution/toConsolidate").asInt()).isEqualTo(1);
+
+        // Compteurs du quiz (liste « X joués ») : terminées uniquement
+        JsonNode q = send(getAs("/quizzes/" + quizId, creator)).at("/data");
+        assertThat(q.at("/participationsCount").asInt()).isEqualTo(2);
+        assertThat(q.at("/averageScorePercent").asDouble()).isEqualTo(75.0);
+
+        // XP / niveau / série de l'apprenant
+        JsonNode me = send(getAs("/auth/me", learner)).at("/data");
+        assertThat(me.at("/xpPoints").asInt()).isEqualTo(200 + 50);
+        assertThat(me.at("/streakDays").asInt()).isEqualTo(1);
+
+        // Résultats de l'élève dans la classe (vue du formateur)
+        JsonNode classes = send(getAs("/classes", creator)).at("/data");
+        JsonNode student = classes.at("/0/students/0");
+        assertThat(student.at("/quizzesCompletedCount").asInt()).isEqualTo(1);
+        assertThat(student.at("/averageScorePercent").asDouble()).isEqualTo(100.0);
+    }
+
+    @Test
+    void usage_MatchesEnforcedQuotas_AndCountsAiGenerations() throws Exception {
+        User creator = newUser(UserRole.CREATOR);
+        for (int i = 0; i < 4; i++) {
+            jdbc.update("insert into quizzes (id, title, category, difficulty, status, creator_id, share_code, visibility) values (?,?,?,?,?,?,?,?)",
+                    "cmold" + i + UUID.randomUUID().toString().substring(0, 8), "Ancien " + i, "Général", "MEDIUM", "PUBLISHED", creator.getId(), "OLD" + UUID.randomUUID(), "PUBLIC");
+        }
+        post("/quizzes", quizPayload("Nouveau", 1), creator).andExpect(status().isCreated());
+        post("/ai/generate-quiz", Map.of("prompt", "Docker", "count", 3, "difficulty", "MEDIUM"), creator).andExpect(status().isOk());
+
+        JsonNode usage = send(getAs("/subscriptions/usage", creator).andExpect(status().isOk())).at("/data");
+        assertThat(usage.at("/tier").asText()).isEqualTo("FREE");
+        assertThat(usage.at("/quizzesCreated").asInt()).isEqualTo(1);
+        assertThat(usage.at("/quizzesImported").asInt()).isEqualTo(4);
+        assertThat(usage.at("/quizzesLimit").asInt()).isEqualTo(3);
+        assertThat(usage.at("/aiGenerationsUsed").asInt()).isEqualTo(1);
+        assertThat(usage.at("/aiGenerationsLimit").asInt()).isEqualTo(5);
+        assertThat(usage.at("/liveParticipantsLimit").asInt()).isEqualTo(25);
+    }
+
+    @Test
+    void certificateSignatory_IsConfigurableByAdmin() throws Exception {
+        User admin = newUser(UserRole.ADMIN);
+        JsonNode settings = send(mvc.perform(get("/subscriptions/settings"))).at("/data");
+        Map<String, Object> updated = json.convertValue(settings, Map.class);
+        updated.put("certificateSignatoryName", "Junior MEDJEU FOPA");
+        updated.put("certificateSignatoryTitle", "Directeur, IA Horizon Plus Consulting");
+        putJson("/subscriptions/settings", updated, admin).andExpect(status().isOk());
+
+        JsonNode reloaded = send(mvc.perform(get("/subscriptions/settings"))).at("/data");
+        assertThat(reloaded.at("/certificateSignatoryName").asText()).isEqualTo("Junior MEDJEU FOPA");
+        assertThat(reloaded.at("/certificateSignatoryTitle").asText()).isEqualTo("Directeur, IA Horizon Plus Consulting");
+
+        // Seul un administrateur peut modifier ces paramètres
+        putJson("/subscriptions/settings", updated, newUser(UserRole.CREATOR)).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void maintenanceMode_OnlyAdminsCanLogIn() throws Exception {
+        User admin = newUser(UserRole.ADMIN);
+        User learner = newUser(UserRole.LEARNER);
+        Map<String, Object> settings = json.convertValue(send(mvc.perform(get("/subscriptions/settings"))).at("/data"), Map.class);
+        try {
+            settings.put("isMaintenanceMode", true);
+            putJson("/subscriptions/settings", settings, admin).andExpect(status().isOk());
+            assertThat(send(mvc.perform(get("/subscriptions/settings"))).at("/data/isMaintenanceMode").asBoolean()).isTrue();
+
+            JsonNode refused = send(post("/auth/login", Map.of("email", learner.getEmail(), "password", "Test1234!"), null)
+                    .andExpect(status().isUnauthorized()));
+            assertThat(refused.at("/message").asText()).contains("Seuls les administrateurs");
+            post("/auth/login", Map.of("email", admin.getEmail(), "password", "Test1234!"), null).andExpect(status().isOk());
+        } finally {
+            settings.put("isMaintenanceMode", false);
+            putJson("/subscriptions/settings", settings, admin).andExpect(status().isOk());
+        }
+        post("/auth/login", Map.of("email", learner.getEmail(), "password", "Test1234!"), null).andExpect(status().isOk());
+    }
+
+    @Test
+    void certificates_AreListedAfterReconnection_IncludingImportedSuccesses() throws Exception {
+        User creator = newUser(UserRole.CREATOR);
+        JsonNode quiz = send(post("/quizzes", quizPayload("Quiz certifiant", 2), creator).andExpect(status().isCreated())).at("/data");
+        User learner = newUser(UserRole.LEARNER);
+
+        // Résultat importé de l'ancien QuizzBoard (réussi à 85 %, sans certificat) et tentative ratée (40 %)
+        jdbc.update("insert into participations (id, quiz_id, quiz_title, user_id, participant_name, score, max_score, percentage, status, time_total_seconds, certificate_eligible) values (?,?,?,?,?,?,?,?,?,?,?)",
+                "legacy-ok-" + UUID.randomUUID(), quiz.at("/id").asText(), "Ancien quiz réussi", learner.getId(), "Test LEARNER", 85, 100, 85.0, "COMPLETED", 60, false);
+        jdbc.update("insert into participations (id, quiz_id, quiz_title, user_id, participant_name, score, max_score, percentage, status, time_total_seconds, certificate_eligible) values (?,?,?,?,?,?,?,?,?,?,?)",
+                "legacy-ko-" + UUID.randomUUID(), quiz.at("/id").asText(), "Ancien quiz raté", learner.getId(), "Test LEARNER", 40, 100, 40.0, "COMPLETED", 60, false);
+        // Quiz réussi sans être connecté, avec l'email du compte (écrit en majuscules) et un pseudo générique
+        jdbc.update("insert into participations (id, quiz_id, quiz_title, participant_email, participant_name, score, max_score, percentage, status, time_total_seconds, certificate_eligible) values (?,?,?,?,?,?,?,?,?,?,?)",
+                "legacy-guest-" + UUID.randomUUID(), quiz.at("/id").asText(), "Quiz joué en invité", learner.getEmail().toUpperCase(), "Player", 90, 100, 90.0, "COMPLETED", 60, false);
+
+        // Nouveau quiz réussi à 100 % : certificat délivré immédiatement
+        JsonNode full = send(getAs("/quizzes/" + quiz.at("/id").asText(), learner)).at("/data");
+        List<Map<String, Object>> answers = new ArrayList<>();
+        for (JsonNode q : full.at("/questions")) {
+            String good = q.at("/choices/0/isCorrect").asBoolean() ? q.at("/choices/0/id").asText() : q.at("/choices/1/id").asText();
+            answers.add(Map.of("questionId", q.at("/id").asText(), "selectedChoiceIds", List.of(good), "timeSpentSeconds", 2));
+        }
+        JsonNode saved = send(post("/participations", Map.of("quizId", quiz.at("/id").asText(), "participantName", "Test LEARNER", "status", "COMPLETED", "timeTotalSeconds", 4, "answers", answers), learner)
+                .andExpect(status().isCreated())).at("/data");
+        assertThat(saved.at("/certificateId").asText()).isNotBlank();
+
+        // Après reconnexion (nouveau jeton) : les 3 certificats sont toujours là, pas celui du quiz raté
+        JsonNode mine = send(mvc.perform(get("/certificates/my").header("Authorization", token(learner))).andExpect(status().isOk())).at("/data");
+        assertThat(mine.size()).isEqualTo(3);
+        assertThat(mine.findValuesAsText("quizTitle")).contains("Quiz certifiant", "Ancien quiz réussi", "Quiz joué en invité").doesNotContain("Ancien quiz raté");
+        for (JsonNode cert : mine) {
+            if (cert.at("/quizTitle").asText().equals("Quiz joué en invité")) {
+                assertThat(cert.at("/recipientName").asText()).isEqualTo(learner.getPrenom() + " " + learner.getNom());
+            }
+        }
+        // Stable : relire la liste ne crée pas de doublon
+        assertThat(send(mvc.perform(get("/certificates/my").header("Authorization", token(learner)))).at("/data").size()).isEqualTo(3);
+        // Historique et XP : les 4 quiz terminés comptent (dont celui joué avec l'email du compte)
+        assertThat(send(getAs("/participations/my", learner)).at("/data").size()).isEqualTo(4);
+        mvc.perform(get("/certificates/my")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void paymentCallback_IsReservedToAdmins() throws Exception {
+        User creator = newUser(UserRole.CREATOR);
+        post("/payments/callback", Map.of("reference", "PD-123", "status", "PAID"), creator).andExpect(status().isForbidden());
+        post("/payments/callback", Map.of("reference", "PD-123", "status", "PAID"), null).andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void classes_OtherCreatorCannotModifyOrDelete() throws Exception {
         User owner = newUser(UserRole.CREATOR);
         JsonNode classe = send(post("/classes", Map.of("name", "Classe privée", "code", "CL-" + UUID.randomUUID().toString().substring(0, 6), "level", "Master 1"), owner)

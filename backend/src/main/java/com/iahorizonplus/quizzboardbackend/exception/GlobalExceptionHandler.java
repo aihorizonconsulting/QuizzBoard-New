@@ -43,6 +43,12 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(response, HttpStatus.NOT_FOUND);
     }
 
+    /** Adresse d'API inexistante : 404 (et non une erreur serveur 500). */
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNoResource(org.springframework.web.servlet.resource.NoResourceFoundException ex, HttpServletRequest request) {
+        return handleResourceNotFound(new ResourceNotFoundException("Adresse introuvable : " + request.getRequestURI()), request);
+    }
+
     @ExceptionHandler(BadRequestException.class)
     public ResponseEntity<ApiResponse<Void>> handleBadRequest(BadRequestException ex, HttpServletRequest request) {
         log.warn("400 Bad Request sur {} : champ='{}', message='{}'", request.getRequestURI(), ex.getField(), ex.getMessage());

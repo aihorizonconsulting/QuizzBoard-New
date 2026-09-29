@@ -12,6 +12,7 @@ import com.iahorizonplus.quizzboardbackend.repository.TransactionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.*;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
@@ -32,6 +33,15 @@ public class PayDunyaPaymentService {
     private final PaymentSettlementService paymentSettlementService;
     private final SmtpEmailService emailService;
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    // Paiement simulé : uniquement sur un environnement de test sans clés PayDunya (jamais en production)
+    @Value("${app.payment.simulation-enabled:false}")
+    private boolean simulationEnabled;
+
+    @Value("${app.url:http://localhost:4200}")
+    private String appBaseUrl;
+
+    static final String SIMULATION_TOKEN_PREFIX = "SIM-";
     private final RestTemplate restTemplate = new RestTemplate();
 
     /**
@@ -43,6 +53,18 @@ public class PayDunyaPaymentService {
 
         TransactionRecord transaction = transactionRepository.findByReference(reference)
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction introuvable avec la référence : " + reference));
+
+        if (simulationEnabled && !payDunyaConfig.isConfigured()) {
+            String simulatedToken = SIMULATION_TOKEN_PREFIX + reference;
+            transaction.setPaydunyaToken(simulatedToken);
+            transaction.setStatus(PaymentStatus.PENDING);
+            transactionRepository.save(transaction);
+            String base = appBaseUrl.endsWith("/") ? appBaseUrl.substring(0, appBaseUrl.length() - 1) : appBaseUrl;
+            String checkoutUrl = base + "/app/subscription/callback?token=" + simulatedToken + "&simulation=1";
+            log.warn("Paiement SIMULÉ (environnement de test) pour {} : référence {}", userEmail, reference);
+            return new PaymentInitiateResponse(simulatedToken, reference, PaymentMethod.PAYDUNYA, amountFcfa, "FCFA",
+                    checkoutUrl, null, true, "Paiement simulé (environnement de test) : aucun débit réel.");
+        }
 
         if (!payDunyaConfig.isConfigured()) {
             transaction.setStatus(PaymentStatus.FAILED);
@@ -157,6 +179,15 @@ public class PayDunyaPaymentService {
 
         if (token.startsWith("mock-")) {
             throw new BadRequestException("token", "Les tokens de paiement simulé ne sont pas acceptés sur cet environnement.");
+        }
+
+        if (token.startsWith(SIMULATION_TOKEN_PREFIX)) {
+            if (!simulationEnabled) {
+                throw new BadRequestException("token", "Les paiements simulés sont désactivés sur cet environnement.");
+            }
+            TransactionRecord simulated = transactionRepository.findByPaydunyaToken(token)
+                    .orElseThrow(() -> new ResourceNotFoundException("Aucune transaction simulée pour ce token."));
+            return paymentSettlementService.settleSuccessfulPayment(simulated.getReference());
         }
 
         TransactionRecord transaction = transactionRepository.findByPaydunyaToken(token)

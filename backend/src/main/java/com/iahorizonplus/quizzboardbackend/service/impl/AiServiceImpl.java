@@ -8,6 +8,7 @@ import com.iahorizonplus.quizzboardbackend.entity.*;
 import com.iahorizonplus.quizzboardbackend.exception.BadRequestException;
 import com.iahorizonplus.quizzboardbackend.repository.CourseChapterRepository;
 import com.iahorizonplus.quizzboardbackend.repository.CourseRepository;
+import com.iahorizonplus.quizzboardbackend.repository.PlatformSettingsRepository;
 import com.iahorizonplus.quizzboardbackend.repository.UserRepository;
 import com.iahorizonplus.quizzboardbackend.service.AiService;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
 
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -32,8 +34,11 @@ public class AiServiceImpl implements AiService {
     private final CourseRepository courseRepository;
     private final CourseChapterRepository courseChapterRepository;
     private final UserRepository userRepository;
+    private final PlatformSettingsRepository settingsRepository;
     private final ObjectMapper objectMapper;
     private final RestClient restClient = RestClient.create();
+
+    public static final int STARTER_MONTHLY_AI_CREDITS = 100;
 
     @Value("${app.ai.gemini.api-key:}")
     private String geminiApiKey;
@@ -47,26 +52,41 @@ public class AiServiceImpl implements AiService {
     @Value("${app.ai.groq.api-key:}")
     private String groqApiKey;
 
+    /** Limite mensuelle de générations IA du forfait (null = illimité pour un administrateur). */
+    public static Integer monthlyAiLimit(User user, PlatformSettings settings) {
+        if (user.getRole() == UserRole.ADMIN) return null;
+        return user.getSubscriptionTier() == SubscriptionTier.FREE ? settings.getFreeAiCreditsMonth() : STARTER_MONTHLY_AI_CREDITS;
+    }
+
+    /** Générations IA déjà consommées ce mois-ci (le compteur repart à zéro chaque mois). */
+    public static int aiCreditsUsedThisMonth(User user) {
+        String period = YearMonth.now().toString();
+        return period.equals(user.getAiGenerationsPeriod()) && user.getAiGenerationsCount() != null ? user.getAiGenerationsCount() : 0;
+    }
+
+    /** Quota mensuel IA commun aux quiz et aux cours générés. */
+    private void consumeAiCredit(String creatorEmail) {
+        if (creatorEmail == null) return;
+        User creator = userRepository.findByEmail(creatorEmail).orElse(null);
+        if (creator == null) return;
+        PlatformSettings settings = settingsRepository.findById("default-settings").orElseGet(() -> PlatformSettings.builder().build());
+        Integer limit = monthlyAiLimit(creator, settings);
+        int used = aiCreditsUsedThisMonth(creator);
+        if (limit != null && used >= limit) {
+            throw new BadRequestException("quota", creator.getSubscriptionTier() == SubscriptionTier.FREE
+                    ? "Quota mensuel IA épuisé pour le forfait DÉCOUVERTE (" + limit + " générations/mois). Passez au forfait STARTER pour " + STARTER_MONTHLY_AI_CREDITS + " générations par mois !"
+                    : "Quota mensuel IA épuisé pour le forfait " + creator.getSubscriptionTier() + " (" + limit + " générations/mois). Contactez-nous pour un accès PREMIUM.");
+        }
+        creator.setAiGenerationsPeriod(YearMonth.now().toString());
+        creator.setAiGenerationsCount(used + 1);
+        userRepository.save(creator);
+    }
+
     @Override
     public List<Question> generateQuizQuestions(AiQuizGenerateRequest request, String creatorEmail) {
         log.info("Génération de {} questions IA pour le thème : {}", request.count(), request.prompt());
 
-        // === Enforcement du quota mensuel de requêtes IA ===
-        if (creatorEmail != null) {
-            userRepository.findByEmail(creatorEmail).ifPresent(creator -> {
-                LocalDateTime startOfMonth = LocalDateTime.now().withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0).withNano(0);
-                long monthlyUsage = courseRepository.countByCreatorIdAndCreatedAtAfter(creator.getId(), startOfMonth);
-
-                if (creator.getRole() != UserRole.ADMIN && creator.getSubscriptionTier() == SubscriptionTier.FREE && monthlyUsage >= 5) {
-                    throw new BadRequestException("quota",
-                            "Quota mensuel IA épuisé pour le forfait DÉCOUVERTE (5 générations/mois). Passez au forfait STARTER pour 100 générations par mois !");
-                } else if (creator.getRole() != UserRole.ADMIN && creator.getSubscriptionTier() == SubscriptionTier.STARTER && monthlyUsage >= 100) {
-                    throw new BadRequestException("quota",
-                            "Quota mensuel IA épuisé pour le forfait STARTER (100 générations/mois). Contactez-nous pour un accès PREMIUM.");
-                }
-            });
-        }
-        // === Fin du quota IA ===
+        consumeAiCredit(creatorEmail);
 
         int count = Math.max(1, request.count());
 
@@ -128,6 +148,7 @@ public class AiServiceImpl implements AiService {
     @Transactional
     public Course generateCourse(String creatorEmail, AiCourseGenerateRequest request) {
         log.info("Génération d'un cours magistral IA par {} sur le sujet : {}", creatorEmail, request.topic());
+        consumeAiCredit(creatorEmail);
 
         User creator = userRepository.findByEmail(creatorEmail).orElse(null);
         String creatorName = creator != null ? creator.getPrenom() + " " + creator.getNom() : "Professeur";

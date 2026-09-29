@@ -66,6 +66,17 @@ services:
       - REDIS_PORT=6379
       - CORS_ORIGINS=${CORS_ORIGINS:-https://quizzboard.com,https://www.quizzboard.com}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-385748483146-1r3b7ab8tmhetu1t4pshvelc35lalabg.apps.googleusercontent.com}
+      # Adresses publiques fixées ici (et non dans .env) : un fichier .env de dev présent sur le serveur
+      # ne peut plus faire pointer les emails, invitations ou paiements de la production vers dev.
+      - APP_URL=https://quizzboard.com
+      - RESET_PASSWORD_URL=https://quizzboard.com/reinitialisation-mot-de-passe?token=
+      - INVITATION_BASE_URL=https://quizzboard.com/invitation/
+      - STORAGE_BASE_URL=https://quizzboard.com/api/v1/files
+      - PAYDUNYA_RETURN_URL=https://quizzboard.com/app/subscription/callback
+      - PAYDUNYA_CANCEL_URL=https://quizzboard.com/app/subscription/callback?status=cancelled
+      - PAYDUNYA_CALLBACK_URL=https://quizzboard.com/api/v1/payments/paydunya/ipn
+      # Jamais de paiement simulé en production
+      - ENABLE_PAYMENT_SIMULATION=false
     ports:
       - "127.0.0.1:8080:8080"
     volumes:

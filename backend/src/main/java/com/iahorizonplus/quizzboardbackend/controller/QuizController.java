@@ -7,6 +7,7 @@ import com.iahorizonplus.quizzboardbackend.entity.Quiz;
 import com.iahorizonplus.quizzboardbackend.repository.ParticipationRepository;
 import com.iahorizonplus.quizzboardbackend.security.UserPrincipal;
 import com.iahorizonplus.quizzboardbackend.service.QuizService;
+import com.iahorizonplus.quizzboardbackend.service.impl.LearningStatsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -179,57 +180,62 @@ public class QuizController {
 
         Map<String, Object> stats = new HashMap<>();
 
-        if (quizIds.isEmpty()) {
-            stats.put("totalParticipants", 0);
-            stats.put("averageSuccessRate", 0.0);
-            stats.put("completedQuizzes", 0);
-            stats.put("quizzesCount", 0);
-            stats.put("weeklyActivity", List.of(0, 0, 0, 0, 0, 0, 0));
-            return ResponseEntity.ok(ApiResponse.ok(stats, "Aucune donnée disponible", List.of(), "/api/v1/quizzes/creator-stats"));
-        }
+        // Seules les participations TERMINÉES comptent : les tentatives abandonnées (importées de
+        // l'ancien QuizzBoard avec 0 %) faussaient le taux de réussite et le nombre de participants.
+        List<Participation> allParts = quizIds.isEmpty() ? List.of() : participationRepository.findByQuizIdIn(quizIds);
+        List<Participation> completed = allParts.stream()
+            .filter(p -> LearningStatsService.COMPLETED.equalsIgnoreCase(p.getStatus()))
+            .toList();
 
-        // Total des participations
-        long totalParticipants = participationRepository.countByQuizIdIn(quizIds);
-        List<Participation> allParts = participationRepository.findByQuizIdIn(quizIds);
+        double averageScore = completed.stream().mapToDouble(Participation::getPercentage).average().orElse(0.0);
+        long passed = completed.stream().filter(p -> p.getPercentage() >= LearningStatsService.PASS_THRESHOLD).count();
+        double successRate = completed.isEmpty() ? 0.0 : 100.0 * passed / completed.size();
 
-        // Taux de réussite moyen
-        double avgRate = 0.0;
-        if (!allParts.isEmpty()) {
-            double sumPct = allParts.stream()
-                .mapToDouble(Participation::getPercentage)
-                .sum();
-            avgRate = Math.round((sumPct / allParts.size()) * 10.0) / 10.0;
-        }
+        // Répartition réelle des résultats (seuil de validation : 70 %)
+        long excellent = completed.stream().filter(p -> p.getPercentage() >= 85.0).count();
+        long validated = completed.stream().filter(p -> p.getPercentage() >= 70.0 && p.getPercentage() < 85.0).count();
+        long toConsolidate = completed.stream().filter(p -> p.getPercentage() >= 50.0 && p.getPercentage() < 70.0).count();
+        long failed = completed.size() - excellent - validated - toConsolidate;
 
-        // Quiz avec au moins 1 participation
-        long completedQuizzes = myQuizzes.stream()
-            .filter(q -> q.getParticipationsCount() != null && q.getParticipationsCount() > 0)
+        long distinctParticipants = completed.stream()
+            .map(p -> p.getUserId() != null ? "u:" + p.getUserId()
+                : p.getParticipantEmail() != null && !p.getParticipantEmail().isBlank() ? "e:" + p.getParticipantEmail().trim().toLowerCase()
+                : "n:" + (p.getParticipantName() == null ? "" : p.getParticipantName().trim().toLowerCase()))
+            .distinct()
             .count();
+        long quizzesPlayed = completed.stream().map(Participation::getQuizId).distinct().count();
 
-        // Activité des 7 derniers jours (lun-dim)
+        // Activité de la semaine en cours (lun-dim)
         LocalDate today = LocalDate.now();
         LocalDate startOfWeek = today.with(DayOfWeek.MONDAY);
         int[] weeklyActivity = new int[7]; // index 0 = lundi
-        for (Participation p : allParts) {
+        for (Participation p : completed) {
             if (p.getCompletedAt() != null) {
                 LocalDate partDate = p.getCompletedAt().toLocalDate();
                 if (!partDate.isBefore(startOfWeek) && !partDate.isAfter(today)) {
-                    int dayIndex = partDate.getDayOfWeek().getValue() - 1; // lundi=0
-                    weeklyActivity[dayIndex]++;
+                    weeklyActivity[partDate.getDayOfWeek().getValue() - 1]++;
                 }
             }
         }
 
-        List<Integer> weeklyList = List.of(
+        stats.put("totalParticipants", completed.size());
+        stats.put("distinctParticipants", distinctParticipants);
+        stats.put("abandonedAttempts", allParts.size() - completed.size());
+        stats.put("averageScore", Math.round(averageScore * 10.0) / 10.0);
+        stats.put("successRate", Math.round(successRate * 10.0) / 10.0);
+        stats.put("averageSuccessRate", Math.round(successRate * 10.0) / 10.0);
+        stats.put("completedQuizzes", quizzesPlayed);
+        stats.put("quizzesCount", myQuizzes.size());
+        stats.put("distribution", Map.of(
+            "excellent", excellent,
+            "validated", validated,
+            "toConsolidate", toConsolidate,
+            "failed", failed
+        ));
+        stats.put("weeklyActivity", List.of(
             weeklyActivity[0], weeklyActivity[1], weeklyActivity[2],
             weeklyActivity[3], weeklyActivity[4], weeklyActivity[5], weeklyActivity[6]
-        );
-
-        stats.put("totalParticipants", totalParticipants);
-        stats.put("averageSuccessRate", avgRate);
-        stats.put("completedQuizzes", completedQuizzes);
-        stats.put("quizzesCount", myQuizzes.size());
-        stats.put("weeklyActivity", weeklyList);
+        ));
 
         List<LinkDto> links = List.of(
                 LinkDto.of("self", "/api/v1/quizzes/creator-stats", "GET"),
