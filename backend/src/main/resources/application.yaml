@@ -103,7 +103,9 @@ app:
   ai:
     gemini:
       api-key: ${GEMINI_API_KEY:}
-      model: ${GEMINI_MODEL:gemini-2.5-flash}
+      # gemini-2.5-flash n'est plus ouvert aux nouvelles clés Google : modèle actuel + modèle de secours
+      model: ${GEMINI_MODEL:gemini-3.5-flash}
+      fallback-model: ${GEMINI_FALLBACK_MODEL:gemini-3.5-flash-lite}
       base-url: https://generativelanguage.googleapis.com/v1beta
     groq:
       api-key: ${GROQ_API_KEY:}

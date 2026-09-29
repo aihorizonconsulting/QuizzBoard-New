@@ -47,13 +47,21 @@ public class PlatformHealthService {
     @Value("${app.ai.gemini.api-key:}")
     private String geminiApiKey;
 
-    @Value("${app.ai.gemini.model:gemini-2.5-flash}")
+    @Value("${app.ai.gemini.model:gemini-3.5-flash}")
     private String geminiModel;
+
+    @Value("${app.ai.gemini.fallback-model:gemini-3.5-flash-lite}")
+    private String geminiFallbackModel;
 
     @Value("${app.ai.gemini.base-url:https://generativelanguage.googleapis.com/v1beta}")
     private String geminiBaseUrl;
 
     private final HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(4)).build();
+
+    /** Résultat du test Gemini gardé 5 minutes (chaque test est une petite génération réelle). */
+    private static final long GEMINI_CHECK_TTL_MS = 5 * 60 * 1000L;
+    private volatile Map<String, Object> lastGeminiStatus;
+    private volatile long lastGeminiCheckAt;
 
     public List<Map<String, Object>> checkServices() {
         List<Map<String, Object>> services = new ArrayList<>();
@@ -81,35 +89,57 @@ public class PlatformHealthService {
     }
 
     /**
-     * La clé est testée auprès de Google (lecture gratuite de la fiche du modèle, sans génération) :
-     * sans clé valide, « Générer avec l'IA » produit des questions génériques de secours.
+     * Test réel de l'IA : une très courte génération avec le modèle principal, puis le modèle de secours.
+     * (La fiche d'un modèle peut répondre alors que Google refuse d'y générer : cas de gemini-2.5-flash.)
+     * Sans génération possible, « Générer avec l'IA » produit des questions génériques de secours.
      */
     private Map<String, Object> geminiStatus() {
         String name = "IA Google Gemini";
         if (!isSet(geminiApiKey)) {
             return service("gemini", name, WARNING, "Clé GEMINI_API_KEY absente : questions génériques de secours");
         }
-        String url = geminiBaseUrl + "/models/" + geminiModel + "?key=" + URLEncoder.encode(geminiApiKey.trim(), StandardCharsets.UTF_8);
+        Map<String, Object> cached = lastGeminiStatus;
+        if (cached != null && System.currentTimeMillis() - lastGeminiCheckAt < GEMINI_CHECK_TTL_MS) {
+            return cached;
+        }
         long start = System.nanoTime();
+        int primary = generationStatus(geminiModel);
+        long ms = Math.max(1, (System.nanoTime() - start) / 1_000_000);
+        Map<String, Object> status;
+        if (primary == 200) {
+            status = service("gemini", name, UP, "Opérationnel, modèle " + geminiModel + " (" + ms + " ms)");
+        } else if (primary == 400 || primary == 401 || primary == 403) {
+            status = service("gemini", name, DOWN, "Clé refusée par Google (HTTP " + primary + ") : questions génériques de secours");
+        } else {
+            int fallback = generationStatus(geminiFallbackModel);
+            String problem = primary == 404 ? "indisponible pour cette clé"
+                    : primary == 429 ? "quota dépassé"
+                    : primary == 503 ? "saturé chez Google"
+                    : primary < 0 ? "ne répond pas" : "en erreur (HTTP " + primary + ")";
+            status = fallback == 200
+                    ? service("gemini", name, WARNING, "Modèle " + geminiModel + " " + problem + " : modèle de secours " + geminiFallbackModel + " utilisé")
+                    : service("gemini", name, DOWN, "Modèles " + geminiModel + " et " + geminiFallbackModel + " indisponibles : questions génériques de secours");
+        }
+        lastGeminiStatus = status;
+        lastGeminiCheckAt = System.currentTimeMillis();
+        return status;
+    }
+
+    /** Code HTTP d'une génération minimale (-1 si Google est injoignable). */
+    private int generationStatus(String model) {
+        if (model == null || model.isBlank()) return -1;
+        String url = geminiBaseUrl + "/models/" + model.trim() + ":generateContent?key=" + URLEncoder.encode(geminiApiKey.trim(), StandardCharsets.UTF_8);
+        String body = "{\"contents\":[{\"parts\":[{\"text\":\"Reponds OK\"}]}]}";
         try {
             HttpResponse<Void> response = httpClient.send(
-                    HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(6)).GET().build(),
+                    HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(15))
+                            .header("Content-Type", "application/json")
+                            .POST(HttpRequest.BodyPublishers.ofString(body)).build(),
                     HttpResponse.BodyHandlers.discarding());
-            long ms = Math.max(1, (System.nanoTime() - start) / 1_000_000);
-            int code = response.statusCode();
-            if (code == 200) {
-                return service("gemini", name, UP, "Clé valide, modèle " + geminiModel + " (" + ms + " ms)");
-            }
-            if (code == 404) {
-                return service("gemini", name, DOWN, "Modèle " + geminiModel + " introuvable chez Google");
-            }
-            if (code == 429) {
-                return service("gemini", name, WARNING, "Quota Google dépassé (HTTP 429)");
-            }
-            return service("gemini", name, DOWN, "Clé refusée par Google (HTTP " + code + ") : questions génériques de secours");
+            return response.statusCode();
         } catch (Exception e) {
-            log.warn("Supervision : Google Gemini injoignable ({})", e.getMessage());
-            return service("gemini", name, WARNING, "Google injoignable depuis le serveur");
+            log.warn("Supervision : Google Gemini ({}) injoignable ({})", model, e.getMessage());
+            return -1;
         }
     }
 

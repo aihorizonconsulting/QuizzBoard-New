@@ -22,8 +22,10 @@ import org.springframework.web.client.RestClient;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -43,8 +45,11 @@ public class AiServiceImpl implements AiService {
     @Value("${app.ai.gemini.api-key:}")
     private String geminiApiKey;
 
-    @Value("${app.ai.gemini.model:gemini-1.5-flash}")
+    @Value("${app.ai.gemini.model:gemini-3.5-flash}")
     private String geminiModel;
+
+    @Value("${app.ai.gemini.fallback-model:gemini-3.5-flash-lite}")
+    private String geminiFallbackModel;
 
     @Value("${app.ai.gemini.base-url:https://generativelanguage.googleapis.com/v1beta}")
     private String geminiBaseUrl;
@@ -251,14 +256,7 @@ public class AiServiceImpl implements AiService {
                     )
             );
 
-            String url = buildGeminiGenerateUrl();
-
-            String response = restClient.post()
-                    .uri(url)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(requestBody)
-                    .retrieve()
-                    .body(String.class);
+            String response = generateWithGemini(requestBody);
 
             if (response != null && !response.isBlank()) {
                 JsonNode root = objectMapper.readTree(response);
@@ -345,14 +343,7 @@ public class AiServiceImpl implements AiService {
                     )
             );
 
-            String url = buildGeminiGenerateUrl();
-
-            String response = restClient.post()
-                    .uri(url)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(requestBody)
-                    .retrieve()
-                    .body(String.class);
+            String response = generateWithGemini(requestBody);
 
             if (response != null && !response.isBlank()) {
                 JsonNode root = objectMapper.readTree(response);
@@ -388,9 +379,49 @@ public class AiServiceImpl implements AiService {
         return null;
     }
 
-    private String buildGeminiGenerateUrl() {
+    /**
+     * Appel Gemini avec le modèle principal, puis le modèle de secours : Google peut être momentanément
+     * saturé (503) ou retirer un modèle. Renvoie null si aucun modèle ne répond.
+     */
+    private String generateWithGemini(Map<String, Object> requestBody) {
+        Set<String> models = new LinkedHashSet<>();
+        if (geminiModel != null && !geminiModel.isBlank()) models.add(geminiModel.trim());
+        if (geminiFallbackModel != null && !geminiFallbackModel.isBlank()) models.add(geminiFallbackModel.trim());
+        for (String model : models) {
+            // Une seconde tentative quand Google est momentanément saturé (503) ou limité (429)
+            for (int attempt = 1; attempt <= 2; attempt++) {
+                try {
+                    String response = restClient.post()
+                            .uri(buildGeminiGenerateUrl(model))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .body(requestBody)
+                            .retrieve()
+                            .body(String.class);
+                    if (response != null && !response.isBlank()) {
+                        return response;
+                    }
+                    break;
+                } catch (Exception e) {
+                    String message = String.valueOf(e.getMessage());
+                    boolean transientError = message.startsWith("503") || message.startsWith("429");
+                    log.warn("Google Gemini ({}, essai {}) n'a pas répondu : {}", model, attempt, message.length() > 160 ? message.substring(0, 160) : message);
+                    if (!transientError || attempt == 2) {
+                        break;
+                    }
+                    try {
+                        Thread.sleep(1500);
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        return null;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private String buildGeminiGenerateUrl(String model) {
         String baseUrl = trimTrailingSlash(geminiBaseUrl);
-        String model = (geminiModel == null || geminiModel.isBlank()) ? "gemini-1.5-flash" : geminiModel.trim();
         return "%s/models/%s:generateContent?key=%s".formatted(baseUrl, model, geminiApiKey.trim());
     }
 
