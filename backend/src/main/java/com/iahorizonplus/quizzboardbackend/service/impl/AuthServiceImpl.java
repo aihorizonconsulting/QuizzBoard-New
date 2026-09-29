@@ -63,7 +63,6 @@ public class AuthServiceImpl implements AuthService {
                 .subscriptionTier(SubscriptionTier.FREE)
                 .authProvider(AuthProvider.LOCAL)
                 .avatarUrl(null)
-                .organization("Organisation Démo")
                 .status("ACTIVE")
                 .emailVerified(false)
                 .emailVerificationToken(UUID.randomUUID().toString())

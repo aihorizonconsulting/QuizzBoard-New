@@ -27,7 +27,7 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
             Bonjour, {{ authService.currentUser()?.prenom || 'Étudiant' }} ! 👋
           </h1>
           <p class="body-small text-muted" style="margin: 0;">
-            {{ authService.currentUser()?.organization || 'Université Virtuelle' }} • Prêt pour vos évaluations du jour ?
+            {{ authService.currentUser()?.organization ? authService.currentUser()?.organization + ' • ' : '' }}Prêt pour vos évaluations du jour ?
           </p>
         </div>
 

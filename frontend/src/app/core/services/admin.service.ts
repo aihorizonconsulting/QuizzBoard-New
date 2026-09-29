@@ -1,9 +1,9 @@
 import { Injectable, signal, computed, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
-import { ToastService } from './toast.service';
+import { ToastService, apiErrorMessage } from './toast.service';
 import { User, UserRole, SubscriptionTier } from '../models/user.model';
-import { AuditLog, SystemMetrics, PlatformSettings, TransactionRecord } from '../models/admin.model';
+import { AuditLog, AdminDashboardStats, PlatformSettings, TransactionRecord } from '../models/admin.model';
 import { environment } from '../../../environments/environment';
 
 @Injectable({
@@ -22,22 +22,10 @@ export class AdminService {
   // 3. JOURNAUX D'AUDIT DE SÉCURITÉ (alimentés dynamiquement par le backend)
   private auditLogs = signal<AuditLog[]>([]);
 
-  // 4. MÉTRIQUES SYSTÈMES & QUOTAS
-  private metrics = signal<SystemMetrics>({
-    totalUsers: 0,
-    creatorsCount: 0,
-    learnersCount: 0,
-    mrrFcfa: 0,
-    mrrUsd: 0,
-    totalQuizzes: 0,
-    totalCourses: 0,
-    aiCallsMonth: 0,
-    activeLiveArenas: 0,
-    connectedLiveStudents: 0,
-    databaseHealthPercent: 100.0,
-    geminiLatencyMs: 250,
-    groqLatencyMs: 120
-  });
+  // 4. SUPERVISION : indicateurs calculés par le serveur (null tant qu'ils ne sont pas chargés)
+  private dashboard = signal<AdminDashboardStats | null>(null);
+  private dashboardLoading = signal(false);
+  private dashboardError = signal<string | null>(null);
 
   // 5. PARAMÈTRES GLOBAUX DE LA PLATEFORME
   private settings = signal<PlatformSettings>({
@@ -60,23 +48,7 @@ export class AdminService {
   }
 
   loadAdminData(): void {
-    // Stats
-    this.http.get<any>(`${environment.apiUrl}/admin/stats`).subscribe({
-      next: (response) => {
-        const stats = this.unwrap(response);
-        if (stats) {
-          this.metrics.update(m => ({
-            ...m,
-            totalUsers: stats.totalUsers ?? m.totalUsers,
-            mrrFcfa: stats.totalRevenueFcfa ?? m.mrrFcfa,
-            totalQuizzes: stats.totalQuizzes ?? m.totalQuizzes,
-            totalCourses: stats.totalCourses ?? m.totalCourses,
-            totalQuestions: stats.totalQuestions ?? m.totalQuestions
-          }));
-        }
-      },
-      error: () => {}
-    });
+    this.loadDashboard();
 
     // Utilisateurs
     this.http.get<User[] | { data: User[] }>(`${environment.apiUrl}/admin/users`).subscribe({
@@ -100,16 +72,7 @@ export class AdminService {
       }
     });
 
-    // Logs d'audit
-    this.http.get<AuditLog[] | { data: AuditLog[] }>(`${environment.apiUrl}/admin/audit-logs`).subscribe({
-      next: (response) => {
-        const logs = this.unwrap<AuditLog[]>(response);
-        this.auditLogs.set(Array.isArray(logs) ? logs : []);
-      },
-      error: () => {
-        this.auditLogs.set([]);
-      }
-    });
+    this.loadAuditLogs();
 
     // Paramètres Plateforme
     this.http.get<PlatformSettings>(`${environment.apiUrl}/subscriptions/settings`).subscribe({
@@ -123,11 +86,48 @@ export class AdminService {
     });
   }
 
+  /** Indicateurs de supervision (recalculés par le serveur à chaque appel, services vérifiés en direct). */
+  loadDashboard(): void {
+    this.dashboardLoading.set(true);
+    this.http.get<any>(`${environment.apiUrl}/admin/stats`).subscribe({
+      next: (response) => {
+        this.dashboard.set(this.unwrap<AdminDashboardStats>(response));
+        this.dashboardError.set(null);
+        this.dashboardLoading.set(false);
+      },
+      error: (err) => {
+        this.dashboardError.set(apiErrorMessage(err, 'Les indicateurs n\'ont pas pu être chargés.'));
+        this.dashboardLoading.set(false);
+      }
+    });
+  }
+
+  /** Journal d'audit tel qu'enregistré par le serveur (auteur, adresse IP, date). */
+  loadAuditLogs(): void {
+    this.http.get<AuditLog[] | { data: AuditLog[] }>(`${environment.apiUrl}/admin/audit-logs`).subscribe({
+      next: (response) => {
+        const logs = this.unwrap<AuditLog[]>(response);
+        this.auditLogs.set(Array.isArray(logs) ? logs : []);
+      },
+      error: () => {
+        this.auditLogs.set([]);
+      }
+    });
+  }
+
+  /** Après une action : le journal (écrit par le serveur) et les indicateurs sont relus. */
+  private afterAction(): void {
+    this.loadAuditLogs();
+    this.loadDashboard();
+  }
+
   // GETTERS (READONLY SIGNALS)
   public getUsers() { return this.users.asReadonly(); }
   public getTransactions() { return this.transactions.asReadonly(); }
   public getAuditLogs() { return this.auditLogs.asReadonly(); }
-  public getMetrics() { return this.metrics.asReadonly(); }
+  public getDashboard() { return this.dashboard.asReadonly(); }
+  public isDashboardLoading() { return this.dashboardLoading.asReadonly(); }
+  public getDashboardError() { return this.dashboardError.asReadonly(); }
   public getSettings() { return this.settings.asReadonly(); }
 
   // ACTIONS UTILISATEURS
@@ -140,25 +140,20 @@ export class AdminService {
   }
 
   toggleUserStatus(userId: string): void {
-    const user = this.users().find(u => u.id === userId);
     this.http.put<User>(`${environment.apiUrl}/admin/users/${userId}/toggle-active`, {}).subscribe({
       next: (saved) => {
         this.replaceUser(this.unwrap(saved));
-        if (user) {
-          const suspended = this.unwrap(saved)?.status === 'SUSPENDED';
-          this.logAction(suspended ? 'Suspension de compte' : 'Réactivation de compte', `${user.prenom} ${user.nom} (${user.email})`, suspended ? 'WARNING' : 'INFO');
-        }
+        this.afterAction();
       },
       error: (err) => this.toast.apiError(err, 'Le statut du compte n\'a pas pu être modifié.')
     });
   }
 
   updateUserTier(userId: string, tier: SubscriptionTier): void {
-    const user = this.users().find(u => u.id === userId);
     this.http.put<User>(`${environment.apiUrl}/admin/users/${userId}/tier?tier=${tier}`, {}).subscribe({
       next: (saved) => {
         this.replaceUser(this.unwrap(saved));
-        if (user) this.logAction(`Modification Forfait vers ${tier}`, `${user.prenom} ${user.nom} (${user.email})`, 'INFO');
+        this.afterAction();
         this.toast.success(`Forfait ${tier} appliqué.`);
       },
       error: (err) => this.toast.apiError(err, 'Le forfait n\'a pas pu être modifié.')
@@ -166,11 +161,10 @@ export class AdminService {
   }
 
   updateUserRole(userId: string, role: UserRole): void {
-    const user = this.users().find(u => u.id === userId);
     this.http.put<User>(`${environment.apiUrl}/admin/users/${userId}/role?role=${role}`, {}).subscribe({
       next: (saved) => {
         this.replaceUser(this.unwrap(saved));
-        if (user) this.logAction(`Modification Rôle vers ${role}`, `${user.prenom} ${user.nom} (${user.email})`, role === 'ADMIN' ? 'CRITICAL' : 'INFO');
+        this.afterAction();
         this.toast.success('Rôle mis à jour.');
       },
       error: (err) => this.toast.apiError(err, 'Le rôle n\'a pas pu être modifié.')
@@ -193,7 +187,7 @@ export class AdminService {
       const res = await firstValueFrom(this.http.post<User>(`${environment.apiUrl}/admin/users`, payload));
       const created = this.unwrap<User>(res);
       this.users.update(list => [created, ...list.filter(u => u.id !== created.id)]);
-      this.logAction('Création de compte administratif', `${created.prenom} ${created.nom} (${created.email}) - Rôle: ${created.role}`, 'INFO');
+      this.afterAction();
       this.toast.success(`Compte ${created.email} créé.`);
       return created;
     } catch (err) {
@@ -208,7 +202,7 @@ export class AdminService {
     this.http.delete(`${environment.apiUrl}/admin/users/${userId}`).subscribe({
       next: () => {
         this.users.update(list => list.filter(u => u.id !== userId));
-        this.logAction('Suppression définitive du compte', `${user.prenom} ${user.nom} (${user.email})`, 'CRITICAL');
+        this.afterAction();
       },
       error: (err) => this.toast.apiError(err, 'Le compte n\'a pas pu être supprimé.')
     });
@@ -221,7 +215,7 @@ export class AdminService {
     this.settings.set(next);
     this.http.put<PlatformSettings>(`${environment.apiUrl}/subscriptions/settings`, next).subscribe({
       next: () => {
-        this.logAction('Mise à jour des paramètres plateforme', 'Configuration système enregistrée', 'WARNING');
+        this.afterAction();
         this.toast.success('Paramètres enregistrés.');
       },
       error: (err) => {
@@ -229,20 +223,6 @@ export class AdminService {
         this.toast.apiError(err, 'Les paramètres n\'ont pas pu être enregistrés.');
       }
     });
-  }
-
-  // LOGGING INTERNE
-  private logAction(action: string, target: string, severity: 'INFO' | 'WARNING' | 'CRITICAL') {
-    const newLog: AuditLog = {
-      id: 'log-' + Date.now(),
-      timestamp: 'À l\'instant',
-      adminName: 'Admin HQ',
-      action,
-      target,
-      ipAddress: '196.207.240.12 (Dakar, SN)',
-      severity
-    };
-    this.auditLogs.update(logs => [newLog, ...logs]);
   }
 
   private unwrap<T>(response: T | { data: T }): T {

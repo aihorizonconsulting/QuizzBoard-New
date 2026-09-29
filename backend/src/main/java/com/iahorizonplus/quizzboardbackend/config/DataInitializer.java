@@ -76,6 +76,11 @@ public class DataInitializer implements CommandLineRunner {
             log.info("Compte Administrateur (admin@quizzboard.com) configuré avec succès.");
         }
 
+        int cleaned = userRepository.clearDemoOrganization();
+        if (cleaned > 0) {
+            log.info("Organisation fictive « Organisation Démo » retirée de {} compte(s).", cleaned);
+        }
+
         // 3. Initialisation des quiz publics de référence si aucun quiz n'existe en base
         if (quizRepository.count() == 0) {
             log.info("Initialisation des quiz interactifs de référence QuizzBoard...");

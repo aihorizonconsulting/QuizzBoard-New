@@ -3,15 +3,23 @@ package com.iahorizonplus.quizzboardbackend.service.impl;
 import com.iahorizonplus.quizzboardbackend.entity.*;
 import com.iahorizonplus.quizzboardbackend.exception.ResourceNotFoundException;
 import com.iahorizonplus.quizzboardbackend.repository.*;
+import com.iahorizonplus.quizzboardbackend.security.UserPrincipal;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import com.iahorizonplus.quizzboardbackend.service.AdminService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.time.LocalDateTime;
+import java.time.YearMonth;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -27,35 +35,98 @@ public class AdminServiceImpl implements AdminService {
     private final QuestionRepository questionRepository;
     private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
     private final LearningStatsService learningStatsService;
+    private final LiveSessionRecordRepository liveSessionRecordRepository;
+    private final PlatformHealthService platformHealthService;
+
+    /** Une session Live sans activité depuis 3 heures n'est plus comptée comme en cours. */
+    private static final long LIVE_ACTIVITY_HOURS = 3;
 
     @Override
     @Transactional(readOnly = true)
     public Map<String, Object> getDashboardStats() {
         Map<String, Object> stats = new HashMap<>();
+        LocalDateTime now = LocalDateTime.now();
+        YearMonth thisMonth = YearMonth.now();
 
-        long usersCount = userRepository.count();
-        long quizzesCount = quizRepository.count();
-        long coursesCount = courseRepository.count();
-        long participationsCount = participationRepository.count();
-        long questionsCount = questionRepository.count();
+        // Comptes : rôles, forfaits payants en cours, inscriptions du mois
+        List<User> users = userRepository.findAll();
+        long creators = users.stream().filter(u -> u.getRole() == UserRole.CREATOR).count();
+        long paidCreators = users.stream().filter(u -> u.getRole() == UserRole.CREATOR && hasActivePaidPlan(u, now)).count();
+        long paidLearners = users.stream().filter(u -> u.getRole() == UserRole.LEARNER && hasActivePaidPlan(u, now)).count();
+        stats.put("totalUsers", (long) users.size());
+        stats.put("creatorsCount", creators);
+        stats.put("learnersCount", users.stream().filter(u -> u.getRole() == UserRole.LEARNER).count());
+        stats.put("adminsCount", users.stream().filter(u -> u.getRole() == UserRole.ADMIN).count());
+        stats.put("paidCreatorsCount", paidCreators);
+        stats.put("paidLearnersCount", paidLearners);
+        stats.put("freeCreatorsCount", creators - paidCreators);
+        stats.put("newUsersThisMonth", users.stream().filter(u -> inMonth(u.getCreatedAt(), thisMonth)).count());
+        stats.put("newUsersLastMonth", users.stream().filter(u -> inMonth(u.getCreatedAt(), thisMonth.minusMonths(1))).count());
 
+        // Contenus et activité
+        stats.put("totalQuizzes", quizRepository.count());
+        stats.put("totalCourses", courseRepository.count());
+        stats.put("totalQuestions", questionRepository.count());
+        stats.put("totalParticipations", participationRepository.count());
+        List<Participation> completed = participationRepository.findByStatus(LearningStatsService.COMPLETED);
+        stats.put("completedParticipations", (long) completed.size());
+        stats.put("completedParticipationsThisMonth", completed.stream().filter(p -> inMonth(p.getCompletedAt(), thisMonth)).count());
+
+        // Revenus : paiements confirmés uniquement
         List<TransactionRecord> paidTx = transactionRepository.findAll().stream()
                 .filter(t -> t.getStatus() == PaymentStatus.PAID)
                 .toList();
-
-        double totalRevenueFcfa = paidTx.stream()
-                .mapToDouble(t -> t.getAmountFcfa() != null ? t.getAmountFcfa() : 0.0)
-                .sum();
-
-        stats.put("totalUsers", usersCount);
-        stats.put("totalQuizzes", quizzesCount);
-        stats.put("totalCourses", coursesCount);
-        stats.put("totalParticipations", participationsCount);
-        stats.put("totalQuestions", questionsCount);
-        stats.put("totalRevenueFcfa", totalRevenueFcfa);
+        stats.put("totalRevenueFcfa", sumFcfa(paidTx));
         stats.put("paidTransactionsCount", paidTx.size());
+        stats.put("revenueThisMonthFcfa", sumFcfa(paidTx.stream().filter(t -> inMonth(t.getCreatedAt(), thisMonth)).toList()));
+        stats.put("revenueLastMonthFcfa", sumFcfa(paidTx.stream().filter(t -> inMonth(t.getCreatedAt(), thisMonth.minusMonths(1))).toList()));
+        List<Map<String, Object>> monthlyRevenue = new ArrayList<>();
+        for (int i = 5; i >= 0; i--) {
+            YearMonth month = thisMonth.minusMonths(i);
+            List<TransactionRecord> ofMonth = paidTx.stream().filter(t -> inMonth(t.getCreatedAt(), month)).toList();
+            monthlyRevenue.add(Map.of("month", month.toString(), "amountFcfa", sumFcfa(ofMonth), "payments", ofMonth.size()));
+        }
+        stats.put("monthlyRevenue", monthlyRevenue);
+        List<Map<String, Object>> byMethod = new ArrayList<>();
+        paidTx.stream().collect(Collectors.groupingBy(t -> t.getPaymentMethod() != null ? t.getPaymentMethod().name() : "AUTRE"))
+                .forEach((method, list) -> byMethod.add(Map.of("method", method, "payments", list.size(), "amountFcfa", sumFcfa(list))));
+        byMethod.sort(Comparator.comparing(m -> -((Number) m.get("amountFcfa")).doubleValue()));
+        stats.put("revenueByMethod", byMethod);
 
+        // IA : générations du mois (quiz et cours), compteur par utilisateur
+        String period = thisMonth.toString();
+        stats.put("aiGenerationsThisMonth", users.stream()
+                .filter(u -> period.equals(u.getAiGenerationsPeriod()) && u.getAiGenerationsCount() != null)
+                .mapToLong(User::getAiGenerationsCount).sum());
+
+        // Sessions Live : en cours (activité récente) et joueurs présents
+        LocalDateTime activeSince = now.minusHours(LIVE_ACTIVITY_HOURS);
+        List<LiveSessionRecord> lives = liveSessionRecordRepository.findAll();
+        List<LiveSessionRecord> activeLives = lives.stream()
+                .filter(l -> !"FINISHED".equals(l.getStatus()))
+                .filter(l -> { LocalDateTime last = l.getUpdatedAt() != null ? l.getUpdatedAt() : l.getCreatedAt(); return last != null && last.isAfter(activeSince); })
+                .toList();
+        stats.put("activeLiveSessions", (long) activeLives.size());
+        stats.put("activeLivePlayers", activeLives.stream().mapToLong(LiveSessionRecord::getPlayersCount).sum());
+        stats.put("liveSessionsThisMonth", lives.stream().filter(l -> inMonth(l.getCreatedAt(), thisMonth)).count());
+
+        // État réel des services
+        stats.put("services", platformHealthService.checkServices());
+        stats.put("checkedAt", now.toString());
         return stats;
+    }
+
+    private static boolean hasActivePaidPlan(User user, LocalDateTime now) {
+        return user.getSubscriptionTier() != null && user.getSubscriptionTier() != SubscriptionTier.FREE
+                && (user.getSubscriptionExpiresAt() == null || user.getSubscriptionExpiresAt().isAfter(now));
+    }
+
+    private static boolean inMonth(LocalDateTime date, YearMonth month) {
+        return date != null && YearMonth.from(date).equals(month);
+    }
+
+    private static double sumFcfa(List<TransactionRecord> transactions) {
+        return transactions.stream().mapToDouble(t -> t.getAmountFcfa() != null ? t.getAmountFcfa() : 0.0).sum();
     }
 
     @Override
@@ -75,7 +146,8 @@ public class AdminServiceImpl implements AdminService {
         user.setRole(role);
         User saved = userRepository.save(user);
 
-        logAction("SYSTEM_ADMIN", "UPDATE_ROLE", user.getEmail(), "Rôle modifié de " + oldRole + " à " + role);
+        audit("Rôle modifié : " + oldRole + " → " + role, user.getEmail(), "Rôle modifié de " + oldRole + " à " + role,
+                role == UserRole.ADMIN ? "CRITICAL" : "INFO");
         return saved;
     }
 
@@ -91,7 +163,7 @@ public class AdminServiceImpl implements AdminService {
         user.setSubscriptionExpiresAt(null);
         User saved = userRepository.save(user);
 
-        logAction("SYSTEM_ADMIN", "UPDATE_TIER", user.getEmail(), "Forfait modifié de " + oldTier + " à " + tier);
+        audit("Forfait modifié : " + oldTier + " → " + tier, user.getEmail(), "Forfait attribué par l'administration, sans date de fin", "INFO");
         return saved;
     }
 
@@ -103,7 +175,8 @@ public class AdminServiceImpl implements AdminService {
         user.setActive(!user.isActive());
         User saved = userRepository.save(user);
 
-        logAction("SYSTEM_ADMIN", "TOGGLE_USER_ACTIVE", user.getEmail(), "Statut actif changé à " + user.isActive());
+        audit(user.isActive() ? "Compte réactivé" : "Compte suspendu", user.getEmail(), "Statut actif changé à " + user.isActive(),
+                user.isActive() ? "INFO" : "WARNING");
         return saved;
     }
 
@@ -128,7 +201,7 @@ public class AdminServiceImpl implements AdminService {
         user.setStatus("ACTIVE");
 
         User created = userRepository.save(user);
-        logAction("SYSTEM_ADMIN", "CREATE_USER", created.getEmail(), "Création administrative d'utilisateur avec rôle " + created.getRole());
+        audit("Compte créé par l'administration", created.getEmail(), "Rôle " + created.getRole(), "INFO");
         return created;
     }
 
@@ -139,7 +212,7 @@ public class AdminServiceImpl implements AdminService {
                 .orElseThrow(() -> new ResourceNotFoundException("Utilisateur non trouvé: " + userId));
         String email = user.getEmail();
         userRepository.delete(user);
-        logAction("SYSTEM_ADMIN", "DELETE_USER", email, "Suppression définitive du compte utilisateur");
+        audit("Compte supprimé définitivement", email, "Suppression définitive du compte utilisateur", "CRITICAL");
     }
 
     @Override
@@ -157,14 +230,49 @@ public class AdminServiceImpl implements AdminService {
     @Override
     @Transactional
     public void logAction(String actorName, String action, String target, String details) {
-        String name = actorName != null ? actorName : "Système";
+        save(actorName != null ? actorName : "Système", action, target, details, "INFO");
+    }
+
+    @Override
+    @Transactional
+    public void audit(String action, String target, String details, String severity) {
+        save(currentActor(), action, target, details, severity);
+    }
+
+    private void save(String actor, String action, String target, String details, String severity) {
         AuditLog logItem = AuditLog.builder()
-                .adminName(name)
-                .actorName(name)
+                .adminName(actor)
+                .actorName(actor)
                 .action(action)
                 .target(target)
                 .details(details)
+                .ipAddress(currentIp())
+                .severity(severity)
                 .build();
         auditLogRepository.save(logItem);
+    }
+
+    /** Email de l'administrateur à l'origine de l'action (requête authentifiée). */
+    private static String currentActor() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof UserPrincipal principal) {
+            return principal.getUsername();
+        }
+        return "Système";
+    }
+
+    /** Adresse IP du client (derrière le proxy : première adresse de X-Forwarded-For). */
+    private static String currentIp() {
+        RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
+        if (!(attributes instanceof ServletRequestAttributes servlet)) {
+            return null;
+        }
+        HttpServletRequest request = servlet.getRequest();
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isBlank()) {
+            return forwarded.split(",")[0].trim();
+        }
+        String realIp = request.getHeader("X-Real-IP");
+        return realIp != null && !realIp.isBlank() ? realIp : request.getRemoteAddr();
     }
 }

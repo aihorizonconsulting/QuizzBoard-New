@@ -17,7 +17,7 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
       <div class="page-header">
         <div>
           <h1 class="h1">Finances & Abonnements SaaS</h1>
-          <p class="body-small">Suivi des flux de facturation Wave, Orange Money et Stripe, gestion des licences et MRR.</p>
+          <p class="body-small">Paiements confirmés (PayDunya), abonnements en cours et historique des transactions.</p>
         </div>
 
         <button type="button" class="btn btn-primary btn-sm" (click)="showLicenseModal = true">
@@ -26,81 +26,62 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
         </button>
       </div>
 
-      <!-- KPI METRICS -->
-      <div class="kpi-finances-grid">
-        <div class="card kpi-fin-card">
-          <span class="lbl">Revenu Récurrent Mensuel (MRR)</span>
-          <div class="val text-success">{{ metrics().mrrFcfa | number }} FCFA</div>
-          <span class="sub">~{{ metrics().mrrUsd }} $ USD • Base de 420 formateurs payants</span>
-        </div>
-
-        <div class="card kpi-fin-card">
-          <span class="lbl">Projection Annuelle (ARR)</span>
-          <div class="val text-navy">17 760 000 FCFA</div>
-          <span class="sub">+18.4% de croissance par trimestre</span>
-        </div>
-
-        <div class="card kpi-fin-card">
-          <span class="lbl">Taux de Rétention Formateurs</span>
-          <div class="val text-primary">94.2%</div>
-          <span class="sub">Moins de 2.1% de churn mensuel</span>
-        </div>
-
-        <div class="card kpi-fin-card">
-          <span class="lbl">Volume Total Collecté</span>
-          <div class="val">8 420 000 FCFA</div>
-          <span class="sub">Depuis le lancement officiel</span>
-        </div>
-      </div>
-
-      <!-- PAYMENT OPERATORS DISTRIBUTION -->
-      <div class="card gateways-card">
-        <div class="card-title-row">
-          <h3 class="h3" style="margin: 0; font-size: 16px;">Répartition par Opérateur de Paiement</h3>
-          <span class="badge badge-primary">Afrique de l'Ouest & International</span>
-        </div>
-
-        <div class="gateways-grid">
-          <!-- WAVE -->
-          <div class="gateway-box wave">
-            <div class="gw-top">
-              <span class="gw-name">Wave Mobile Money</span>
-              <span class="gw-share">65% du volume</span>
-            </div>
-            <div class="gw-amount">962 000 FCFA / mois</div>
-            <div class="gw-progress">
-              <div class="gw-fill" style="width: 65%;"></div>
-            </div>
-            <span class="gw-fees">Frais opérateur : 1% • Sénégal & Côte d'Ivoire</span>
+      <!-- KPI METRICS (calculés par le serveur) -->
+      @if (stats(); as s) {
+        <div class="kpi-finances-grid">
+          <div class="card kpi-fin-card">
+            <span class="lbl">Revenus du mois</span>
+            <div class="val text-success">{{ s.revenueThisMonthFcfa | number }} FCFA</div>
+            <span class="sub">Mois précédent : {{ s.revenueLastMonthFcfa | number }} FCFA</span>
           </div>
 
-          <!-- ORANGE MONEY -->
-          <div class="gateway-box om">
-            <div class="gw-top">
-              <span class="gw-name">Orange Money</span>
-              <span class="gw-share">25% du volume</span>
-            </div>
-            <div class="gw-amount">370 000 FCFA / mois</div>
-            <div class="gw-progress">
-              <div class="gw-fill" style="width: 25%;"></div>
-            </div>
-            <span class="gw-fees">Frais opérateur : 1.5% • Mali, CI, SN</span>
+          <div class="card kpi-fin-card">
+            <span class="lbl">Abonnements payants en cours</span>
+            <div class="val text-navy">{{ s.paidCreatorsCount + s.paidLearnersCount }}</div>
+            <span class="sub">{{ s.paidCreatorsCount }} formateur(s) Starter • {{ s.paidLearnersCount }} Apprenant Plus</span>
           </div>
 
-          <!-- STRIPE / CARTES -->
-          <div class="gateway-box stripe">
-            <div class="gw-top">
-              <span class="gw-name">Stripe & Cartes Bancaires</span>
-              <span class="gw-share">10% du volume</span>
-            </div>
-            <div class="gw-amount">148 000 FCFA / mois</div>
-            <div class="gw-progress">
-              <div class="gw-fill" style="width: 10%;"></div>
-            </div>
-            <span class="gw-fees">Visa / Mastercard / Maghreb & Europe</span>
+          <div class="card kpi-fin-card">
+            <span class="lbl">Paiements en attente</span>
+            <div class="val text-primary">{{ pendingCount() }}</div>
+            <span class="sub">Non encore confirmés par PayDunya</span>
+          </div>
+
+          <div class="card kpi-fin-card">
+            <span class="lbl">Volume total encaissé</span>
+            <div class="val">{{ s.totalRevenueFcfa | number }} FCFA</div>
+            <span class="sub">{{ s.paidTransactionsCount }} paiement(s) confirmé(s) depuis le lancement</span>
           </div>
         </div>
-      </div>
+
+        <!-- RÉPARTITION RÉELLE PAR MOYEN DE PAIEMENT -->
+        <div class="card gateways-card">
+          <div class="card-title-row">
+            <h3 class="h3" style="margin: 0; font-size: 16px;">Répartition par moyen de paiement</h3>
+            <span class="badge badge-primary">Paiements confirmés</span>
+          </div>
+
+          @if (s.revenueByMethod.length === 0) {
+            <p class="body-small text-muted" style="margin: 12px 0 0 0;">Aucun paiement confirmé pour le moment.</p>
+          } @else {
+            <div class="gateways-grid">
+              @for (m of s.revenueByMethod; track m.method) {
+                <div class="gateway-box" [ngClass]="m.method.toLowerCase()">
+                  <div class="gw-top">
+                    <span class="gw-name">{{ methodLabel(m.method) }}</span>
+                    <span class="gw-share">{{ methodShare(m.amountFcfa) | number:'1.0-1' }}% du volume</span>
+                  </div>
+                  <div class="gw-amount">{{ m.amountFcfa | number }} FCFA</div>
+                  <div class="gw-progress">
+                    <div class="gw-fill" [style.width.%]="methodShare(m.amountFcfa)"></div>
+                  </div>
+                  <span class="gw-fees">{{ m.payments }} paiement(s) confirmé(s)</span>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      }
 
       <!-- TRANSACTIONS TABLE -->
       <div class="card table-container">
@@ -172,7 +153,7 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
                 <td>
                   <div>
                     <strong>{{ tx.userName }}</strong>
-                    <div class="body-small text-muted">{{ tx.organization || tx.userEmail }}</div>
+                    <div class="body-small text-muted">{{ tx.userEmail }}</div>
                   </div>
                 </td>
 
@@ -201,7 +182,7 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
                   }
                 </td>
 
-                <td class="date-cell">{{ tx.date || (tx.createdAt | date:'yyyy-MM-dd') }}</td>
+                <td class="date-cell">{{ (tx.createdAt || tx.date) | date:'dd/MM/yyyy' }}</td>
 
                 <td style="text-align: right;">
                   <button type="button" class="btn btn-outline btn-xs" (click)="downloadReceipt(tx)">
@@ -420,6 +401,7 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
           &.wave .gw-fill { background: #00D2D3; }
           &.om .gw-fill { background: #FF6600; }
           &.stripe .gw-fill { background: #6366F1; }
+          &.paydunya .gw-fill { background: #F59E0B; }
 
           .gw-fees {
             font-size: 11px;
@@ -609,7 +591,25 @@ export class AdminFinancesComponent {
   private adminService = inject(AdminService);
   private confirmService = inject(ConfirmDialogService);
 
-  metrics = this.adminService.getMetrics();
+  stats = this.adminService.getDashboard();
+
+  constructor() {
+    this.adminService.loadDashboard();
+  }
+
+  pendingCount(): number {
+    return this.transactions().filter(tx => tx.status === 'PENDING').length;
+  }
+
+  methodLabel(method: string): string {
+    const labels: Record<string, string> = { PAYDUNYA: 'PayDunya', WAVE: 'Wave Mobile Money', ORANGE_MONEY: 'Orange Money', STRIPE: 'Carte bancaire (Stripe)' };
+    return labels[method] ?? method;
+  }
+
+  methodShare(amount: number): number {
+    const total = this.stats()?.totalRevenueFcfa ?? 0;
+    return total > 0 ? (amount / total) * 100 : 0;
+  }
   transactions = this.adminService.getTransactions();
 
   selectedMethod = 'ALL';

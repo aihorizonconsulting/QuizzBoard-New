@@ -6,6 +6,7 @@ import com.iahorizonplus.quizzboardbackend.exception.BadRequestException;
 import com.iahorizonplus.quizzboardbackend.exception.ResourceNotFoundException;
 import com.iahorizonplus.quizzboardbackend.repository.*;
 import com.iahorizonplus.quizzboardbackend.service.impl.AdminServiceImpl;
+import com.iahorizonplus.quizzboardbackend.service.impl.PlatformHealthService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,6 +16,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -54,6 +57,12 @@ class AdminServiceTest {
     @Mock
     private LearningStatsService learningStatsService;
 
+    @Mock
+    private LiveSessionRecordRepository liveSessionRecordRepository;
+
+    @Mock
+    private PlatformHealthService platformHealthService;
+
     @InjectMocks
     private AdminServiceImpl adminService;
 
@@ -73,27 +82,57 @@ class AdminServiceTest {
     }
 
     @Test
-    @DisplayName("Dashboard stats réelles calculées correctement")
+    @DisplayName("Supervision : indicateurs calculés à partir des données (comptes, forfaits, revenus, IA, Live)")
     void testGetDashboardStats() {
-        when(userRepository.count()).thenReturn(15L);
+        LocalDateTime now = LocalDateTime.now();
+        User paidCreator = User.builder().role(UserRole.CREATOR).subscriptionTier(SubscriptionTier.STARTER)
+                .subscriptionExpiresAt(now.plusDays(10)).createdAt(now).aiGenerationsPeriod(YearMonth.now().toString()).aiGenerationsCount(4).build();
+        User expiredCreator = User.builder().role(UserRole.CREATOR).subscriptionTier(SubscriptionTier.STARTER)
+                .subscriptionExpiresAt(now.minusDays(1)).createdAt(now.minusMonths(3)).aiGenerationsPeriod("2020-01").aiGenerationsCount(9).build();
+        User learner = User.builder().role(UserRole.LEARNER).subscriptionTier(SubscriptionTier.FREE).createdAt(now).build();
+        User admin = User.builder().role(UserRole.ADMIN).subscriptionTier(SubscriptionTier.STARTER).build();
+        when(userRepository.findAll()).thenReturn(List.of(paidCreator, expiredCreator, learner, admin));
         when(quizRepository.count()).thenReturn(8L);
         when(courseRepository.count()).thenReturn(4L);
         when(participationRepository.count()).thenReturn(52L);
         when(questionRepository.count()).thenReturn(40L);
-
-        TransactionRecord tx = TransactionRecord.builder()
-                .id("tx-1")
-                .amountFcfa(9900.0)
-                .status(PaymentStatus.PAID)
-                .build();
-        when(transactionRepository.findAll()).thenReturn(List.of(tx));
+        when(participationRepository.findByStatus("COMPLETED")).thenReturn(List.of(
+                Participation.builder().status("COMPLETED").completedAt(now).build(),
+                Participation.builder().status("COMPLETED").completedAt(now.minusMonths(2)).build()));
+        when(transactionRepository.findAll()).thenReturn(List.of(
+                TransactionRecord.builder().amountFcfa(999.0).status(PaymentStatus.PAID).paymentMethod(PaymentMethod.PAYDUNYA).createdAt(now).build(),
+                TransactionRecord.builder().amountFcfa(999.0).status(PaymentStatus.PAID).paymentMethod(PaymentMethod.PAYDUNYA).createdAt(now.minusMonths(1)).build(),
+                TransactionRecord.builder().amountFcfa(999.0).status(PaymentStatus.PENDING).paymentMethod(PaymentMethod.PAYDUNYA).createdAt(now).build()));
+        LiveSessionRecord active = new LiveSessionRecord();
+        active.setStatus("IN_PROGRESS");
+        active.setPlayersCount(12);
+        active.setCreatedAt(now);
+        active.setUpdatedAt(now);
+        LiveSessionRecord forgotten = new LiveSessionRecord();
+        forgotten.setStatus("LOBBY");
+        forgotten.setPlayersCount(3);
+        forgotten.setCreatedAt(now.minusDays(5));
+        forgotten.setUpdatedAt(now.minusDays(5));
+        when(liveSessionRecordRepository.findAll()).thenReturn(List.of(active, forgotten));
+        when(platformHealthService.checkServices()).thenReturn(List.of(Map.of("id", "database", "status", "UP")));
 
         Map<String, Object> stats = adminService.getDashboardStats();
 
-        assertThat(stats.get("totalUsers")).isEqualTo(15L);
+        assertThat(stats.get("totalUsers")).isEqualTo(4L);
+        assertThat(stats.get("creatorsCount")).isEqualTo(2L);
+        assertThat(stats.get("paidCreatorsCount")).isEqualTo(1L); // l'abonnement expiré ne compte pas
+        assertThat(stats.get("freeCreatorsCount")).isEqualTo(1L);
+        assertThat(stats.get("newUsersThisMonth")).isEqualTo(2L);
         assertThat(stats.get("totalQuizzes")).isEqualTo(8L);
-        assertThat(stats.get("totalRevenueFcfa")).isEqualTo(9900.0);
-        assertThat(stats.get("paidTransactionsCount")).isEqualTo(1);
+        assertThat(stats.get("completedParticipationsThisMonth")).isEqualTo(1L);
+        assertThat(stats.get("totalRevenueFcfa")).isEqualTo(1998.0); // paiement en attente exclu
+        assertThat(stats.get("revenueThisMonthFcfa")).isEqualTo(999.0);
+        assertThat(stats.get("paidTransactionsCount")).isEqualTo(2);
+        assertThat((List<?>) stats.get("monthlyRevenue")).hasSize(6);
+        assertThat(stats.get("aiGenerationsThisMonth")).isEqualTo(4L);
+        assertThat(stats.get("activeLiveSessions")).isEqualTo(1L); // la session oubliée depuis 5 jours n'est pas « en cours »
+        assertThat(stats.get("activeLivePlayers")).isEqualTo(12L);
+        assertThat((List<?>) stats.get("services")).hasSize(1);
     }
 
     @Test

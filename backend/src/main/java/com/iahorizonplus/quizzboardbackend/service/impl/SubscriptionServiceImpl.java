@@ -8,6 +8,7 @@ import com.iahorizonplus.quizzboardbackend.repository.InvoiceRepository;
 import com.iahorizonplus.quizzboardbackend.repository.QuizRepository;
 import com.iahorizonplus.quizzboardbackend.repository.PlatformSettingsRepository;
 import com.iahorizonplus.quizzboardbackend.repository.UserRepository;
+import com.iahorizonplus.quizzboardbackend.service.AdminService;
 import com.iahorizonplus.quizzboardbackend.service.SubscriptionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +28,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     private final PlatformSettingsRepository settingsRepository;
     private final QuizRepository quizRepository;
     private final CommunityRepository communityRepository;
+    private final AdminService adminService;
 
     static final int STARTER_MAX_COMMUNITIES = 10;
     static final int STARTER_MAX_LIVE_PARTICIPANTS = 300;
@@ -68,7 +70,13 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     @Transactional
     public PlatformSettings updatePlatformSettings(PlatformSettings settings) {
         settings.setId("default-settings");
-        return settingsRepository.save(settings);
+        PlatformSettings saved = settingsRepository.save(settings);
+        adminService.audit("Paramètres de la plateforme modifiés", "Paramètres", String.format(
+                "Maintenance : %s ; FREE : %d quiz, %d joueurs Live, %d générations IA / mois ; Starter : %.0f FCFA ; signataire : %s",
+                saved.isMaintenanceMode() ? "activée" : "désactivée", saved.getFreeMaxQuizzes(), saved.getFreeMaxLiveParticipants(),
+                saved.getFreeAiCreditsMonth(), saved.getStarterPriceFcfa(), saved.getCertificateSignatoryName()),
+                saved.isMaintenanceMode() ? "CRITICAL" : "WARNING");
+        return saved;
     }
 
     @Override

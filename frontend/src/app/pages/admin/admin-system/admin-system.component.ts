@@ -16,7 +16,7 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
       <div class="page-header">
         <div>
           <h1 class="h1">Surveillance Système, Quotas IA & Audit</h1>
-          <p class="body-small">Monitoring des modèles IA (Gemini & Groq), charge des serveurs WebSockets et traçabilité de sécurité.</p>
+          <p class="body-small">État réel des services, usage de l'IA, sessions Live en cours et journal d'audit des administrateurs.</p>
         </div>
 
         <button type="button" class="btn btn-outline btn-sm" (click)="exportAuditLogs()">
@@ -25,98 +25,76 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
         </button>
       </div>
 
-      <!-- AI & INFRASTRUCTURE GAUGES -->
-      <div class="infra-grid">
-        <!-- 1. GOOGLE GEMINI -->
-        <div class="card infra-card">
-          <div class="infra-head">
-            <div class="infra-title-wrap">
-              <span class="infra-icon-dot google"></span>
-              <strong>Google Gemini 1.5 Flash</strong>
+      <!-- IA, INFRASTRUCTURE ET LIVE (données réelles) -->
+      @if (stats(); as s) {
+        <div class="infra-grid">
+          <div class="card infra-card">
+            <div class="infra-head">
+              <div class="infra-title-wrap">
+                <span class="infra-icon-dot google"></span>
+                <strong>Intelligence artificielle</strong>
+              </div>
+              <span class="badge badge-primary">Génération IA</span>
             </div>
-            <span class="badge badge-primary">Génération IA</span>
+            <div class="infra-body">
+              <div class="metric-line">
+                <span>Générations ce mois :</span>
+                <strong>{{ s.aiGenerationsThisMonth | number }} (quiz et cours)</strong>
+              </div>
+              <div class="metric-line">
+                <span>Google Gemini :</span>
+                <strong [class.text-success]="service('gemini')?.status === 'UP'">{{ service('gemini')?.detail }}</strong>
+              </div>
+              <div class="metric-line">
+                <span>Groq :</span>
+                <strong [class.text-success]="service('groq')?.status === 'UP'">{{ service('groq')?.detail }}</strong>
+              </div>
+            </div>
           </div>
 
-          <div class="infra-body">
-            <div class="metric-line">
-              <span>Appels ce mois :</span>
-              <strong>32 400 requêtes</strong>
+          <div class="card infra-card">
+            <div class="infra-head">
+              <div class="infra-title-wrap">
+                <span class="infra-icon-dot groq"></span>
+                <strong>Serveurs & services</strong>
+              </div>
+              <span class="badge badge-orange">Vérifié à {{ s.checkedAt | date:'HH:mm' }}</span>
             </div>
-            <div class="metric-line">
-              <span>Latence moyenne :</span>
-              <strong class="text-success">{{ metrics().geminiLatencyMs }} ms</strong>
+            <div class="infra-body">
+              @for (id of ['database', 'redis', 'smtp', 'paydunya']; track id) {
+                <div class="metric-line">
+                  <span>{{ service(id)?.name }} :</span>
+                  <strong [class.text-success]="service(id)?.status === 'UP'">{{ service(id)?.detail }}</strong>
+                </div>
+              }
             </div>
-            <div class="metric-line">
-              <span>Tokens consommés :</span>
-              <strong>14.2M tokens</strong>
+          </div>
+
+          <div class="card infra-card">
+            <div class="infra-head">
+              <div class="infra-title-wrap">
+                <span class="infra-icon-dot ws"></span>
+                <strong>Sessions Live</strong>
+              </div>
+              <span class="badge badge-navy">Temps Réel</span>
             </div>
-            <div class="metric-line">
-              <span>Taux de disponibilité :</span>
-              <strong class="text-success">99.98%</strong>
+            <div class="infra-body">
+              <div class="metric-line">
+                <span>Sessions en cours :</span>
+                <strong class="text-primary">{{ s.activeLiveSessions }}</strong>
+              </div>
+              <div class="metric-line">
+                <span>Joueurs dans ces sessions :</span>
+                <strong class="text-navy">{{ s.activeLivePlayers }}</strong>
+              </div>
+              <div class="metric-line">
+                <span>Sessions créées ce mois :</span>
+                <strong>{{ s.liveSessionsThisMonth }}</strong>
+              </div>
             </div>
           </div>
         </div>
-
-        <!-- 2. GROQ LLAMA 3.3 OCR -->
-        <div class="card infra-card">
-          <div class="infra-head">
-            <div class="infra-title-wrap">
-              <span class="infra-icon-dot groq"></span>
-              <strong>Groq LLaMA 3.3 (Parsing PDF)</strong>
-            </div>
-            <span class="badge badge-orange">OCR & Documents</span>
-          </div>
-
-          <div class="infra-body">
-            <div class="metric-line">
-              <span>Supports analysés :</span>
-              <strong>10 400 documents</strong>
-            </div>
-            <div class="metric-line">
-              <span>Vitesse de parsing :</span>
-              <strong class="text-success">{{ metrics().groqLatencyMs }} ms</strong>
-            </div>
-            <div class="metric-line">
-              <span>Précision d'extraction :</span>
-              <strong>98.6%</strong>
-            </div>
-            <div class="metric-line">
-              <span>Erreurs de structure :</span>
-              <strong>< 0.2%</strong>
-            </div>
-          </div>
-        </div>
-
-        <!-- 3. WEBSOCKETS CLUSTER -->
-        <div class="card infra-card">
-          <div class="infra-head">
-            <div class="infra-title-wrap">
-              <span class="infra-icon-dot ws"></span>
-              <strong>Cluster WebSockets STOMP</strong>
-            </div>
-            <span class="badge badge-navy">Temps Réel</span>
-          </div>
-
-          <div class="infra-body">
-            <div class="metric-line">
-              <span>Arènes Live actives :</span>
-              <strong class="text-primary">{{ metrics().activeLiveArenas }} salons</strong>
-            </div>
-            <div class="metric-line">
-              <span>Étudiants connectés :</span>
-              <strong class="text-navy">{{ metrics().connectedLiveStudents }} simultanés</strong>
-            </div>
-            <div class="metric-line">
-              <span>Temps de propagation :</span>
-              <strong class="text-success">< 18 ms</strong>
-            </div>
-            <div class="metric-line">
-              <span>Méthode de synchro :</span>
-              <strong>Full Push (Zero Polling)</strong>
-            </div>
-          </div>
-        </div>
-      </div>
+      }
 
       <!-- SECURITY AUDIT TRAIL -->
       <div class="card audit-card">
@@ -153,7 +131,7 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
               @for (log of paginatedLogs(); track log.id) {
                 <tr>
                   <td class="time-cell">
-                    <strong>{{ log.timestamp }}</strong>
+                    <strong>{{ log.timestamp | date:'dd/MM/yyyy HH:mm' }}</strong>
                   </td>
 
                   <td>
@@ -378,7 +356,16 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
 })
 export class AdminSystemComponent {
   private adminService = inject(AdminService);
-  metrics = this.adminService.getMetrics();
+  stats = this.adminService.getDashboard();
+
+  constructor() {
+    this.adminService.loadDashboard();
+    this.adminService.loadAuditLogs();
+  }
+
+  service(id: string) {
+    return this.stats()?.services.find(svc => svc.id === id);
+  }
   auditLogs = this.adminService.getAuditLogs();
 
   searchLog = '';

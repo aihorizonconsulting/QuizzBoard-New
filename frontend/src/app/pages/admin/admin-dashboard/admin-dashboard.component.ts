@@ -1,8 +1,7 @@
-import { Component, inject } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { AdminService } from '../../../core/services/admin.service';
-import { QuizService } from '../../../core/services/quiz.service';
 import { IconComponent } from '../../../shared/components/icon/icon.component';
 
 @Component({
@@ -19,16 +18,25 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
               <app-icon name="shield" [size]="13" color="var(--color-orange)"></app-icon>
               <span>SUPERADMINISTRATION GLOBALE</span>
             </span>
-            <span class="health-pill">
-              <span class="pulse-dot"></span>
-              <span>Plateforme 100% Opérationnelle</span>
-            </span>
+            @if (stats()) {
+              <span class="health-pill" [class.warn]="health().warnings > 0 && health().down === 0" [class.down]="health().down > 0">
+                <span class="pulse-dot"></span>
+                <span>{{ health().label }}</span>
+              </span>
+            }
           </div>
           <h1 class="h1" style="margin-top: 8px;">Supervision & Pilotage Central</h1>
-          <p class="body-small">Surveillance temps réel des indicateurs financiers, des utilisateurs et des quotas de la plateforme.</p>
+          <p class="body-small">
+            Indicateurs calculés à partir des données réelles de la plateforme.
+            @if (stats(); as s) { Mis à jour le {{ s.checkedAt | date:'dd/MM/yyyy à HH:mm' }}. }
+          </p>
         </div>
 
         <div class="header-actions">
+          <button type="button" class="btn btn-outline btn-sm" (click)="refresh()" [disabled]="loading()">
+            <app-icon name="refresh-cw" [size]="15"></app-icon>
+            <span>{{ loading() ? 'Actualisation...' : 'Actualiser' }}</span>
+          </button>
           <a routerLink="/admin/users" class="btn btn-outline btn-sm">
             <app-icon name="users" [size]="15"></app-icon>
             <span>Gérer les Utilisateurs</span>
@@ -40,238 +48,219 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
         </div>
       </div>
 
-      <!-- 4 KPI CARDS -->
-      <div class="kpi-grid">
-        <div class="kpi-card card">
-          <div class="kpi-top">
-            <span class="kpi-title">Utilisateurs Actifs</span>
-            <span class="kpi-trend positive">+14% ce mois</span>
-          </div>
-          <div class="kpi-val">{{ metrics().totalUsers | number }}</div>
-          <div class="kpi-breakdown">
-            <span><strong>{{ metrics().creatorsCount }}</strong> Formateurs</span>
-            <span>•</span>
-            <span><strong>{{ metrics().learnersCount }}</strong> Élèves</span>
-          </div>
-        </div>
-
-        <div class="kpi-card card">
-          <div class="kpi-top">
-            <span class="kpi-title">Revenu Mensuel (MRR)</span>
-            <span class="kpi-trend positive">+22% ce mois</span>
-          </div>
-          <div class="kpi-val highlight-green">{{ (metrics().mrrFcfa | number) }} F</div>
-          <div class="kpi-breakdown">
-            <span>~{{ metrics().mrrUsd }} $ USD</span>
-            <span>•</span>
-            <span class="payment-badge wave">Wave 65%</span>
-            <span class="payment-badge om">OM 25%</span>
-          </div>
-        </div>
-
-        <div class="kpi-card card">
-          <div class="kpi-top">
-            <span class="kpi-title">Quiz & Cours Hébergés</span>
-            <span class="kpi-trend neutral">Actifs</span>
-          </div>
-          <div class="kpi-val">{{ metrics().totalQuizzes | number }}</div>
-          <div class="kpi-breakdown">
-            <span><strong>{{ metrics().totalCourses }}</strong> Cours structurés</span>
-            <span>•</span>
-            <span><strong>{{ (metrics().totalQuestions || 0) | number }}</strong> Questions</span>
-          </div>
-        </div>
-
-        <div class="kpi-card card">
-          <div class="kpi-top">
-            <span class="kpi-title">Appels IA & OCR (Mois)</span>
-            <span class="kpi-trend warning">{{ metrics().geminiLatencyMs }}ms moy.</span>
-          </div>
-          <div class="kpi-val highlight-orange">{{ metrics().aiCallsMonth | number }}</div>
-          <div class="kpi-breakdown">
-            <span>Gemini 1.5 Flash</span>
-            <span>•</span>
-            <span>Groq LLaMA 3.3</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- CHARTS SECTION: 2 DIAGRAMMES SIMPLES & ÉLÉGANTS -->
-      <div class="charts-admin-grid">
-        <!-- DIAGRAMME 1: ÉVOLUTION DES REVENUS MRR (6 MOIS) -->
-        <div class="card chart-card">
-          <div class="chart-header">
-            <div>
-              <h3 class="chart-title">Croissance des Revenus Mensuels (FCFA)</h3>
-              <p class="chart-subtitle">Progression des souscriptions STARTER via Wave et Orange Money</p>
+      @if (stats(); as s) {
+        <!-- 4 KPI CARDS -->
+        <div class="kpi-grid">
+          <div class="kpi-card card">
+            <div class="kpi-top">
+              <span class="kpi-title">Utilisateurs inscrits</span>
+              <span class="kpi-trend" [class.positive]="s.newUsersThisMonth > 0" [class.neutral]="s.newUsersThisMonth === 0">+{{ s.newUsersThisMonth }} ce mois</span>
             </div>
-            <div class="chart-tag-pill">
-              <app-icon name="trending-up" [size]="14" color="var(--color-success)"></app-icon>
-              <span>+18.4% MRR</span>
+            <div class="kpi-val">{{ s.totalUsers | number }}</div>
+            <div class="kpi-breakdown">
+              <span><strong>{{ s.creatorsCount | number }}</strong> Formateurs</span>
+              <span>•</span>
+              <span><strong>{{ s.learnersCount | number }}</strong> Apprenants</span>
+              <span>•</span>
+              <span><strong>{{ s.adminsCount }}</strong> Admin</span>
             </div>
           </div>
 
-          <!-- MINI BAR CHART DES REVENUS -->
-          <div class="chart-bars-wrap">
-            @for (m of monthlyRevenues; track m.month) {
-              <div class="bar-col" [class.is-current]="m.isCurrent">
-                <div class="bar-val-tip">{{ m.amountLabel }}</div>
-                <div class="bar-track">
-                  <div class="bar-fill-inner" [style.height]="m.percent + '%'"></div>
-                </div>
-                <div class="bar-month-label">{{ m.month }}</div>
+          <div class="kpi-card card">
+            <div class="kpi-top">
+              <span class="kpi-title">Revenus du mois</span>
+              <span class="kpi-trend neutral">Mois dernier : {{ s.revenueLastMonthFcfa | number }} F</span>
+            </div>
+            <div class="kpi-val highlight-green">{{ s.revenueThisMonthFcfa | number }} F</div>
+            <div class="kpi-breakdown">
+              <span>Total encaissé : <strong>{{ s.totalRevenueFcfa | number }} F</strong></span>
+              <span>•</span>
+              <span><strong>{{ s.paidTransactionsCount }}</strong> paiement(s) confirmé(s)</span>
+            </div>
+          </div>
+
+          <div class="kpi-card card">
+            <div class="kpi-top">
+              <span class="kpi-title">Quiz & Cours hébergés</span>
+              <span class="kpi-trend neutral">{{ s.completedParticipationsThisMonth | number }} quiz joués ce mois</span>
+            </div>
+            <div class="kpi-val">{{ s.totalQuizzes | number }}</div>
+            <div class="kpi-breakdown">
+              <span><strong>{{ s.totalCourses | number }}</strong> Cours</span>
+              <span>•</span>
+              <span><strong>{{ s.totalQuestions | number }}</strong> Questions</span>
+              <span>•</span>
+              <span><strong>{{ s.completedParticipations | number }}</strong> quiz terminés au total</span>
+            </div>
+          </div>
+
+          <div class="kpi-card card">
+            <div class="kpi-top">
+              <span class="kpi-title">Générations IA (mois)</span>
+              <span class="kpi-trend" [class.positive]="aiReady()" [class.warning]="!aiReady()">{{ aiReady() ? 'IA configurée' : 'Clés IA absentes' }}</span>
+            </div>
+            <div class="kpi-val highlight-orange">{{ s.aiGenerationsThisMonth | number }}</div>
+            <div class="kpi-breakdown">
+              <span>Quiz et cours générés ce mois</span>
+              <span>•</span>
+              <span>Gemini : <strong>{{ serviceShort('gemini') }}</strong></span>
+              <span>•</span>
+              <span>Groq : <strong>{{ serviceShort('groq') }}</strong></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- CHARTS SECTION -->
+        <div class="charts-admin-grid">
+          <!-- DIAGRAMME 1: REVENUS ENCAISSÉS (6 MOIS) -->
+          <div class="card chart-card">
+            <div class="chart-header">
+              <div>
+                <h3 class="chart-title">Revenus encaissés (6 derniers mois)</h3>
+                <p class="chart-subtitle">Paiements confirmés des forfaits, en FCFA</p>
               </div>
+              <div class="chart-tag-pill">
+                <app-icon name="trending-up" [size]="14" color="var(--color-success)"></app-icon>
+                <span>{{ revenueTrendLabel() }}</span>
+              </div>
+            </div>
+
+            @if (revenueSixMonths() === 0) {
+              <p class="empty-note">Aucun paiement encaissé sur les 6 derniers mois.</p>
             }
-          </div>
-
-          <div class="chart-legend-row">
-            <div class="legend-item">
-              <span class="legend-dot dot-current"></span>
-              <span>Mois en cours : <strong>1 480 000 FCFA</strong></span>
-            </div>
-            <div class="legend-item">
-              <span class="legend-dot dot-prev"></span>
-              <span>Moyenne trimestrielle : <strong>1 190 000 FCFA</strong></span>
-            </div>
-          </div>
-        </div>
-
-        <!-- DIAGRAMME 2: RÉPARTITION DES COMPTES PAR FORFAIT -->
-        <div class="card chart-card">
-          <div class="chart-header">
-            <div>
-              <h3 class="chart-title">Répartition des Utilisateurs</h3>
-              <p class="chart-subtitle">Formateurs abonnés, gratuits et apprenants</p>
-            </div>
-            <div class="chart-tag-pill">
-              <span>{{ metrics().totalUsers }} Comptes</span>
-            </div>
-          </div>
-
-          <!-- DONUT & DISTRIBUTION BARS -->
-          <div class="distribution-bars-wrap">
-            <div class="dist-row">
-              <div class="dist-label">
-                <span class="dist-name">Formateurs STARTER (Payant)</span>
-                <span class="dist-val">420 (34%)</span>
-              </div>
-              <div class="dist-progress-track">
-                <div class="dist-fill fill-starter" style="width: 34%;"></div>
-              </div>
-            </div>
-
-            <div class="dist-row">
-              <div class="dist-label">
-                <span class="dist-name">Formateurs FREE (Gratuit)</span>
-                <span class="dist-val">430 (34%)</span>
-              </div>
-              <div class="dist-progress-track">
-                <div class="dist-fill fill-free" style="width: 34%;"></div>
-              </div>
-            </div>
-
-            <div class="dist-row">
-              <div class="dist-label">
-                <span class="dist-name">Apprenants & Étudiants</span>
-                <span class="dist-val">398 (32%)</span>
-              </div>
-              <div class="dist-progress-track">
-                <div class="dist-fill fill-learner" style="width: 32%;"></div>
-              </div>
-            </div>
-          </div>
-
-          <div class="quick-stat-box">
-            <div class="stat-mini">
-              <span class="stat-lbl">Taux de Conversion :</span>
-              <strong class="stat-num text-success">49.4%</strong>
-            </div>
-            <div class="stat-mini">
-              <span class="stat-lbl">Sessions Live en Direct :</span>
-              <strong class="stat-num text-primary">{{ metrics().activeLiveArenas }} actives</strong>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- BOTTOM SECTION: SERVICES HEALTH & RECENT AUDIT LOGS -->
-      <div class="bottom-admin-grid">
-        <!-- 1. HEALTH STATUS -->
-        <div class="card status-card">
-          <div class="card-head">
-            <h3 class="h3" style="margin: 0; font-size: 16px;">Santé des Passerelles & Services</h3>
-            <span class="badge badge-primary">SLA 99.9%</span>
-          </div>
-
-          <div class="services-list">
-            <div class="service-row">
-              <div class="service-info">
-                <span class="service-dot online"></span>
-                <strong>Passerelle Wave Mobile Money</strong>
-              </div>
-              <span class="service-status">Opérationnel (< 300ms)</span>
-            </div>
-
-            <div class="service-row">
-              <div class="service-info">
-                <span class="service-dot online"></span>
-                <strong>Passerelle Orange Money</strong>
-              </div>
-              <span class="service-status">Opérationnel (API v2)</span>
-            </div>
-
-            <div class="service-row">
-              <div class="service-info">
-                <span class="service-dot online"></span>
-                <strong>API IA Générative (Google Gemini & Groq)</strong>
-              </div>
-              <span class="service-status">Temps de réponse: {{ metrics().geminiLatencyMs }}ms</span>
-            </div>
-
-            <div class="service-row">
-              <div class="service-info">
-                <span class="service-dot online"></span>
-                <strong>Serveur WebSockets Live (STOMP)</strong>
-              </div>
-              <span class="service-status">{{ metrics().connectedLiveStudents }} étudiants connectés</span>
-            </div>
-
-            <div class="service-row">
-              <div class="service-info">
-                <span class="service-dot online"></span>
-                <strong>Cluster Base de Données (PostgreSQL ACID)</strong>
-              </div>
-              <span class="service-status">{{ metrics().databaseHealthPercent }}% Uptime</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- 2. RECENT SECURITY AUDIT LOG -->
-        <div class="card logs-card">
-          <div class="card-head">
-            <h3 class="h3" style="margin: 0; font-size: 16px;">Journal d'Audit de Sécurité Récent</h3>
-            <a routerLink="/admin/system" class="view-all-link">Voir tout le journal →</a>
-          </div>
-
-          <div class="logs-compact-list">
-            @for (log of auditLogs().slice(0, 4); track log.id) {
-              <div class="log-item">
-                <div class="log-badge" [ngClass]="'sev-' + log.severity.toLowerCase()">
-                  {{ log.severity }}
+            <div class="chart-bars-wrap">
+              @for (m of revenueBars(); track m.month) {
+                <div class="bar-col" [class.is-current]="m.isCurrent">
+                  <div class="bar-val-tip">{{ m.amountLabel }}</div>
+                  <div class="bar-track">
+                    <div class="bar-fill-inner" [style.height]="m.percent + '%'"></div>
+                  </div>
+                  <div class="bar-month-label">{{ m.label }}</div>
                 </div>
-                <div class="log-content">
-                  <div class="log-title">{{ log.action }}</div>
-                  <div class="log-target">{{ log.target }}</div>
-                  <div class="log-meta">{{ log.timestamp }} • Par {{ log.adminName }}</div>
-                </div>
+              }
+            </div>
+
+            <div class="chart-legend-row">
+              <div class="legend-item">
+                <span class="legend-dot dot-current"></span>
+                <span>Mois en cours : <strong>{{ s.revenueThisMonthFcfa | number }} FCFA</strong></span>
               </div>
-            }
+              <div class="legend-item">
+                <span class="legend-dot dot-prev"></span>
+                <span>Moyenne sur 6 mois : <strong>{{ revenueSixMonths() / 6 | number:'1.0-0' }} FCFA</strong></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- DIAGRAMME 2: RÉPARTITION DES COMPTES -->
+          <div class="card chart-card">
+            <div class="chart-header">
+              <div>
+                <h3 class="chart-title">Répartition des Utilisateurs</h3>
+                <p class="chart-subtitle">Forfaits en cours de validité, par type de compte</p>
+              </div>
+              <div class="chart-tag-pill">
+                <span>{{ s.totalUsers | number }} Comptes</span>
+              </div>
+            </div>
+
+            <div class="distribution-bars-wrap">
+              @for (row of distribution(); track row.name) {
+                <div class="dist-row">
+                  <div class="dist-label">
+                    <span class="dist-name">{{ row.name }}</span>
+                    <span class="dist-val">{{ row.count | number }} ({{ row.percent | number:'1.0-1' }}%)</span>
+                  </div>
+                  <div class="dist-progress-track">
+                    <div class="dist-fill" [ngClass]="row.css" [style.width.%]="row.percent"></div>
+                  </div>
+                </div>
+              }
+            </div>
+
+            <div class="quick-stat-box">
+              <div class="stat-mini">
+                <span class="stat-lbl">Formateurs passés au payant :</span>
+                <strong class="stat-num text-success">{{ conversionRate() | number:'1.0-1' }}%</strong>
+              </div>
+              <div class="stat-mini">
+                <span class="stat-lbl">Sessions Live en cours :</span>
+                <strong class="stat-num text-primary">{{ s.activeLiveSessions }} ({{ s.activeLivePlayers }} joueurs)</strong>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+
+        <!-- BOTTOM SECTION: ÉTAT DES SERVICES & JOURNAL D'AUDIT -->
+        <div class="bottom-admin-grid">
+          <div class="card status-card">
+            <div class="card-head">
+              <h3 class="h3" style="margin: 0; font-size: 16px;">État des services</h3>
+              <span class="badge badge-primary">Vérifié à {{ s.checkedAt | date:'HH:mm' }}</span>
+            </div>
+
+            <div class="services-list">
+              @for (svc of s.services; track svc.id) {
+                <div class="service-row">
+                  <div class="service-info">
+                    <span class="service-dot" [class.online]="svc.status === 'UP'" [class.warn]="svc.status === 'WARNING'" [class.down]="svc.status === 'DOWN'"></span>
+                    <strong>{{ svc.name }}</strong>
+                  </div>
+                  <span class="service-status">{{ svc.detail }}</span>
+                </div>
+              }
+            </div>
+          </div>
+
+          <div class="card logs-card">
+            <div class="card-head">
+              <h3 class="h3" style="margin: 0; font-size: 16px;">Journal d'Audit Récent</h3>
+              <a routerLink="/admin/system" class="view-all-link">Voir tout le journal →</a>
+            </div>
+
+            <div class="logs-compact-list">
+              @for (log of auditLogs().slice(0, 5); track log.id) {
+                <div class="log-item">
+                  <div class="log-badge" [ngClass]="'sev-' + (log.severity || 'INFO').toLowerCase()">
+                    {{ log.severity || 'INFO' }}
+                  </div>
+                  <div class="log-content">
+                    <div class="log-title">{{ log.action }}</div>
+                    <div class="log-target">{{ log.target }}</div>
+                    <div class="log-meta">{{ log.timestamp | date:'dd/MM/yyyy HH:mm' }} • Par {{ log.adminName }}</div>
+                  </div>
+                </div>
+              } @empty {
+                <p class="empty-note">Aucune action enregistrée pour le moment.</p>
+              }
+            </div>
+          </div>
+        </div>
+      } @else if (error()) {
+        <div class="card empty-state-card">
+          <p class="empty-note">{{ error() }}</p>
+          <button type="button" class="btn btn-primary btn-sm" (click)="refresh()">Réessayer</button>
+        </div>
+      } @else {
+        <div class="card empty-state-card"><p class="empty-note">Calcul des indicateurs...</p></div>
+      }
     </div>
   `,
   styles: [`
+    .empty-note {
+      font-size: 13px;
+      color: var(--color-text-secondary);
+      margin: 8px 0;
+    }
+
+    .empty-state-card {
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
     .admin-dashboard {
       display: flex;
       flex-direction: column;
@@ -295,6 +284,9 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
       background: rgba(16, 185, 129, 0.1);
       padding: 4px 10px;
       border-radius: var(--radius-full);
+
+      &.warn { color: #B45309; background: rgba(245, 158, 11, 0.12); .pulse-dot { background-color: #F59E0B; } }
+      &.down { color: #B91C1C; background: rgba(239, 68, 68, 0.12); .pulse-dot { background-color: #EF4444; } }
 
       .pulse-dot {
         width: 8px;
@@ -586,6 +578,7 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
                 &.fill-starter { background: var(--color-primary); }
                 &.fill-free { background: var(--color-navy); }
                 &.fill-learner { background: #3B82F6; }
+                &.fill-admin { background: #94A3B8; }
               }
             }
           }
@@ -675,7 +668,8 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
               border-radius: 50%;
 
               &.online { background-color: var(--color-success); }
-              &.busy { background-color: var(--color-orange); }
+              &.warn { background-color: #F59E0B; }
+              &.down { background-color: #EF4444; }
             }
           }
 
@@ -742,15 +736,90 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
 })
 export class AdminDashboardComponent {
   private adminService = inject(AdminService);
-  metrics = this.adminService.getMetrics();
+  stats = this.adminService.getDashboard();
+  loading = this.adminService.isDashboardLoading();
+  error = this.adminService.getDashboardError();
   auditLogs = this.adminService.getAuditLogs();
 
-  monthlyRevenues = [
-    { month: 'Oct 25', amountLabel: '790k', percent: 53, isCurrent: false },
-    { month: 'Nov 25', amountLabel: '920k', percent: 62, isCurrent: false },
-    { month: 'Déc 25', amountLabel: '1.05M', percent: 71, isCurrent: false },
-    { month: 'Jan 26', amountLabel: '1.18M', percent: 80, isCurrent: false },
-    { month: 'Fév 26', amountLabel: '1.34M', percent: 90, isCurrent: false },
-    { month: 'Mars 26', amountLabel: '1.48M', percent: 100, isCurrent: true }
-  ];
+  private readonly MONTHS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+
+  constructor() {
+    // Indicateurs recalculés à chaque ouverture de la page (services vérifiés en direct)
+    this.refresh();
+  }
+
+  refresh(): void {
+    this.adminService.loadDashboard();
+    this.adminService.loadAuditLogs();
+  }
+
+  /** Synthèse de l'état des services pour la pastille d'en-tête. */
+  health = computed(() => {
+    const services = this.stats()?.services ?? [];
+    const down = services.filter(svc => svc.status === 'DOWN').length;
+    const warnings = services.filter(svc => svc.status === 'WARNING').length;
+    const label = down > 0
+      ? `${down} service(s) en panne`
+      : warnings > 0 ? `${warnings} point(s) à vérifier` : 'Tous les services opérationnels';
+    return { down, warnings, label };
+  });
+
+  serviceShort(id: string): string {
+    const svc = this.stats()?.services.find(x => x.id === id);
+    if (!svc) return '—';
+    return svc.status === 'UP' ? 'configuré' : 'non configuré';
+  }
+
+  aiReady = computed(() => (this.stats()?.services ?? []).some(svc => (svc.id === 'gemini' || svc.id === 'groq') && svc.status === 'UP'));
+
+  revenueSixMonths = computed(() => (this.stats()?.monthlyRevenue ?? []).reduce((sum, m) => sum + m.amountFcfa, 0));
+
+  revenueBars = computed(() => {
+    const months = this.stats()?.monthlyRevenue ?? [];
+    const max = Math.max(...months.map(m => m.amountFcfa), 0);
+    return months.map((m, i) => {
+      const [year, month] = m.month.split('-').map(Number);
+      return {
+        month: m.month,
+        label: `${this.MONTHS[month - 1]} ${String(year).slice(2)}`,
+        amountLabel: this.shortAmount(m.amountFcfa),
+        percent: max > 0 ? Math.max(2, Math.round((m.amountFcfa / max) * 100)) : 2,
+        isCurrent: i === months.length - 1
+      };
+    });
+  });
+
+  revenueTrendLabel = computed(() => {
+    const s = this.stats();
+    if (!s) return '';
+    if (s.revenueLastMonthFcfa > 0) {
+      const change = ((s.revenueThisMonthFcfa - s.revenueLastMonthFcfa) / s.revenueLastMonthFcfa) * 100;
+      return `${change >= 0 ? '+' : ''}${change.toFixed(1).replace('.', ',')} % vs mois dernier`;
+    }
+    return s.revenueThisMonthFcfa > 0 ? 'Premiers revenus ce mois' : 'Aucun revenu ce mois';
+  });
+
+  distribution = computed(() => {
+    const s = this.stats();
+    if (!s) return [];
+    const total = Math.max(1, s.totalUsers);
+    const rows = [
+      { name: 'Formateurs STARTER (payant)', count: s.paidCreatorsCount, css: 'fill-starter' },
+      { name: 'Formateurs FREE (gratuit)', count: s.freeCreatorsCount, css: 'fill-free' },
+      { name: s.paidLearnersCount > 0 ? `Apprenants (dont ${s.paidLearnersCount} Apprenant Plus)` : 'Apprenants', count: s.learnersCount, css: 'fill-learner' },
+      { name: 'Administrateurs', count: s.adminsCount, css: 'fill-admin' }
+    ];
+    return rows.map(r => ({ ...r, percent: (r.count / total) * 100 }));
+  });
+
+  conversionRate = computed(() => {
+    const s = this.stats();
+    return s && s.creatorsCount > 0 ? (s.paidCreatorsCount / s.creatorsCount) * 100 : 0;
+  });
+
+  private shortAmount(amount: number): string {
+    if (amount >= 1_000_000) return (amount / 1_000_000).toFixed(1).replace('.', ',') + ' M';
+    if (amount >= 1000) return Math.round(amount / 1000) + ' k';
+    return String(Math.round(amount));
+  }
 }

@@ -19,4 +19,7 @@ public interface AdminService {
     List<TransactionRecord> getAllTransactions();
     List<AuditLog> getAuditLogs();
     void logAction(String actorName, String action, String target, String details);
+
+    /** Entrée du journal d'audit attribuée à l'administrateur connecté (avec son adresse IP). */
+    void audit(String action, String target, String details, String severity);
 }

@@ -4,25 +4,49 @@ export interface AuditLog {
   adminName: string;
   action: string;
   target: string;
+  details?: string;
   ipAddress?: string;
   severity: 'INFO' | 'WARNING' | 'CRITICAL';
 }
 
-export interface SystemMetrics {
+/** État réel d'un service vérifié par le serveur (base, Redis, emails, paiement, IA). */
+export interface ServiceStatus {
+  id: string;
+  name: string;
+  status: 'UP' | 'WARNING' | 'DOWN';
+  detail: string;
+  latencyMs?: number;
+}
+
+/** Indicateurs de supervision calculés par le serveur à partir de la base. */
+export interface AdminDashboardStats {
   totalUsers: number;
   creatorsCount: number;
   learnersCount: number;
-  mrrFcfa: number;
-  mrrUsd: number;
+  adminsCount: number;
+  paidCreatorsCount: number;
+  paidLearnersCount: number;
+  freeCreatorsCount: number;
+  newUsersThisMonth: number;
+  newUsersLastMonth: number;
   totalQuizzes: number;
   totalCourses: number;
-  totalQuestions?: number;
-  aiCallsMonth: number;
-  activeLiveArenas: number;
-  connectedLiveStudents: number;
-  databaseHealthPercent: number;
-  geminiLatencyMs: number;
-  groqLatencyMs: number;
+  totalQuestions: number;
+  totalParticipations: number;
+  completedParticipations: number;
+  completedParticipationsThisMonth: number;
+  totalRevenueFcfa: number;
+  paidTransactionsCount: number;
+  revenueThisMonthFcfa: number;
+  revenueLastMonthFcfa: number;
+  monthlyRevenue: { month: string; amountFcfa: number; payments: number }[];
+  revenueByMethod: { method: string; payments: number; amountFcfa: number }[];
+  aiGenerationsThisMonth: number;
+  activeLiveSessions: number;
+  activeLivePlayers: number;
+  liveSessionsThisMonth: number;
+  services: ServiceStatus[];
+  checkedAt: string;
 }
 
 export interface PlatformSettings {
