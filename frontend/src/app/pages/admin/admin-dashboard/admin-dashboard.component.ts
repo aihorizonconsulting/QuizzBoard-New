@@ -97,15 +97,13 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
           <div class="kpi-card card">
             <div class="kpi-top">
               <span class="kpi-title">Générations IA (mois)</span>
-              <span class="kpi-trend" [class.positive]="aiReady()" [class.warning]="!aiReady()">{{ aiReady() ? 'IA configurée' : 'Clés IA absentes' }}</span>
+              <span class="kpi-trend" [class.positive]="aiReady()" [class.warning]="!aiReady()">{{ aiReady() ? 'Gemini opérationnel' : 'IA de secours' }}</span>
             </div>
             <div class="kpi-val highlight-orange">{{ s.aiGenerationsThisMonth | number }}</div>
             <div class="kpi-breakdown">
               <span>Quiz et cours générés ce mois</span>
               <span>•</span>
               <span>Gemini : <strong>{{ serviceShort('gemini') }}</strong></span>
-              <span>•</span>
-              <span>Groq : <strong>{{ serviceShort('groq') }}</strong></span>
             </div>
           </div>
         </div>
@@ -767,10 +765,10 @@ export class AdminDashboardComponent {
   serviceShort(id: string): string {
     const svc = this.stats()?.services.find(x => x.id === id);
     if (!svc) return '—';
-    return svc.status === 'UP' ? 'configuré' : 'non configuré';
+    return svc.status === 'UP' ? 'opérationnel' : (svc.status === 'DOWN' ? 'clé refusée' : 'clé absente');
   }
 
-  aiReady = computed(() => (this.stats()?.services ?? []).some(svc => (svc.id === 'gemini' || svc.id === 'groq') && svc.status === 'UP'));
+  aiReady = computed(() => (this.stats()?.services ?? []).some(svc => svc.id === 'gemini' && svc.status === 'UP'));
 
   revenueSixMonths = computed(() => (this.stats()?.monthlyRevenue ?? []).reduce((sum, m) => sum + m.amountFcfa, 0));
 

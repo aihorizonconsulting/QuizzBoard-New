@@ -22,7 +22,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/ai")
 @RequiredArgsConstructor
-@Tag(name = "Intelligence Artificielle", description = "Génération automatisée de quiz et de cours structurés par IA (Gemini / Groq) (Richardson Niveau 3)")
+@Tag(name = "Intelligence Artificielle", description = "Génération automatisée de quiz et de cours structurés par IA (Google Gemini) (Richardson Niveau 3)")
 public class AiController {
 
     private final AiService aiService;

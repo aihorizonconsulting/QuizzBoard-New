@@ -11,6 +11,13 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -43,11 +50,10 @@ public class PlatformHealthService {
     @Value("${app.ai.gemini.model:gemini-2.5-flash}")
     private String geminiModel;
 
-    @Value("${app.ai.groq.api-key:}")
-    private String groqApiKey;
+    @Value("${app.ai.gemini.base-url:https://generativelanguage.googleapis.com/v1beta}")
+    private String geminiBaseUrl;
 
-    @Value("${app.ai.groq.model:llama-3.3-70b-versatile}")
-    private String groqModel;
+    private final HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(4)).build();
 
     public List<Map<String, Object>> checkServices() {
         List<Map<String, Object>> services = new ArrayList<>();
@@ -59,12 +65,7 @@ public class PlatformHealthService {
                 ? service("smtp", "Envoi des emails (SMTP)", UP, "Configuré")
                 : service("smtp", "Envoi des emails (SMTP)", DOWN, "Désactivé : aucun email n'est envoyé"));
         services.add(paymentStatus());
-        services.add(isSet(geminiApiKey)
-                ? service("gemini", "IA Google Gemini", UP, "Clé configurée (" + geminiModel + ")")
-                : service("gemini", "IA Google Gemini", WARNING, "Clé absente : générateur de secours"));
-        services.add(isSet(groqApiKey)
-                ? service("groq", "IA Groq", UP, "Clé configurée (" + groqModel + ")")
-                : service("groq", "IA Groq", WARNING, "Clé absente"));
+        services.add(geminiStatus());
         return services;
     }
 
@@ -77,6 +78,39 @@ public class PlatformHealthService {
         return paymentSimulation
                 ? service("paydunya", name, WARNING, "Paiement simulé (environnement de test)")
                 : service("paydunya", name, DOWN, "Clés absentes : les paiements échouent");
+    }
+
+    /**
+     * La clé est testée auprès de Google (lecture gratuite de la fiche du modèle, sans génération) :
+     * sans clé valide, « Générer avec l'IA » produit des questions génériques de secours.
+     */
+    private Map<String, Object> geminiStatus() {
+        String name = "IA Google Gemini";
+        if (!isSet(geminiApiKey)) {
+            return service("gemini", name, WARNING, "Clé GEMINI_API_KEY absente : questions génériques de secours");
+        }
+        String url = geminiBaseUrl + "/models/" + geminiModel + "?key=" + URLEncoder.encode(geminiApiKey.trim(), StandardCharsets.UTF_8);
+        long start = System.nanoTime();
+        try {
+            HttpResponse<Void> response = httpClient.send(
+                    HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(6)).GET().build(),
+                    HttpResponse.BodyHandlers.discarding());
+            long ms = Math.max(1, (System.nanoTime() - start) / 1_000_000);
+            int code = response.statusCode();
+            if (code == 200) {
+                return service("gemini", name, UP, "Clé valide, modèle " + geminiModel + " (" + ms + " ms)");
+            }
+            if (code == 404) {
+                return service("gemini", name, DOWN, "Modèle " + geminiModel + " introuvable chez Google");
+            }
+            if (code == 429) {
+                return service("gemini", name, WARNING, "Quota Google dépassé (HTTP 429)");
+            }
+            return service("gemini", name, DOWN, "Clé refusée par Google (HTTP " + code + ") : questions génériques de secours");
+        } catch (Exception e) {
+            log.warn("Supervision : Google Gemini injoignable ({})", e.getMessage());
+            return service("gemini", name, WARNING, "Google injoignable depuis le serveur");
+        }
     }
 
     private Map<String, Object> probe(String id, String name, Runnable check) {
@@ -103,6 +137,7 @@ public class PlatformHealthService {
     }
 
     private static boolean isSet(String value) {
-        return value != null && !value.isBlank() && !value.contains("votre_");
+        // Mêmes règles que la génération IA (valeurs d'exemple des fichiers .env ignorées)
+        return value != null && !value.isBlank() && !value.contains("votre_") && !value.contains("your_key");
     }
 }

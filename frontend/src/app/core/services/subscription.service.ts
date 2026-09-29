@@ -55,7 +55,7 @@ const DEFAULT_PLANS: SubscriptionPlan[] = [
     features: [
       { text: 'Quiz et parcours pédagogiques illimités', included: true, highlight: true },
       { text: 'Sessions Live jusqu\'à 300 participants', included: true, highlight: true },
-      { text: 'Génération IA : 100 par mois (Gemini & Groq)', included: true, highlight: true },
+      { text: 'Génération IA : 100 par mois (Google Gemini)', included: true, highlight: true },
       { text: 'Certificats officiels infalsifiables avec QR Code', included: true },
       { text: 'Analytiques prédictives et exports détaillés', included: true },
       { text: 'Support prioritaire 24/7 par WhatsApp/Email', included: true }

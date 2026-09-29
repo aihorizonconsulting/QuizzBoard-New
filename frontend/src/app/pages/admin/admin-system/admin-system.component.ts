@@ -45,10 +45,6 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
                 <span>Google Gemini :</span>
                 <strong [class.text-success]="service('gemini')?.status === 'UP'">{{ service('gemini')?.detail }}</strong>
               </div>
-              <div class="metric-line">
-                <span>Groq :</span>
-                <strong [class.text-success]="service('groq')?.status === 'UP'">{{ service('groq')?.detail }}</strong>
-              </div>
             </div>
           </div>
 
