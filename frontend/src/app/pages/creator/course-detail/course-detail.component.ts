@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -8,6 +8,7 @@ import { QuizService } from '../../../core/services/quiz.service';
 import { LiveSessionService } from '../../../core/services/live-session.service';
 import { FileUploadService } from '../../../core/services/file-upload.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { AuthService } from '../../../core/services/auth.service';
 import { Course, CourseChapter, CourseLevel } from '../../../core/models/course.model';
 import { IconComponent } from '../../../shared/components/icon/icon.component';
 
@@ -38,6 +39,10 @@ export class CourseDetailComponent implements OnInit {
   private liveService = inject(LiveSessionService);
   private fileUploadService = inject(FileUploadService);
   private toast = inject(ToastService);
+  private authService = inject(AuthService);
+
+  /** Formateur ou administrateur : gestion du cours ; apprenant : lecture seule. */
+  canEdit = computed(() => this.authService.isCreator() || this.authService.isAdmin());
 
   course = signal<Course | null>(null);
   selectedChapterIndex = 0; // 0..N, or -1 for final quiz

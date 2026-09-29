@@ -48,8 +48,10 @@ import { extractFieldErrors, getGeneralErrorMessage } from '../../../core/utils/
       <section class="pricing-cards-section">
         <div class="pricing-grid">
           @for (plan of plans(); track plan.id) {
-            <div class="pricing-card card" [class.card-featured]="plan.isPopular">
-              @if (plan.badge) {
+            <div class="pricing-card card" [class.card-featured]="plan.isPopular" [class.card-current]="isCurrentPlan(plan)">
+              @if (isCurrentPlan(plan)) {
+                <div class="plan-badge badge-current">Votre forfait actuel</div>
+              } @else if (plan.badge) {
                 <div class="plan-badge">{{ plan.badge }}</div>
               }
 
@@ -69,7 +71,12 @@ import { extractFieldErrors, getGeneralErrorMessage } from '../../../core/utils/
 
               <!-- Action CTA -->
               <div class="plan-action">
-                @if (plan.id === 'FREE') {
+                @if (isCurrentPlan(plan)) {
+                  <button type="button" class="btn btn-full plan-cta cta-current" disabled>
+                    <app-icon name="check-circle" [size]="15" color="#166534"></app-icon>
+                    <span>{{ currentPlanLabel() }}</span>
+                  </button>
+                } @else if (plan.id === 'FREE') {
                   <a 
                     [routerLink]="authService.isAuthenticated() ? authService.dashboardUrl() : '/inscription'"
                     [queryParams]="authService.isAuthenticated() ? {} : { plan: 'FREE' }"
@@ -324,6 +331,22 @@ import { extractFieldErrors, getGeneralErrorMessage } from '../../../core/utils/
 
       .btn-full {
         width: 100%;
+      }
+
+      .card-current {
+        border: 2px solid #16A34A !important;
+      }
+
+      .badge-current {
+        background: #16A34A !important;
+        color: #FFFFFF !important;
+      }
+
+      .cta-current {
+        background: #DCFCE7 !important;
+        color: #166534 !important;
+        border: 1px solid #16A34A !important;
+        cursor: default;
       }
 
       .plan-cta {
@@ -586,6 +609,16 @@ export class PricingComponent implements OnInit {
       // Déjà connecté : on ouvre simplement l'espace (un abonné payant ne doit pas perdre son forfait par ce bouton)
       this.router.navigate([this.authService.dashboardUrl()]);
     }
+  }
+
+  /** Le forfait de l'utilisateur connecté est signalé sur sa carte (et ne peut pas être racheté). */
+  isCurrentPlan(plan: SubscriptionPlan): boolean {
+    return this.authService.isAuthenticated() && this.authService.subscriptionTier() === plan.id;
+  }
+
+  currentPlanLabel(): string {
+    const expiresAt = this.authService.currentUser()?.subscriptionExpiresAt;
+    return expiresAt ? `Forfait actif jusqu'au ${new Date(expiresAt).toLocaleDateString('fr-FR')}` : 'Forfait actif';
   }
 
   openPaymentModal(plan: SubscriptionPlan) {

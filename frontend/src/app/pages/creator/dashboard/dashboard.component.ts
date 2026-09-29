@@ -1,7 +1,7 @@
 import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink, Router } from '@angular/router';
-import { QuizService } from '../../../core/services/quiz.service';
+import { QuizService, CreatorStats } from '../../../core/services/quiz.service';
 import { LiveSessionService } from '../../../core/services/live-session.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { PromotionService } from '../../../core/services/promotion.service';
@@ -61,14 +61,14 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
 
         <div class="kpi-card card">
           <div class="kpi-header">
-            <span class="kpi-title">Participants Totaux</span>
+            <span class="kpi-title">Participations</span>
             <span class="kpi-icon" style="background: var(--color-primary-light); color: var(--color-navy);">
               <app-icon name="users" [size]="15"></app-icon>
             </span>
           </div>
           <div class="kpi-val" style="color: var(--color-navy);">{{ statsLoading() ? '...' : stats().totalParticipants }}</div>
           <div class="kpi-sub" [style.color]="stats().totalParticipants > 0 ? 'var(--color-success)' : ''">
-            <span>{{ stats().totalParticipants > 0 ? 'Participations réelles' : 'Aucune participation' }}</span>
+            <span>{{ stats().totalParticipants > 0 ? (stats().distinctParticipants + ' participant(s) distinct(s)') : 'Aucune participation terminée' }}</span>
           </div>
         </div>
 
@@ -79,8 +79,8 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
               <app-icon name="award" [size]="15" color="var(--color-orange)"></app-icon>
             </span>
           </div>
-          <div class="kpi-val" style="color: var(--color-orange);">{{ statsLoading() ? '...' : stats().averageSuccessRate + '%' }}</div>
-          <div class="kpi-sub">{{ stats().averageSuccessRate >= 70 ? 'Excellent niveau' : stats().averageSuccessRate >= 50 ? 'Bon niveau' : 'Aucune donnée' }}</div>
+          <div class="kpi-val" style="color: var(--color-orange);">{{ statsLoading() ? '...' : stats().successRate + '%' }}</div>
+          <div class="kpi-sub">{{ stats().totalParticipants > 0 ? ('Score moyen : ' + stats().averageScore + ' % (seuil de réussite 70 %)') : 'Aucune participation terminée' }}</div>
         </div>
 
         <div class="kpi-card card">
@@ -91,7 +91,7 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
             </span>
           </div>
           <div class="kpi-val" style="color: var(--color-success);">{{ statsLoading() ? '...' : stats().completedQuizzes }}</div>
-          <div class="kpi-sub">Quiz avec participations réelles</div>
+          <div class="kpi-sub">Quiz joués au moins une fois</div>
         </div>
       </div>
 
@@ -104,12 +104,12 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
               <span class="card-eyebrow">Activité hebdomadaire</span>
               <h3 class="card-title">Participations aux Quiz</h3>
             </div>
-            <span class="trend-badge">7 jours</span>
+            <span class="trend-badge">Cette semaine</span>
           </div>
 
           <div class="big-metric-wrap">
             <span class="big-metric-val">{{ statsLoading() ? '...' : stats().totalParticipants }}</span>
-            <span class="big-metric-unit">{{ stats().totalParticipants === 1 ? 'élève évalué au total' : 'élèves évalués au total' }}</span>
+            <span class="big-metric-unit">{{ stats().totalParticipants === 1 ? 'participation terminée au total' : 'participations terminées au total' }}</span>
           </div>
 
           @if (stats().totalParticipants === 0 && !statsLoading()) {
@@ -123,9 +123,10 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
             <div class="barchart-area">
               <div class="barchart-grid">
                 <!-- Lignes guides horizontales -->
-                <div class="grid-line" style="bottom: 75%;"><span>{{ weeklyMax() }}</span></div>
-                <div class="grid-line" style="bottom: 50%;"><span>{{ (weeklyMax() / 2) | number:'1.0-0' }}</span></div>
-                <div class="grid-line" style="bottom: 25%;"><span>{{ (weeklyMax() / 4) | number:'1.0-0' }}</span></div>
+                <div class="grid-line" style="bottom: 95%;"><span>{{ weeklyAxisMax() }}</span></div>
+                <div class="grid-line" style="bottom: 71.25%;"><span>{{ weeklyAxisMax() * 3 / 4 }}</span></div>
+                <div class="grid-line" style="bottom: 47.5%;"><span>{{ weeklyAxisMax() / 2 }}</span></div>
+                <div class="grid-line" style="bottom: 23.75%;"><span>{{ weeklyAxisMax() / 4 }}</span></div>
                 <div class="grid-line" style="bottom: 0%;"><span>0</span></div>
 
                 <!-- Colonnes de barres -->
@@ -135,7 +136,7 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
                       <div class="bar-track">
                         <div class="bar-fill"
                           [class.fill-peak]="day.count === weeklyMax() && weeklyMax() > 0"
-                          [style.height]="weeklyMax() > 0 ? (day.count / weeklyMax() * 95) + '%' : '2%'">
+                          [style.height]="day.count > 0 ? (day.count / weeklyAxisMax() * 95) + '%' : '2%'">
                           @if (day.count > 0) {
                             <span class="bar-tooltip" [class.peak-tip]="day.count === weeklyMax() && weeklyMax() > 0">
                               {{ day.count }}{{ day.count === weeklyMax() && weeklyMax() > 0 ? ' (Pic)' : '' }}
@@ -160,13 +161,13 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
               <h3 class="card-title">Répartition des Résultats</h3>
             </div>
             @if (!statsLoading() && stats().totalParticipants > 0) {
-              <span class="trend-badge success">{{ stats().averageSuccessRate }}% moy.</span>
+              <span class="trend-badge success">Score moyen {{ stats().averageScore }} %</span>
             }
           </div>
 
           <div class="big-metric-wrap">
-            <span class="big-metric-val">{{ statsLoading() ? '...' : stats().averageSuccessRate + '%' }}</span>
-            <span class="big-metric-unit">taux de réussite moyen (seuil : 70%)</span>
+            <span class="big-metric-val">{{ statsLoading() ? '...' : stats().successRate + '%' }}</span>
+            <span class="big-metric-unit">des participations réussies (score ≥ 70 %)</span>
           </div>
 
           @if (stats().totalParticipants === 0 && !statsLoading()) {
@@ -204,7 +205,7 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
                     transform="rotate(-90 60 60)" class="donut-segment"/>
                 </svg>
                 <div class="donut-center-info">
-                  <span class="center-pct">{{ stats().averageSuccessRate }}%</span>
+                  <span class="center-pct">{{ stats().successRate }}%</span>
                   <span class="center-sub">Réussite</span>
                 </div>
               </div>
@@ -218,7 +219,7 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
                       <span class="legend-name">Excellence (≥ 85%)</span>
                       <strong class="legend-val">{{ excellencePct() }}%</strong>
                     </div>
-                    <span class="legend-sub">{{ excellenceCount() }} élèves</span>
+                    <span class="legend-sub">{{ excellenceCount() }} participation(s)</span>
                   </div>
                 </div>
                 <div class="legend-item">
@@ -228,31 +229,34 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
                       <span class="legend-name">Validé (70-84%)</span>
                       <strong class="legend-val">{{ validePct() }}%</strong>
                     </div>
-                    <span class="legend-sub">{{ valideCount() }} élèves</span>
+                    <span class="legend-sub">{{ valideCount() }} participation(s)</span>
                   </div>
                 </div>
                 <div class="legend-item">
                   <span class="legend-bullet bullet-orange"></span>
                   <div class="legend-details">
                     <div class="legend-top">
-                      <span class="legend-name">À consolider</span>
+                      <span class="legend-name">À consolider (50-69%)</span>
                       <strong class="legend-val">{{ consoliderPct() }}%</strong>
                     </div>
-                    <span class="legend-sub">{{ consoliderCount() }} élèves</span>
+                    <span class="legend-sub">{{ consoliderCount() }} participation(s)</span>
                   </div>
                 </div>
                 <div class="legend-item">
                   <span class="legend-bullet bullet-gray"></span>
                   <div class="legend-details">
                     <div class="legend-top">
-                      <span class="legend-name">Non validé</span>
+                      <span class="legend-name">Non validé (&lt; 50%)</span>
                       <strong class="legend-val">{{ nonValidePct() }}%</strong>
                     </div>
-                    <span class="legend-sub">{{ nonValideCount() }} élèves</span>
+                    <span class="legend-sub">{{ nonValideCount() }} participation(s)</span>
                   </div>
                 </div>
               </div>
             </div>
+            @if (stats().abandonedAttempts > 0) {
+              <p class="abandoned-note">{{ stats().abandonedAttempts }} tentative(s) non terminée(s) exclue(s) du calcul.</p>
+            }
           }
         </div>
       </div>
@@ -743,7 +747,11 @@ export class DashboardComponent implements OnInit {
   });
 
   statsLoading = signal(true);
-  stats = signal({ totalParticipants: 0, averageSuccessRate: 0, completedQuizzes: 0, quizzesCount: 0, weeklyActivity: [0,0,0,0,0,0,0] });
+  stats = signal<CreatorStats>({
+    totalParticipants: 0, distinctParticipants: 0, abandonedAttempts: 0, averageScore: 0, successRate: 0,
+    completedQuizzes: 0, quizzesCount: 0, weeklyActivity: [0, 0, 0, 0, 0, 0, 0],
+    distribution: { excellent: 0, validated: 0, toConsolidate: 0, failed: 0 }
+  });
 
   private readonly DAY_LABELS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
@@ -753,6 +761,8 @@ export class DashboardComponent implements OnInit {
   }));
 
   weeklyMax = () => Math.max(...(this.stats().weeklyActivity ?? [0]), 1);
+  /** Graduation de l'axe : multiple de 4 pour des repères entiers (0, ¼, ½, ¾, max). */
+  weeklyAxisMax = () => Math.max(4, Math.ceil(this.weeklyMax() / 4) * 4);
 
   recentQuizzesCount = () => this.myQuizzes().filter(q => {
     const d = new Date(q.createdAt);
@@ -760,19 +770,20 @@ export class DashboardComponent implements OnInit {
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
   }).length;
 
-  // Computed stats for donut
-  private get allParts(): number { return this.stats().totalParticipants; }
+  // Répartition réelle des participations terminées (seuil de validation : 70 %)
+  excellenceCount = () => this.stats().distribution.excellent;
+  valideCount = () => this.stats().distribution.validated;
+  consoliderCount = () => this.stats().distribution.toConsolidate;
+  nonValideCount = () => this.stats().distribution.failed;
 
-  excellenceCount = () => 0; // placeholder - would require more granular API
-  valideCount = () => 0;
-  consoliderCount = () => 0;
-  nonValideCount = () => 0;
-
-  // Taux simple basé sur le taux de réussite moyen pour le donut
-  excellencePct = () => this.stats().averageSuccessRate >= 85 ? Math.round(this.stats().averageSuccessRate) : Math.max(0, Math.round(this.stats().averageSuccessRate - 15));
-  validePct = () => this.stats().averageSuccessRate >= 70 ? Math.min(40, Math.round(100 - this.stats().averageSuccessRate)) : 0;
-  consoliderPct = () => Math.max(0, Math.round((100 - this.stats().averageSuccessRate) * 0.6));
-  nonValidePct = () => Math.max(0, 100 - this.excellencePct() - this.validePct() - this.consoliderPct());
+  private pctOf(count: number): number {
+    const total = this.stats().totalParticipants;
+    return total > 0 ? Math.round((count / total) * 1000) / 10 : 0;
+  }
+  excellencePct = () => this.pctOf(this.excellenceCount());
+  validePct = () => this.pctOf(this.valideCount());
+  consoliderPct = () => this.pctOf(this.consoliderCount());
+  nonValidePct = () => this.pctOf(this.nonValideCount());
 
   private readonly CIRCUMFERENCE = 282.74;
   excellenceDash = () => Math.round(this.excellencePct() / 100 * this.CIRCUMFERENCE * 10) / 10;

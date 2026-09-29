@@ -3,10 +3,17 @@
     <!-- 1. TOP TEACHER MANAGEMENT BAR -->
     <header class="player-topbar">
       <div class="topbar-left">
-        <a routerLink="/app/courses" class="btn-back" title="Retourner à la liste de mes cours">
-          <app-icon name="arrow-left" [size]="14"></app-icon>
-          <span class="hide-mobile">Mes Cours</span>
-        </a>
+        @if (canEdit()) {
+          <a routerLink="/app/courses" class="btn-back" title="Retourner à la liste de mes cours">
+            <app-icon name="arrow-left" [size]="14"></app-icon>
+            <span class="hide-mobile">Mes Cours</span>
+          </a>
+        } @else {
+          <a routerLink="/app/learner/classes" class="btn-back" title="Retourner à mes classes">
+            <app-icon name="arrow-left" [size]="14"></app-icon>
+            <span class="hide-mobile">Mes Classes</span>
+          </a>
+        }
         <div class="topbar-divider hide-mobile"></div>
         <div class="course-meta-title">
           <span class="course-category-tag">{{ c.category }} • {{ c.level }}</span>
@@ -25,18 +32,21 @@
             <app-icon name="book-open" [size]="13"></app-icon>
             <span>Contenu ({{ c.chapters.length }})</span>
           </button>
-          <button 
-            type="button" 
-            class="switch-btn" 
-            [class.active]="viewMode === 'QUIZZES'"
-            (click)="viewMode = 'QUIZZES'">
-            <app-icon name="zap" [size]="13"></app-icon>
-            <span>Tous les Quiz ({{ getAllQuizzes().length }})</span>
-          </button>
+          @if (canEdit()) {
+            <button
+              type="button"
+              class="switch-btn"
+              [class.active]="viewMode === 'QUIZZES'"
+              (click)="viewMode = 'QUIZZES'">
+              <app-icon name="zap" [size]="13"></app-icon>
+              <span>Tous les Quiz ({{ getAllQuizzes().length }})</span>
+            </button>
+          }
         </div>
       </div>
 
       <!-- RIGHT: TEACHER ACTION BUTTONS (EDIT, ASSIGN, DELETE) -->
+      @if (canEdit()) {
       <div class="topbar-right">
         <!-- EDIT COURSE INFO -->
         <button 
@@ -68,6 +78,7 @@
           <span class="hide-mobile">Supprimer</span>
         </button>
       </div>
+      }
     </header>
 
     <!-- =========================================================================
@@ -99,64 +110,28 @@
                   </div>
 
                   <!-- EDIT CHAPTER ACTION BUTTON -->
-                  <button 
-                    type="button" 
-                    class="btn btn-outline btn-sm btn-edit-chapter"
-                    (click)="openEditChapterModal(selectedChapterIndex)">
-                    <app-icon name="file-text" [size]="12"></app-icon>
-                    <span>Éditer ce chapitre</span>
-                  </button>
+                  @if (canEdit()) {
+                    <button
+                      type="button"
+                      class="btn btn-outline btn-sm btn-edit-chapter"
+                      (click)="openEditChapterModal(selectedChapterIndex)">
+                      <app-icon name="file-text" [size]="12"></app-icon>
+                      <span>Éditer ce chapitre</span>
+                    </button>
+                  }
                 </div>
 
                 <h2 class="lecture-title">{{ curCh.title }}</h2>
                 <p class="lecture-summary-callout">{{ curCh.summary }}</p>
               </header>
 
-              <!-- OPENCLASSROOMS PEDAGOGICAL OBJECTIVES -->
-              <section class="learning-objectives-box">
-                <div class="box-head">
-                  <app-icon name="sparkles" [size]="16" color="var(--color-navy)"></app-icon>
-                  <h3>Objectifs d'apprentissage de cette leçon</h3>
-                </div>
-                <ul class="objectives-list">
-                  <li>
-                    <app-icon name="check" [size]="12" color="#059669"></app-icon>
-                    <span>Assimiler les concepts clés et principes directeurs développés dans ce chapitre.</span>
-                  </li>
-                  <li>
-                    <app-icon name="check" [size]="12" color="#059669"></app-icon>
-                    <span>Appliquer les règles techniques et bonnes pratiques industrielles.</span>
-                  </li>
-                  <li>
-                    <app-icon name="check" [size]="12" color="#059669"></app-icon>
-                    <span>Préparer les étudiants à réussir le quiz d'évaluation intermédiaire.</span>
-                  </li>
-                </ul>
-              </section>
-
               <!-- LECTURE BODY PROSE & TERMINAL CODE -->
               <section class="lecture-prose-content">
                 <div class="markdown-rendered-body" [innerHTML]="formatContent(curCh.content)"></div>
               </section>
 
-              <!-- OPENCLASSROOMS KEY TAKEAWAYS -->
-              <section class="key-takeaways-card">
-                <div class="takeaway-head">
-                  <span class="takeaway-badge">SYNTHÈSE FORMATEUR</span>
-                  <h4>Points clés à retenir</h4>
-                </div>
-                <div class="takeaway-body">
-                  <div class="takeaway-item">
-                    <strong>Principe clé :</strong> Assurer la rigueur conceptuelle et l'isolation des composants pour garantir la scalabilité.
-                  </div>
-                  <div class="takeaway-item">
-                    <strong>Recommandation pédagogique :</strong> Inciter les étudiants à tester chaque configuration en TP pratique.
-                  </div>
-                </div>
-              </section>
-
-              <!-- CHAPTER QUIZ BANNER -->
-              @if (curCh.hasQuiz) {
+              <!-- CHAPTER QUIZ BANNER (lancé en Live par le formateur) -->
+              @if (curCh.hasQuiz && canEdit()) {
                 <section class="chapter-quiz-card">
                   <div class="quiz-visual-side">
                     <div class="quiz-icon-avatar">
@@ -198,10 +173,12 @@
                 </button>
 
                 <div class="footer-center-actions">
-                  <button type="button" class="btn btn-outline btn-sm" (click)="openAddChapterModal()">
-                    <app-icon name="plus" [size]="12"></app-icon>
-                    <span>Ajouter un chapitre</span>
-                  </button>
+                  @if (canEdit()) {
+                    <button type="button" class="btn btn-outline btn-sm" (click)="openAddChapterModal()">
+                      <app-icon name="plus" [size]="12"></app-icon>
+                      <span>Ajouter un chapitre</span>
+                    </button>
+                  }
                 </div>
 
                 @if (selectedChapterIndex < c.chapters.length - 1) {
@@ -279,10 +256,14 @@
               }
 
               <div class="exam-cta-wrap">
-                <button type="button" class="btn btn-secondary btn-lg" (click)="launchFinalQuizLive(c)">
-                  <app-icon name="play" [size]="18" color="#FFFFFF"></app-icon>
-                  <span>Démarrer l'Examen Final en Direct (Live)</span>
-                </button>
+                @if (canEdit()) {
+                  <button type="button" class="btn btn-secondary btn-lg" (click)="launchFinalQuizLive(c)">
+                    <app-icon name="play" [size]="18" color="#FFFFFF"></app-icon>
+                    <span>Démarrer l'Examen Final en Direct (Live)</span>
+                  </button>
+                } @else {
+                  <p class="body-small text-muted">L'examen final est lancé en direct par votre formateur : rejoignez-le avec le code PIN qu'il vous communique.</p>
+                }
               </div>
             </div>
           }
@@ -295,14 +276,16 @@
               <h3 class="curriculum-heading">Sommaire du cours</h3>
               <span class="curriculum-stats">{{ c.chapters.length }} chapitres au programme</span>
             </div>
-            <button 
-              type="button" 
-              class="btn-add-ch-quick" 
-              (click)="openAddChapterModal()" 
-              title="Ajouter un nouveau chapitre">
-              <app-icon name="plus" [size]="12"></app-icon>
-              <span>Nouveau</span>
-            </button>
+            @if (canEdit()) {
+              <button
+                type="button"
+                class="btn-add-ch-quick"
+                (click)="openAddChapterModal()"
+                title="Ajouter un nouveau chapitre">
+                <app-icon name="plus" [size]="12"></app-icon>
+                <span>Nouveau</span>
+              </button>
+            }
           </header>
 
           <!-- BADGE STATUT CERTIFICAT DU COURS -->
@@ -351,6 +334,7 @@
                 </div>
 
                 <!-- EDIT / DELETE CHAPTER BUTTONS ON HOVER -->
+                @if (canEdit()) {
                 <div class="item-actions" (click)="$event.stopPropagation()">
                   <button 
                     type="button" 
@@ -369,6 +353,7 @@
                     </button>
                   }
                 </div>
+                }
               </div>
             }
 
@@ -400,7 +385,7 @@
     <!-- =========================================================================
          VIEW 2: DEDICATED ALL QUIZZES MANAGEMENT SCREEN (VOIR TOUS LES QUIZ)
          ========================================================================= -->
-    @if (viewMode === 'QUIZZES') {
+    @if (viewMode === 'QUIZZES' && canEdit()) {
       <div class="course-quizzes-management animate-fade-in">
         <!-- QUIZZES DASHBOARD HEADER -->
         <div class="quizzes-dashboard-head card">

@@ -7,6 +7,18 @@ import { reloadOnAccountChange } from '../utils/account-change.util';
 import { firstValueFrom } from 'rxjs';
 import { ToastService } from './toast.service';
 
+export interface CreatorStats {
+  totalParticipants: number;       // participations terminées
+  distinctParticipants: number;
+  abandonedAttempts: number;       // tentatives non terminées, exclues des calculs
+  averageScore: number;            // score moyen (%)
+  successRate: number;             // part des participations >= 70 % (%)
+  completedQuizzes: number;        // quiz joués au moins une fois
+  quizzesCount: number;
+  weeklyActivity: number[];
+  distribution: { excellent: number; validated: number; toConsolidate: number; failed: number };
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -58,13 +70,8 @@ export class QuizService {
     return Array.isArray(data) ? data : [];
   }
 
-  async getCreatorStats(): Promise<{
-    totalParticipants: number;
-    averageSuccessRate: number;
-    completedQuizzes: number;
-    quizzesCount: number;
-    weeklyActivity: number[];
-  }> {
+  /** Statistiques du tableau de bord formateur, calculées par le serveur sur les participations terminées. */
+  async getCreatorStats(): Promise<CreatorStats> {
     try {
       const resp = await firstValueFrom(
         this.http.get<any>(`${environment.apiUrl}/quizzes/creator-stats`)
@@ -72,13 +79,26 @@ export class QuizService {
       const data = resp?.data || resp || {};
       return {
         totalParticipants: data.totalParticipants ?? 0,
-        averageSuccessRate: data.averageSuccessRate ?? 0,
+        distinctParticipants: data.distinctParticipants ?? 0,
+        abandonedAttempts: data.abandonedAttempts ?? 0,
+        averageScore: data.averageScore ?? 0,
+        successRate: data.successRate ?? 0,
         completedQuizzes: data.completedQuizzes ?? 0,
         quizzesCount: data.quizzesCount ?? 0,
-        weeklyActivity: data.weeklyActivity ?? [0, 0, 0, 0, 0, 0, 0]
+        weeklyActivity: data.weeklyActivity ?? [0, 0, 0, 0, 0, 0, 0],
+        distribution: {
+          excellent: data.distribution?.excellent ?? 0,
+          validated: data.distribution?.validated ?? 0,
+          toConsolidate: data.distribution?.toConsolidate ?? 0,
+          failed: data.distribution?.failed ?? 0
+        }
       };
     } catch {
-      return { totalParticipants: 0, averageSuccessRate: 0, completedQuizzes: 0, quizzesCount: 0, weeklyActivity: [0, 0, 0, 0, 0, 0] };
+      return {
+        totalParticipants: 0, distinctParticipants: 0, abandonedAttempts: 0, averageScore: 0, successRate: 0,
+        completedQuizzes: 0, quizzesCount: 0, weeklyActivity: [0, 0, 0, 0, 0, 0, 0],
+        distribution: { excellent: 0, validated: 0, toConsolidate: 0, failed: 0 }
+      };
     }
   }
 

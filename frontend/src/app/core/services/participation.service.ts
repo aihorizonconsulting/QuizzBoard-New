@@ -32,7 +32,10 @@ export class ParticipationService {
 
   constructor() {
     this.loadBackendData();
-    reloadOnAccountChange(() => this.loadBackendData());
+    reloadOnAccountChange(() => this.loadBackendData(), () => {
+      this.participations.set([]);
+      this.certificates.set([]);
+    });
     this.flushPending();
     if (typeof window !== 'undefined') {
       window.addEventListener('online', () => this.flushPending());
@@ -42,8 +45,10 @@ export class ParticipationService {
   loadBackendData(): void {
     if (!this.authService.isAuthenticated()) {
       this.participations.set([]);
+      this.certificates.set([]);
       return;
     }
+    this.loadCertificates();
     this.http.get<any>(`${environment.apiUrl}/participations/my`).subscribe({
       next: (res) => {
         const data = res?.data || res;
@@ -52,6 +57,17 @@ export class ParticipationService {
       error: () => {
         this.participations.set([]);
       }
+    });
+  }
+
+  /** Certificats de l'utilisateur, relus sur le serveur (ils ne vivaient avant que le temps de la session). */
+  loadCertificates(): void {
+    this.http.get<any>(`${environment.apiUrl}/certificates/my`).subscribe({
+      next: (res) => {
+        const data = res?.data || res;
+        this.certificates.set(Array.isArray(data) ? data : []);
+      },
+      error: () => this.certificates.set([])
     });
   }
 
@@ -97,8 +113,10 @@ export class ParticipationService {
       const response = await firstValueFrom(this.http.post<any>(`${environment.apiUrl}/participations`, payload));
       const saved: Participation = response?.data || response;
       this.participations.update(list => [saved, ...list.filter(p => p.id !== saved.id)]);
-      if (saved.certificateId) {
-        this.loadCertificate(saved.certificateId);
+      if (this.authService.isAuthenticated()) {
+        // XP, niveau et série sont recalculés par le serveur : on recharge le profil et les certificats
+        this.authService.loadCurrentUser().subscribe({ error: () => {} });
+        if (saved.certificateId) this.loadCertificates();
       }
       return saved;
     } catch (err: any) {
@@ -116,18 +134,6 @@ export class ParticipationService {
         completedAt: new Date().toISOString()
       } as Participation;
     }
-  }
-
-  private loadCertificate(certificateId: string): void {
-    this.http.get<any>(`${environment.apiUrl}/certificates/${certificateId}`).subscribe({
-      next: (certRes) => {
-        const cert = certRes?.data || certRes;
-        if (cert && cert.id) {
-          this.certificates.update(list => [cert, ...list.filter(c => c.id !== cert.id)]);
-        }
-      },
-      error: () => {}
-    });
   }
 
   private readPending(): PendingParticipation[] {
@@ -177,6 +183,7 @@ export class ParticipationService {
     if (sent > 0) {
       this.toast.success(`${sent} résultat(s) de quiz en attente ont été enregistrés.`);
       this.loadBackendData();
+      if (this.authService.isAuthenticated()) this.authService.loadCurrentUser().subscribe({ error: () => {} });
     }
   }
 

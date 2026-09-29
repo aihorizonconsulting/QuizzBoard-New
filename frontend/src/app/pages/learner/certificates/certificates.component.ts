@@ -1,4 +1,6 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { environment } from '../../../../environments/environment';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -64,7 +66,7 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
               class="pill-btn" 
               [class.active]="filterScore === 'PASSED'" 
               (click)="filterScore = 'PASSED'; currentPage = 1">
-              Réussite (80-89%)
+              Réussite (70-89%)
             </button>
           </div>
 
@@ -96,7 +98,7 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
             </div>
             <h3 class="empty-title">Aucun certificat trouvé</h3>
             <p class="empty-desc">
-              Obtenez 80% ou plus à une évaluation pour décrocher automatiquement votre certificat d'excellence.
+              Obtenez 70 % ou plus à une évaluation pour décrocher automatiquement votre certificat.
             </p>
             <a routerLink="/app/learner/classes" class="btn btn-primary btn-sm">
               <app-icon name="arrow-right" [size]="14" color="var(--color-navy)"></app-icon>
@@ -235,8 +237,8 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
 
               <div class="diploma-footer">
                 <div class="signature-block">
-                  <span class="signature-script">Dr. Amadou Diallo</span>
-                  <span class="signature-role">Directeur Pédagogique & Certification</span>
+                  <span class="signature-script">{{ signatoryName() }}</span>
+                  <span class="signature-role">{{ signatoryTitle() }}</span>
                 </div>
 
                 <div class="security-seal-block">
@@ -685,7 +687,24 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
 })
 export class CertificatesComponent {
   private partService = inject(ParticipationService);
+  private http = inject(HttpClient);
   certificates = this.partService.getCertificates();
+
+  // Signataire configuré par l'administrateur (Admin > Paramètres > Certificats)
+  signatoryName = signal('La Direction Pédagogique');
+  signatoryTitle = signal('QuizzBoard Academy');
+
+  constructor() {
+    this.partService.loadCertificates();
+    this.http.get<any>(`${environment.apiUrl}/subscriptions/settings`).subscribe({
+      next: (res) => {
+        const settings = res?.data || res;
+        if (settings?.certificateSignatoryName) this.signatoryName.set(settings.certificateSignatoryName);
+        if (settings?.certificateSignatoryTitle) this.signatoryTitle.set(settings.certificateSignatoryTitle);
+      },
+      error: () => {}
+    });
+  }
 
   selectedCert: Certificate | null = null;
 

@@ -35,7 +35,10 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
               <span>PAIEMENT VALIDÉ AVEC SUCCÈS</span>
             </div>
 
-            <h2 class="title" style="margin-top: 12px;">Abonnement STARTER Activé ! 🎉</h2>
+            <h2 class="title" style="margin-top: 12px;">Abonnement {{ invoiceDetails()?.planName?.includes('Apprenant') ? 'Apprenant Plus' : 'STARTER' }} Activé ! 🎉</h2>
+            @if (simulated()) {
+              <p class="simulation-note">Paiement simulé (environnement de test) : aucun montant n'a été débité.</p>
+            }
 
             <p class="subtitle">
               Félicitations <strong>{{ authService.currentUser()?.prenom || 'Cher Formateur' }}</strong> ! Votre compte a été mis à niveau avec succès.
@@ -128,6 +131,17 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
       box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08);
       border-radius: 16px;
       background-color: #FFFFFF;
+    }
+
+    .simulation-note {
+      margin: 6px 0 0;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: #92400E;
+      background: #FEF3C7;
+      border-radius: 6px;
+      padding: 6px 10px;
+      display: inline-block;
     }
 
     .status-box {
@@ -240,6 +254,7 @@ export class PaymentCallbackComponent implements OnInit {
   status = signal<'loading' | 'success' | 'error'>('loading');
   errorMessage = signal<string>('');
   invoiceDetails = signal<any>(null);
+  simulated = signal(false);
 
   ngOnInit(): void {
     this.route.queryParams.subscribe(async (params) => {
@@ -258,8 +273,15 @@ export class PaymentCallbackComponent implements OnInit {
         return;
       }
 
+      this.simulated.set(params['simulation'] === '1');
       try {
         const invoice = await this.subService.confirmPayDunyaPayment(token);
+        if (!invoice) {
+          // PayDunya n'a pas encore confirmé le paiement : le forfait n'est PAS encore actif
+          this.status.set('error');
+          this.errorMessage.set('Paiement en attente de confirmation par PayDunya. Votre forfait sera activé automatiquement dès la validation ; rechargez cette page dans quelques instants.');
+          return;
+        }
         this.invoiceDetails.set(invoice);
         this.status.set('success');
       } catch (err: any) {

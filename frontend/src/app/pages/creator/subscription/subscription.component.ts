@@ -1,10 +1,10 @@
-import { Component, inject, computed } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { SubscriptionService } from '../../../core/services/subscription.service';
+import { SubscriptionService, PlanUsage } from '../../../core/services/subscription.service';
 import { AuthService } from '../../../core/services/auth.service';
-import { QuizService } from '../../../core/services/quiz.service';
-import { CourseService } from '../../../core/services/course.service';
+import { ToastService } from '../../../core/services/toast.service';
+import { Invoice } from '../../../core/models/plan.model';
 import { IconComponent } from '../../../shared/components/icon/icon.component';
 
 @Component({
@@ -43,7 +43,7 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
             @if (authService.subscriptionTier() === 'FREE') {
               Formule Découverte (Gratuit)
             } @else {
-              Formule STARTER Illimité (999 FCFA / mois)
+              Formule STARTER (999 FCFA / mois)
             }
           </h2>
 
@@ -51,7 +51,12 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
             @if (authService.subscriptionTier() === 'FREE') {
               Accès gratuit pour tester les fonctionnalités et animer de petits groupes d'élèves.
             } @else {
-              Accès complet illimité • Prochain renouvellement le <strong>15 du mois prochain</strong> (PayDunya).
+              Quiz illimités, 100 générations IA par mois, Live jusqu'à 300 joueurs •
+              @if (authService.currentUser()?.subscriptionExpiresAt; as expiresAt) {
+                Actif jusqu'au <strong>{{ expiresAt | date:'dd/MM/yyyy' }}</strong> : renouvelable depuis la page Tarifs.
+              } @else {
+                Attribué par l'administration, sans date de fin.
+              }
             }
           </p>
         </div>
@@ -63,78 +68,75 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
         </div>
       </div>
 
-      <!-- 3. QUOTAS (3 SIMPLE CLEAN CARDS) -->
-      <div class="quotas-grid">
-        <!-- Quota 1 -->
-        <div class="card quota-item">
-          <div class="quota-row">
-            <span class="quota-title">Quiz & Cours Hébergés</span>
-            <span class="quota-badge">
-              {{ authService.subscriptionTier() === 'FREE' ? (totalHosted() + ' / 3') : (totalHosted() + ' (Illimités)') }}
-            </span>
-          </div>
-          <div class="bar-track">
-            <div class="bar-fill fill-navy" [style.width]="hostedPercent() + '%'"></div>
-          </div>
-          <span class="quota-note">
-            @if (authService.subscriptionTier() === 'FREE') {
-              @if (totalHosted() >= 3) {
-                <span class="danger-txt">Quota atteint (3/3)</span>
+      <!-- 3. QUOTAS : valeurs appliquées par le serveur -->
+      @if (usage(); as u) {
+        <div class="quotas-grid">
+          <!-- Quota 1 : quiz créés sur la plateforme -->
+          <div class="card quota-item">
+            <div class="quota-row">
+              <span class="quota-title">Quiz créés</span>
+              <span class="quota-badge">{{ u.quizzesCreated }} / {{ u.quizzesLimit ?? 'Illimité' }}</span>
+            </div>
+            <div class="bar-track">
+              <div class="bar-fill fill-navy" [style.width]="percent(u.quizzesCreated, u.quizzesLimit) + '%'"></div>
+            </div>
+            <span class="quota-note">
+              @if (u.quizzesLimit === null) {
+                <span class="success-txt">✓ Création de quiz illimitée</span>
+              } @else if (u.quizzesCreated >= u.quizzesLimit) {
+                <span class="danger-txt">Quota atteint ({{ u.quizzesCreated }}/{{ u.quizzesLimit }}) : passez au forfait STARTER pour créer d'autres quiz</span>
               } @else {
-                <span class="success-txt">✓ {{ 3 - totalHosted() }} création(s) restante(s) sur votre forfait</span>
+                <span class="success-txt">✓ {{ u.quizzesLimit - u.quizzesCreated }} création(s) restante(s) sur votre forfait</span>
               }
-            } @else {
-              <span class="success-txt">✓ Création de quiz et cours illimitée</span>
+            </span>
+            @if (u.quizzesImported > 0) {
+              <span class="quota-note quota-imported">+ {{ u.quizzesImported }} quiz importé(s) de l'ancien QuizzBoard, non comptés dans le quota</span>
             }
-          </span>
-        </div>
+          </div>
 
-        <!-- Quota 2 -->
-        <div class="card quota-item">
-          <div class="quota-row">
-            <span class="quota-title">Générations IA (Mois)</span>
-            <span class="quota-badge">
-              {{ authService.subscriptionTier() === 'FREE' ? (aiGenerationsUsed() + ' / 5') : (aiGenerationsUsed() + ' / 100') }}
-            </span>
-          </div>
-          <div class="bar-track">
-            <div class="bar-fill fill-primary" [style.width]="aiGenerationsPercent() + '%'"></div>
-          </div>
-          <span class="quota-note">
-            @if (authService.subscriptionTier() === 'FREE') {
-              @if (aiGenerationsUsed() >= 5) {
-                <span class="danger-txt">Quota mensuel IA atteint (5/5)</span>
+          <!-- Quota 2 : générations IA du mois -->
+          <div class="card quota-item">
+            <div class="quota-row">
+              <span class="quota-title">Générations IA (Mois)</span>
+              <span class="quota-badge">{{ u.aiGenerationsUsed }} / {{ u.aiGenerationsLimit ?? 'Illimité' }}</span>
+            </div>
+            <div class="bar-track">
+              <div class="bar-fill fill-primary" [style.width]="percent(u.aiGenerationsUsed, u.aiGenerationsLimit) + '%'"></div>
+            </div>
+            <span class="quota-note">
+              @if (u.aiGenerationsLimit === null) {
+                <span class="success-txt">✓ Générations IA illimitées</span>
+              } @else if (u.aiGenerationsUsed >= u.aiGenerationsLimit) {
+                <span class="danger-txt">Quota mensuel IA atteint ({{ u.aiGenerationsUsed }}/{{ u.aiGenerationsLimit }})</span>
               } @else {
-                <span class="success-txt">✓ {{ 5 - aiGenerationsUsed() }} génération(s) IA restante(s) ce mois-ci</span>
-              }
-            } @else {
-              <span class="success-txt">✓ {{ 100 - aiGenerationsUsed() }} générations IA restantes sur votre forfait STARTER</span>
-            }
-          </span>
-        </div>
-
-        <!-- Quota 3 -->
-        <div class="card quota-item">
-          <div class="quota-row">
-            <span class="quota-title">Capacité Joueurs Live</span>
-            <span class="quota-badge">
-              {{ authService.subscriptionTier() === 'FREE' ? '25 Joueurs' : '200 Joueurs' }}
-            </span>
-          </div>
-          <div class="bar-track">
-            <div class="bar-fill fill-green" [style.width]="authService.subscriptionTier() === 'FREE' ? '100%' : '25%'"></div>
-          </div>
-          <span class="quota-note">
-            <span class="success-txt">
-              @if (authService.subscriptionTier() === 'STARTER') {
-                ✓ Promotions & grands amphis jusqu'à 200 participants
-              } @else {
-                Format TD & petits groupes (25 max)
+                <span class="success-txt">✓ {{ u.aiGenerationsLimit - u.aiGenerationsUsed }} génération(s) IA restante(s) ce mois-ci</span>
               }
             </span>
-          </span>
+          </div>
+
+          <!-- Quota 3 : joueurs Live -->
+          <div class="card quota-item">
+            <div class="quota-row">
+              <span class="quota-title">Capacité Joueurs Live</span>
+              <span class="quota-badge">{{ u.liveParticipantsLimit }} Joueurs</span>
+            </div>
+            <div class="bar-track">
+              <div class="bar-fill fill-green" style="width: 100%"></div>
+            </div>
+            <span class="quota-note">
+              <span class="success-txt">
+                @if (u.tier === 'FREE') {
+                  Format TD & petits groupes ({{ u.liveParticipantsLimit }} max)
+                } @else {
+                  ✓ Promotions & grands amphis jusqu'à {{ u.liveParticipantsLimit }} participants
+                }
+              </span>
+            </span>
+          </div>
         </div>
-      </div>
+      } @else {
+        <div class="card quota-item"><span class="quota-note">Chargement de votre consommation...</span></div>
+      }
 
       <!-- 4. INVOICES TABLE (SAME AS ALL OTHER TABLES) -->
       <div class="card table-card">
@@ -159,8 +161,8 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
             <tbody>
               @for (inv of invoices(); track inv.id) {
                 <tr>
-                  <td><strong style="color: var(--color-navy);">{{ inv.id }}</strong></td>
-                  <td class="body-small">{{ inv.date }}</td>
+                  <td><strong style="color: var(--color-navy);">{{ inv.reference || inv.id }}</strong></td>
+                  <td class="body-small">{{ inv.date | date:'dd/MM/yyyy' }}</td>
                   <td>
                     <span class="badge badge-primary">
                       {{ inv.planName }}
@@ -168,7 +170,7 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
                   </td>
                   <td><strong>{{ inv.amountFcfa | number }} FCFA</strong></td>
                   <td>
-                    {{ inv.paymentMethod === 'WAVE' ? 'Wave Money' : (inv.paymentMethod === 'ORANGE_MONEY' ? 'Orange Money' : 'Carte Bancaire') }}
+                    {{ paymentMethodLabel(inv.paymentMethod) }}
                   </td>
                   <td>
                     <span class="status-pill-paid">
@@ -177,7 +179,7 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
                     </span>
                   </td>
                   <td style="text-align: right;">
-                    <button class="btn btn-outline btn-sm btn-pdf" (click)="downloadReceipt(inv.id)">
+                    <button class="btn btn-outline btn-sm btn-pdf" (click)="downloadReceipt(inv)" title="Imprimer ou enregistrer le reçu en PDF">
                       <app-icon name="download" [size]="12"></app-icon>
                       <span>PDF</span>
                     </button>
@@ -276,7 +278,9 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
       grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
       gap: 16px;
 
-      .quota-item {
+      .quota-imported { display: block; margin-top: 6px; color: var(--color-text-secondary); font-size: 11.5px; }
+
+    .quota-item {
         padding: 16px 18px;
         display: flex;
         flex-direction: column;
@@ -403,54 +407,62 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
 export class CreatorSubscriptionComponent {
   public authService = inject(AuthService);
   private subService = inject(SubscriptionService);
-  private quizService = inject(QuizService);
-  private courseService = inject(CourseService);
+  private toast = inject(ToastService);
 
   invoices = this.subService.getInvoices();
 
-  userQuizzesCount = computed(() => {
-    const user = this.authService.currentUser();
-    if (!user) return 0;
-    return this.quizService.getQuizzes()().filter(q =>
-      (q.creatorId && (q.creatorId === user.id || q.creatorId === user.email)) ||
-      ((q as any).creatorEmail && (q as any).creatorEmail === user.email)
-    ).length;
-  });
+  usage = signal<PlanUsage | null>(null);
 
-  userCoursesCount = computed(() => {
-    const user = this.authService.currentUser();
-    if (!user) return 0;
-    return this.courseService.getCourses()().filter(c =>
-      c.creatorId && (c.creatorId === user.id || c.creatorId === user.email)
-    ).length;
-  });
+  constructor() {
+    this.subService.loadUsage().then(u => this.usage.set(u));
+  }
 
-  totalHosted = computed(() => this.userQuizzesCount() + this.userCoursesCount());
+  percent(used: number, limit: number | null): number {
+    if (limit === null || limit <= 0) return 100;
+    return Math.min(100, Math.round((used / limit) * 100));
+  }
 
-  hostedPercent = computed(() => {
-    if (this.authService.subscriptionTier() === 'STARTER') {
-      return Math.min(100, Math.round((this.totalHosted() / 50) * 100));
+  paymentMethodLabel(method: string): string {
+    switch (method) {
+      case 'PAYDUNYA': return 'PayDunya';
+      case 'WAVE': return 'Wave Money';
+      case 'ORANGE_MONEY': return 'Orange Money';
+      case 'STRIPE': return 'Carte bancaire';
+      default: return method || '—';
     }
-    return Math.min(100, Math.round((this.totalHosted() / 3) * 100));
-  });
+  }
 
-  aiGenerationsUsed = computed(() => {
-    const user = this.authService.currentUser();
-    if (!user) return 0;
-    try {
-      const stored = localStorage.getItem(`quizzboard_ai_gens_${user.id || user.email}`);
-      return stored ? parseInt(stored, 10) : 0;
-    } catch {
-      return 0;
+  /** Reçu de paiement imprimable (le navigateur propose « Enregistrer au format PDF »). */
+  downloadReceipt(inv: Invoice) {
+    const w = window.open('', '_blank', 'width=760,height=900');
+    if (!w) {
+      this.toast.error('Autorisez les fenêtres pop-up de QuizzBoard pour obtenir le reçu.');
+      return;
     }
-  });
-
-  aiGenerationsPercent = computed(() => {
-    const max = this.authService.subscriptionTier() === 'STARTER' ? 100 : 5;
-    return Math.min(100, Math.round((this.aiGenerationsUsed() / max) * 100));
-  });
-
-  downloadReceipt(id: string) {
-    alert(`Téléchargement de la facture ${id} au format PDF.`);
+    const esc = (v: unknown) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const user = this.authService.currentUser();
+    const date = new Date(inv.date).toLocaleDateString('fr-FR');
+    const rows: [string, string][] = [
+      ['Référence', inv.reference || inv.id],
+      ['Date', date],
+      ['Client', `${user?.prenom ?? ''} ${user?.nom ?? ''}`.trim()],
+      ['Email', user?.email ?? ''],
+      ['Forfait', inv.planName],
+      ['Montant', `${(inv.amountFcfa ?? 0).toLocaleString('fr-FR')} FCFA`],
+      ['Mode de paiement', this.paymentMethodLabel(inv.paymentMethod)],
+      ['Statut', inv.status === 'PAID' ? 'Payé' : inv.status]
+    ];
+    w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Reçu QuizzBoard ${esc(inv.reference || inv.id)}</title>
+      <style>body{font-family:Segoe UI,Arial,sans-serif;color:#0F172A;margin:40px}h1{margin:0;font-size:22px}
+      .brand{color:#F59E0B;font-weight:900;letter-spacing:1px}table{border-collapse:collapse;width:100%;margin-top:24px}
+      td{border:1px solid #CBD5E1;padding:10px 12px;font-size:14px}td:first-child{background:#F1F5F9;width:35%;font-weight:600}
+      p{color:#475569;font-size:12px;margin-top:24px}</style></head><body>
+      <div class="brand">QUIZZBOARD</div><h1>Reçu de paiement</h1>
+      <table>${rows.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}</table>
+      <p>IA Horizon Plus Consulting — QuizzBoard. Reçu généré le ${new Date().toLocaleDateString('fr-FR')}.</p>
+      </body></html>`);
+    w.document.close();
+    w.focus();
+    w.print();
   }
 }

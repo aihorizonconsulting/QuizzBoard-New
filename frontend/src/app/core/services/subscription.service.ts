@@ -55,7 +55,7 @@ const DEFAULT_PLANS: SubscriptionPlan[] = [
     features: [
       { text: 'Quiz et parcours pédagogiques illimités', included: true, highlight: true },
       { text: 'Sessions Live jusqu\'à 300 participants', included: true, highlight: true },
-      { text: 'Génération IA illimitée (Gemini & Groq)', included: true, highlight: true },
+      { text: 'Génération IA : 100 par mois (Gemini & Groq)', included: true, highlight: true },
       { text: 'Certificats officiels infalsifiables avec QR Code', included: true },
       { text: 'Analytiques prédictives et exports détaillés', included: true },
       { text: 'Support prioritaire 24/7 par WhatsApp/Email', included: true }
@@ -83,6 +83,20 @@ const DEFAULT_PLANS: SubscriptionPlan[] = [
     isPopular: false
   }
 ];
+
+/** Consommation du forfait calculée par le serveur (limite null = illimité). */
+export interface PlanUsage {
+  tier: 'FREE' | 'STARTER' | 'LEARNER_PLUS';
+  subscriptionExpiresAt?: string | null;
+  quizzesCreated: number;
+  quizzesImported: number;
+  quizzesLimit: number | null;
+  communitiesCreated: number;
+  communitiesLimit: number | null;
+  aiGenerationsUsed: number;
+  aiGenerationsLimit: number | null;
+  liveParticipantsLimit: number;
+}
 
 @Injectable({
   providedIn: 'root'
@@ -120,7 +134,8 @@ export class SubscriptionService {
       if (serverInvoices && serverInvoices.length > 0) {
         const formatted: Invoice[] = serverInvoices.map((inv: any) => ({
           id: inv.id || inv.reference,
-          date: inv.createdAt ? inv.createdAt.split('T')[0] : new Date().toISOString().split('T')[0],
+          reference: inv.reference || inv.id,
+          date: inv.createdAt || new Date().toISOString(),
           planName: inv.planName,
           amountFcfa: inv.amountFcfa,
           amountUsd: inv.amountUsd,
@@ -134,6 +149,16 @@ export class SubscriptionService {
       }
     } catch {
       this.invoices.set([]);
+    }
+  }
+
+  /** Quotas réellement appliqués par le serveur (les quiz importés de l'ancien QuizzBoard sont exclus). */
+  async loadUsage(): Promise<PlanUsage | null> {
+    try {
+      const res = await firstValueFrom(this.http.get<any>(`${environment.apiUrl}/subscriptions/usage`));
+      return (res?.data || res) as PlanUsage;
+    } catch {
+      return null;
     }
   }
 

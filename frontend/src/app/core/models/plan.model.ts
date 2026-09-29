@@ -22,6 +22,8 @@ export interface SubscriptionPlan {
 
 export interface Invoice {
   id: string;
+  /** Référence de la transaction (celle communiquée par email et à PayDunya) */
+  reference?: string;
   date: string;
   planName: string;
   amountFcfa: number;

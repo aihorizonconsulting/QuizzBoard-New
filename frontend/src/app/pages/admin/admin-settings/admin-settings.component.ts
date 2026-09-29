@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, effect, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AdminService } from '../../../core/services/admin.service';
@@ -43,7 +43,7 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
             <div class="form-group">
               <label>Participants Maximum par Arène Live (Formule FREE)</label>
               <input type="number" [(ngModel)]="currentSettings.freeMaxLiveParticipants" class="input-field" min="5" max="50">
-              <span class="hint">Recommandé : 25 participants pour le format gratuit, 200 pour le format STARTER.</span>
+              <span class="hint">Recommandé : 25 participants pour le format gratuit (le forfait STARTER autorise 300 participants).</span>
             </div>
 
             <div class="form-group">
@@ -120,7 +120,28 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
           </div>
         </div>
 
-        <!-- 3. MODE MAINTENANCE & INFOS SYSTÈME -->
+        <!-- 3. SIGNATAIRE DES CERTIFICATS -->
+        <div class="card settings-card full-span">
+          <div class="card-head">
+            <h3 class="h3" style="margin: 0; font-size: 16px;">Certificats des Apprenants</h3>
+            <span class="badge badge-primary">Signataire</span>
+          </div>
+          <div class="form-body">
+            <div class="form-row">
+              <div class="form-group">
+                <label>Nom du signataire</label>
+                <input type="text" name="certificateSignatoryName" [(ngModel)]="currentSettings.certificateSignatoryName" class="input-field" maxlength="120" placeholder="Ex : Junior MEDJEU FOPA">
+              </div>
+              <div class="form-group">
+                <label>Fonction du signataire</label>
+                <input type="text" name="certificateSignatoryTitle" [(ngModel)]="currentSettings.certificateSignatoryTitle" class="input-field" maxlength="120" placeholder="Ex : Directeur Pédagogique">
+              </div>
+            </div>
+            <span class="hint">Affichés en bas de chaque certificat délivré aux apprenants (y compris ceux déjà délivrés).</span>
+          </div>
+        </div>
+
+        <!-- 4. MODE MAINTENANCE & INFOS SYSTÈME -->
         <div class="card settings-card full-span">
           <div class="card-head">
             <h3 class="h3" style="margin: 0; font-size: 16px;">Disponibilité & Mode Maintenance</h3>
@@ -330,8 +351,19 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
 export class AdminSettingsComponent {
   private adminService = inject(AdminService);
   private confirmService = inject(ConfirmDialogService);
+  private cdr = inject(ChangeDetectorRef);
 
   currentSettings: PlatformSettings = { ...this.adminService.getSettings()() };
+
+  constructor() {
+    // Le formulaire reprend les réglages du serveur dès leur chargement : sans cela, une ouverture rapide
+    // de la page affichait (et pouvait enregistrer) les valeurs par défaut.
+    // (application sans zone.js : le formulaire doit être explicitement rafraîchi)
+    effect(() => {
+      this.currentSettings = { ...this.adminService.getSettings()() };
+      this.cdr.markForCheck();
+    });
+  }
 
   async saveSettings() {
     const confirmed = await this.confirmService.confirm({

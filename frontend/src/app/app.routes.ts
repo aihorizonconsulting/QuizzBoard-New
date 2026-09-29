@@ -115,8 +115,8 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/creator/course-list/course-list.component').then(m => m.CourseListComponent)
       },
       {
+        // Lecture d'un cours : ouverte aux apprenants (bouton « Suivre le Cours » de leurs classes)
         path: 'courses/:id',
-        canActivate: [creatorGuard],
         loadComponent: () => import('./pages/creator/course-detail/course-detail.component').then(m => m.CourseDetailComponent)
       },
       {

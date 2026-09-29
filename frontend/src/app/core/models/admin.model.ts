@@ -38,6 +38,8 @@ export interface PlatformSettings {
   stripeActive: boolean;
   allowPublicRegistrations: boolean;
   requireEmailVerification: boolean;
+  certificateSignatoryName?: string;   // signataire affiché sur les certificats
+  certificateSignatoryTitle?: string;
 }
 
 export interface TransactionRecord {

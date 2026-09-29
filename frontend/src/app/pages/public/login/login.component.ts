@@ -727,7 +727,7 @@ export class LoginComponent {
 
         const statusCode = err?.status ?? err?.error?.status;
         if (statusCode === 0) {
-          this.errorMessage = 'Impossible de contacter le serveur backend (http://localhost:8080). Vérifiez que les conteneurs sont bien démarrés.';
+          this.errorMessage = 'Serveur injoignable : vérifiez votre connexion internet puis réessayez.';
         } else {
           this.errorMessage = err?.userFriendlyMessage || err?.error?.message || getGeneralErrorMessage(err, 'Identifiants invalides : veuillez vérifier votre adresse email et mot de passe.');
         }

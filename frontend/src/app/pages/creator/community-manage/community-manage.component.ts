@@ -158,7 +158,11 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
               @for (comm of paginatedCommunities(); track comm.id) {
                 <div class="comm-compact-card card card-interactive" (click)="openCommunity(comm)">
                   <div class="card-main-row">
-                    <img [src]="comm.coverImage" class="comm-thumb" alt="Cover">
+                    @if (comm.coverImage) {
+                      <img [src]="comm.coverImage" class="comm-thumb" alt="Couverture">
+                    } @else {
+                      <div class="comm-thumb thumb-fallback">{{ comm.name.charAt(0) }}</div>
+                    }
 
                     <div class="comm-info">
                       <div class="tags-row">
@@ -199,7 +203,11 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
             <div class="communities-list-rows animate-fade-in">
               @for (comm of paginatedCommunities(); track comm.id) {
                 <div class="comm-list-row card card-interactive" (click)="openCommunity(comm)">
-                  <img [src]="comm.coverImage" class="row-thumb" alt="Cover">
+                  @if (comm.coverImage) {
+                    <img [src]="comm.coverImage" class="row-thumb" alt="Couverture">
+                  } @else {
+                    <div class="row-thumb thumb-fallback">{{ comm.name.charAt(0) }}</div>
+                  }
 
                   <div class="row-main-info">
                     <div class="row-top-tags">
@@ -1108,6 +1116,17 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
         object-fit: cover;
       }
 
+      .thumb-fallback {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #EEF2FF;
+        color: var(--color-navy);
+        font-weight: 800;
+        font-size: 18px;
+        text-transform: uppercase;
+      }
+
       .row-main-info {
         flex: 1;
         min-width: 0;
@@ -1645,6 +1664,11 @@ export class CommunityManageComponent {
   newCommentTexts: { [topicId: string]: string } = {};
 
   filteredCommunities(): Community[] {
+    // Mes communautés d'abord, puis les plus récentes (une nouvelle communauté apparaît en tête de liste)
+    const myId = this.authService.currentUser()?.id;
+    const byRelevance = (a: Community, b: Community) =>
+      Number(b.creatorId === myId) - Number(a.creatorId === myId) ||
+      (b.createdAt || '').localeCompare(a.createdAt || '');
     return this.communities().filter(c => {
       const matchSearch = !this.searchQuery ||
         c.name.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
@@ -1657,7 +1681,7 @@ export class CommunityManageComponent {
         (this.filterType === 'PRIVATE' && c.isPrivate);
 
       return matchSearch && matchType;
-    });
+    }).sort(byRelevance);
   }
 
   paginatedCommunities(): Community[] {
@@ -1836,6 +1860,8 @@ export class CommunityManageComponent {
         authorAvatar: user?.avatarUrl
       });
       this.newCommentTexts[topicId] = '';
+      // La vue détaillée affiche une copie : on la rafraîchit pour montrer la réponse tout de suite
+      this.selectedCommunity = this.commService.getCommunityById(communityId) || this.selectedCommunity;
     }
   }
 

@@ -896,11 +896,11 @@ export class LearnerDashboardComponent {
   }
 
   passedCount(): number {
-    return this.participations().filter(p => p.percentage >= 75).length;
+    return this.participations().filter(p => p.percentage >= 70).length;
   }
 
   toReviewCount(): number {
-    return this.participations().filter(p => p.percentage < 75).length;
+    return this.participations().filter(p => p.percentage < 70).length;
   }
 
   weeklyXpTotal(): number {
