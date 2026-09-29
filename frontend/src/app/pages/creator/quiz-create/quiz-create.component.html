@@ -637,10 +637,12 @@
             <app-icon name="check-circle" [size]="15" color="var(--color-navy)"></app-icon>
             <span>{{ isSaving ? 'Enregistrement...' : (editingQuizId ? 'Enregistrer les Modifications' : 'Enregistrer dans Mes Quiz') }}</span>
           </button>
-          <button type="button" class="btn btn-secondary" (click)="launchLiveNow()" [disabled]="isSaving">
-            <app-icon name="play" [size]="15" color="#FFFFFF"></app-icon>
-            <span>Lancer la Session Live</span>
-          </button>
+          @if (!editingQuizId) {
+            <button type="button" class="btn btn-secondary" (click)="launchLiveNow()" [disabled]="isSaving" title="Enregistre le quiz dans Mes Quiz puis ouvre une session Live">
+              <app-icon name="play" [size]="15" color="#FFFFFF"></app-icon>
+              <span>Enregistrer et lancer en Live</span>
+            </button>
+          }
         </div>
       </div>
     </section>

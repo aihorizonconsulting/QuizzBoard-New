@@ -1,9 +1,11 @@
-import { Component, OnInit, OnDestroy, inject, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, inject, ChangeDetectorRef, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink, Router, ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { QuizService } from '../../../core/services/quiz.service';
 import { LiveSessionService } from '../../../core/services/live-session.service';
+import { ClasseService } from '../../../core/services/classe.service';
+import { Student } from '../../../core/models/classe.model';
 import { LiveQuizSession, LiveSessionPlayer } from '../../../core/models/quiz.model';
 import { IconComponent } from '../../../shared/components/icon/icon.component';
 import { ConfirmDialogService } from '../../../core/services/confirm-dialog.service';
@@ -131,7 +133,7 @@ import { LiveSyncService } from '../../../core/services/live-sync.service';
                     type="text" 
                     [(ngModel)]="studentInput" 
                     name="studentInput"
-                    placeholder="Saisissez l'email (ex: fatou.sow@univ.sn) ou le matricule (ex: ETU-2026-4819)..."
+                    placeholder="Email de l'élève (prenom.nom@ecole.sn) ou son matricule (ETU-...)"
                     class="input-field-student"
                     [class.input-error]="studentError"
                     (input)="studentError = ''">
@@ -148,22 +150,22 @@ import { LiveSyncService } from '../../../core/services/live-sync.service';
                 }
               </form>
 
-              <!-- Quick suggestion chips -->
-              <div class="quick-chips-row">
-                <span class="chips-hint">Suggestions rapides (1 clic) :</span>
-                <button type="button" class="quick-chip" (click)="addQuickStudent('fatou.sow@etudiant.univ.sn', 'Fatou Sow', 'ETU-2026-012')">
-                  + Fatou Sow (ETU-012)
-                </button>
-                <button type="button" class="quick-chip" (click)="addQuickStudent('amadou.k@etudiant.univ.sn', 'Amadou Kane', 'ETU-2026-088')">
-                  + Amadou Kane (ETU-088)
-                </button>
-                <button type="button" class="quick-chip" (click)="addQuickStudent('mariama.ba@etudiant.sn', 'Mariama Bâ', 'ETU-2026-045')">
-                  + Mariama Bâ (ETU-045)
-                </button>
-                <button type="button" class="quick-chip" (click)="addQuickStudent('paul.k@polytechnique.ci', 'Paul Koffi', 'ETU-2026-104')">
-                  + Paul Koffi (ETU-104)
-                </button>
-              </div>
+              <!-- Ajout en 1 clic des élèves inscrits dans les classes du formateur -->
+              @if (suggestedStudents().length > 0) {
+                <div class="quick-chips-row">
+                  <span class="chips-hint">Élèves de vos classes (1 clic) :</span>
+                  @for (item of suggestedStudents().slice(0, 8); track item.student.email) {
+                    <button type="button" class="quick-chip" [title]="item.student.email + ' — ' + item.className" (click)="addQuickStudent(item.student)">
+                      + {{ item.student.prenom }} {{ item.student.nom }} ({{ item.className }})
+                    </button>
+                  }
+                  @if (suggestedStudents().length > 8) {
+                    <span class="chips-hint">et {{ suggestedStudents().length - 8 }} autre(s) : saisissez leur email ci-dessus.</span>
+                  }
+                </div>
+              } @else {
+                <p class="chips-hint" style="margin-top: 10px;">Les élèves inscrits dans vos classes (Mes Classes) apparaîtront ici pour être ajoutés en un clic.</p>
+              }
             </div>
 
             <!-- CONNECTED PLAYERS LIST & LAUNCH BUTTON -->
@@ -1354,6 +1356,7 @@ import { LiveSyncService } from '../../../core/services/live-sync.service';
 })
 export class LiveHostComponent implements OnInit, OnDestroy {
   private quizService = inject(QuizService);
+  private classeService = inject(ClasseService);
   private liveService = inject(LiveSessionService);
   private liveSyncService = inject(LiveSyncService);
   private route = inject(ActivatedRoute);
@@ -1362,6 +1365,27 @@ export class LiveHostComponent implements OnInit, OnDestroy {
   private cdr = inject(ChangeDetectorRef);
 
   session = this.quizService.activeLiveSession;
+  private classes = this.classeService.getClasses();
+  /** Classe visée par ce Live (ses élèves sont proposés en premier). */
+  private targetClassId = signal<string | null>(null);
+
+  /** Élèves réels des classes du formateur, sans doublon et sans ceux déjà présents dans le Live. */
+  suggestedStudents = computed(() => {
+    const inLive = new Set((this.session()?.players ?? []).map(p => (p.email || '').toLowerCase()).filter(e => !!e));
+    const target = this.targetClassId();
+    const classes = [...this.classes()].sort((a, b) => Number(b.id === target) - Number(a.id === target));
+    const seen = new Set<string>();
+    const list: { student: Student; className: string }[] = [];
+    for (const classe of classes) {
+      for (const student of classe.students ?? []) {
+        const email = (student.email || '').trim().toLowerCase();
+        if (!email || seen.has(email) || inLive.has(email)) continue;
+        seen.add(email);
+        list.push({ student, className: classe.name });
+      }
+    }
+    return list;
+  });
 
   // Student Invitation Input
   studentInput = '';
@@ -1383,6 +1407,7 @@ export class LiveHostComponent implements OnInit, OnDestroy {
 
       const liveSessions = this.liveService.getLiveSessions()();
       const foundSession = liveSessions.find(s => s.id === sessionId);
+      this.targetClassId.set(foundSession?.targetClassId ?? null);
       if (foundSession) {
         const foundQuiz = this.quizService.getQuizzes()().find(q => q.id === foundSession.quizId);
         if (foundQuiz) {
@@ -1568,8 +1593,8 @@ export class LiveHostComponent implements OnInit, OnDestroy {
     this.studentInput = '';
   }
 
-  async addQuickStudent(email: string, nickname: string, matricule: string): Promise<void> {
-    await this.addPlayer({ email, nickname, matricule });
+  async addQuickStudent(student: Student): Promise<void> {
+    await this.addPlayer({ email: student.email, nickname: `${student.prenom} ${student.nom}`.trim(), matricule: student.matricule });
     this.liveSyncService.saveSessionState(this.session());
   }
 

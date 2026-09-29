@@ -2,10 +2,8 @@ import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink, Router } from '@angular/router';
 import { QuizService, CreatorStats } from '../../../core/services/quiz.service';
-import { LiveSessionService } from '../../../core/services/live-session.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { PromotionService } from '../../../core/services/promotion.service';
-import { Quiz } from '../../../core/models/quiz.model';
 import { IconComponent } from '../../../shared/components/icon/icon.component';
 
 @Component({
@@ -34,7 +32,7 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
               <span>Mode Historique (Lecture seule)</span>
             </span>
           } @else {
-            <button class="btn btn-secondary" (click)="launchFirstLive()" title="Lancer une arène interactive en direct">
+            <button class="btn btn-secondary" (click)="launchFirstLive()" title="Choisir un quiz et lancer une session en direct">
               <app-icon name="play" [size]="14" color="#FFFFFF"></app-icon>
               <span>Lancer un Live</span>
             </button>
@@ -730,7 +728,6 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
 })
 export class DashboardComponent implements OnInit {
   private quizService = inject(QuizService);
-  private liveService = inject(LiveSessionService);
   public authService = inject(AuthService);
   public promotionService = inject(PromotionService);
   private router = inject(Router);
@@ -803,17 +800,8 @@ export class DashboardComponent implements OnInit {
     }
   }
 
-  async startLive(quiz: Quiz) {
-    const sessionId = await this.liveService.launchLiveSession(quiz);
-    this.router.navigate(['/app/live/host', sessionId]);
-  }
-
+  /** Ouvre la création de Live (choix du quiz) au lieu de lancer d'office le premier quiz de la liste. */
   launchFirstLive() {
-    const list = this.myQuizzes();
-    if (list.length > 0) {
-      this.startLive(list[0]);
-    } else {
-      this.router.navigate(['/app/live']);
-    }
+    this.router.navigate(['/app/live'], { queryParams: { nouveau: 1 } });
   }
 }

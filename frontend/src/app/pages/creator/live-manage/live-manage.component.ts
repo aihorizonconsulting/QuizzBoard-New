@@ -1,7 +1,7 @@
 import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { LiveSessionService } from '../../../core/services/live-session.service';
 import { QuizService } from '../../../core/services/quiz.service';
 import { ClasseService } from '../../../core/services/classe.service';
@@ -824,6 +824,7 @@ export class LiveManageComponent {
   private classService = inject(ClasseService);
   public promotionService = inject(PromotionService);
   private router = inject(Router);
+  private route = inject(ActivatedRoute);
 
   sessions = this.liveService.getLiveSessions();
   quizzes = this.quizService.getQuizzes();
@@ -832,6 +833,10 @@ export class LiveManageComponent {
   constructor() {
     // Les sessions sont conservées côté serveur : on les recharge à chaque ouverture de la page
     this.liveService.loadMyLiveSessions();
+    // Arrivée depuis « Lancer un Live » du tableau de bord : fenêtre de choix du quiz ouverte
+    if (this.route.snapshot.queryParamMap.has('nouveau')) {
+      this.openCreateModal();
+    }
   }
 
   searchQuery = '';
