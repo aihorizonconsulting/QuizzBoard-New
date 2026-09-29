@@ -48,8 +48,9 @@ public class DataInitializer implements CommandLineRunner {
             });
         }
 
-        // 2. Compte Administrateur Unique pour la gestion
-        User admin = userRepository.findByEmail("admin@quizzboard.com").orElse(null);
+        // 2. Compte Administrateur Unique pour la gestion : créé seulement s'il n'existe aucun administrateur
+        //    (l'administrateur peut changer d'email ; le compte par défaut ne doit pas réapparaître)
+        User admin = userRepository.findFirstByRole(UserRole.ADMIN).orElse(null);
         if (admin == null) {
             log.info("Création du compte Administrateur système QuizzBoard...");
             String encodedPassword = passwordEncoder.encode("Password123!");
