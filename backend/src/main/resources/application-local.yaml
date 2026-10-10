@@ -34,7 +34,7 @@ spring:
 
 app:
   cors:
-    allowed-origins: ${CORS_ORIGINS:http://localhost:4200,http://127.0.0.1:4200}
+    allowed-origins: ${CORS_ORIGINS:http://localhost:4200,http://127.0.0.1:4200,http://localhost:4327,http://127.0.0.1:4327}
   mail:
     enabled: ${SMTP_ENABLED:false}
     from: ${MAIL_FROM:QuizzBoard Support <no-reply@quizzboard.com>}

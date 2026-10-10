@@ -80,6 +80,9 @@ public class GoogleAuthService {
                 existingUser.setAvatarUrl(pictureUrl);
             }
             User savedUser = userRepository.save(existingUser);
+            if (savedUser.getRole() == null) {
+                return AuthResponse.roleRequired(userMapper.toDto(savedUser));
+            }
             learningStatsService.refreshUserStats(savedUser);
             String jwtToken = jwtUtils.generateToken(savedUser.getEmail(), savedUser.getRole().name());
             String refreshToken = jwtUtils.generateRefreshToken(savedUser.getEmail());

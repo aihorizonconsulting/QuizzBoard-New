@@ -26,8 +26,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-
-import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Service
@@ -114,13 +112,48 @@ public class AuthServiceImpl implements AuthService {
         // Mode maintenance : seuls les administrateurs peuvent se connecter
         platformAccessService.assertLoginAllowed(user);
 
-        // Tout compte enregistré a déjà un rôle (y compris les comptes importés de l'ancien
-        // QuizzBoard, dont le rôle a été déduit de leur usage) : connexion directe, sans choix du rôle.
+        if (user.getRole() == null) {
+            return AuthResponse.roleRequired(userMapper.toDto(user));
+        }
+
         learningStatsService.refreshUserStats(user);
         String jwtToken = jwtUtils.generateToken(user.getEmail(), user.getRole().name());
         String refreshToken = jwtUtils.generateRefreshToken(user.getEmail());
 
         return new AuthResponse(jwtToken, refreshToken, userMapper.toDto(user));
+    }
+
+    @Override
+    @Transactional
+    public AuthResponse completeRole(CompleteRoleRequest request) {
+        String cleanEmail = request.email() != null ? request.email().toLowerCase().trim() : "";
+        if (cleanEmail.isEmpty()) {
+            throw new BadRequestException("email", "L'adresse email est obligatoire.");
+        }
+
+        User user = userRepository.findByEmail(cleanEmail)
+                .orElseThrow(() -> new BadRequestException("email", "Aucun compte n'est enregistré avec cette adresse email."));
+
+        if ("SUSPENDED".equalsIgnoreCase(user.getStatus())) {
+            throw new UnauthorizedException("Ce compte utilisateur a été suspendu par un administrateur. Veuillez contacter le support QuizzBoard.");
+        }
+
+        platformAccessService.assertLoginAllowed(user);
+
+        if (user.getPassword() == null || !passwordEncoder.matches(request.password(), user.getPassword())) {
+            throw new BadRequestException("password", "Le mot de passe saisi est incorrect pour ce compte.");
+        }
+
+        if (request.role() == UserRole.ADMIN) {
+            throw new BadRequestException("role", "Le rôle ADMIN ne peut pas être choisi depuis l'application mobile.");
+        }
+
+        user.setRole(request.role());
+        User savedUser = userRepository.save(user);
+        learningStatsService.refreshUserStats(savedUser);
+        String jwtToken = jwtUtils.generateToken(savedUser.getEmail(), savedUser.getRole().name());
+        String refreshToken = jwtUtils.generateRefreshToken(savedUser.getEmail());
+        return new AuthResponse(jwtToken, refreshToken, userMapper.toDto(savedUser));
     }
 
     @Override
@@ -185,6 +218,10 @@ public class AuthServiceImpl implements AuthService {
         String email = jwtUtils.getEmailFromToken(refreshToken);
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Utilisateur introuvable."));
+
+        if (user.getRole() == null) {
+            return AuthResponse.roleRequired(userMapper.toDto(user));
+        }
 
         String newAccessToken = jwtUtils.generateToken(user.getEmail(), user.getRole().name());
         expireSubscriptionIfNeeded(user);

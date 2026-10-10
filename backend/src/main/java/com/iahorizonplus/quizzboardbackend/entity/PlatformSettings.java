@@ -33,6 +33,12 @@ public class PlatformSettings {
     private double starterPriceUsd = 2.0;
 
     @Builder.Default
+    private double learnerPlusPriceFcfa = 200.0;
+
+    @Builder.Default
+    private double learnerPlusPriceUsd = 0.5;
+
+    @Builder.Default
     private boolean isMaintenanceMode = false;
 
     @Builder.Default
