@@ -101,7 +101,7 @@ import { IconComponent } from '../icon/icon.component';
                   <div class="ani-text">
                     <app-icon [name]="isCurrentCorrect ? 'check' : 'x-circle'" [size]="15" [color]="isCurrentCorrect ? 'var(--color-success)' : 'var(--color-danger)'"></app-icon>
                     <span style="font-weight: 700;">
-                      {{ selectedChoiceId ? (isCurrentCorrect ? '+100 XP ! Bonne réponse 🎯' : 'Réponse incorrecte ❌') : 'Temps de réflexion écoulé ! ⏱️' }}
+                      {{ selectedChoiceId ? (isCurrentCorrect ? (practice ? 'Bonne réponse 🎯' : '+100 XP ! Bonne réponse 🎯') : 'Réponse incorrecte ❌') : 'Temps de réflexion écoulé ! ⏱️' }}
                     </span>
                   </div>
                   <span class="next-countdown">Redirection automatique vers la question suivante en 1.5s...</span>
@@ -129,7 +129,27 @@ import { IconComponent } from '../icon/icon.component';
                 <span class="score-pts">{{ totalScore }} / {{ maxTotalScore }} points</span>
               </div>
 
+              @if (practice) {
+                <p class="practice-note">Entraînement : ce score n'est compté ni dans vos résultats ni dans votre XP.</p>
+              }
+
+              <!-- Quiz raté par un apprenant : parcours de remise à niveau préparé dans « Perfectionnement » -->
+              @if (!practice && authService.isLearner() && scorePercentage < 70) {
+                <div class="remedial-hint">
+                  <strong>📚 Un parcours de remise à niveau vous attend</strong>
+                  <span>
+                    @if (authService.hasLearnerPlus()) {
+                      Un mini-cours et un quiz d'entraînement sur les notions manquées sont en préparation dans « Perfectionnement ».
+                    } @else {
+                      Un mini-cours et un quiz d'entraînement sur les notions manquées ont été préparés : ils sont accessibles avec l'abonnement Apprenant Plus.
+                    }
+                  </span>
+                  <a routerLink="/app/learner/perfectionnement" (click)="close()" class="btn btn-outline btn-sm">Voir mon perfectionnement</a>
+                </div>
+              }
+
               <!-- EMAIL SCORE & RANK RECAP -->
+              @if (!practice) {
               <div class="email-score-card animate-fade-in">
                 @if (emailSentSuccess) {
                   <div class="email-status-badge success">
@@ -177,6 +197,8 @@ import { IconComponent } from '../icon/icon.component';
                   </div>
                 }
               </div>
+
+              }
 
               <!-- REWARD PROMPT FOR GUESTS -->
               @if (!authService.isAuthenticated()) {
@@ -503,6 +525,29 @@ import { IconComponent } from '../icon/icon.component';
         }
       }
 
+      .practice-note {
+        font-size: 12.5px;
+        color: var(--color-text-secondary);
+        margin: 0 0 12px 0;
+      }
+
+      .remedial-hint {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        text-align: center;
+        background: #FFFBEB;
+        border: 1px solid #FCD34D;
+        border-radius: 10px;
+        padding: 12px 16px;
+        margin-bottom: 14px;
+        font-size: 12.5px;
+        color: #78350F;
+
+        strong { font-size: 13.5px; color: #92400E; }
+      }
+
       .guest-signup-box {
         background: var(--color-primary-light);
         border: 1.5px solid var(--color-primary);
@@ -570,6 +615,9 @@ export class QuizModalPlayerComponent implements OnInit, OnDestroy, OnChanges {
   @Input() classId?: string;
   @Input() className?: string;
   @Output() closed = new EventEmitter<void>();
+  /** Entraînement (perfectionnement) : le score est seulement renvoyé, rien n'est enregistré ni envoyé. */
+  @Input() practice = false;
+  @Output() practiceFinished = new EventEmitter<number>();
 
   public authService = inject(AuthService);
   private partService = inject(ParticipationService);
@@ -814,6 +862,11 @@ export class QuizModalPlayerComponent implements OnInit, OnDestroy, OnChanges {
     this.maxTotalScore = this.maxPossibleScore;
     this.scorePercentage = Math.round((this.totalScore / this.maxTotalScore) * 100);
     this.earnedXp = this.totalScore + 50;
+    if (this.practice) {
+      this.practiceFinished.emit(this.scorePercentage);
+      this.cdr.markForCheck();
+      return;
+    }
 
     const totalTimeSpent = this.recordedAnswers.reduce((acc, a) => acc + a.timeSpentSeconds, 0);
     const user = this.authService.currentUser();

@@ -41,8 +41,12 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
             }
 
             <p class="subtitle">
-              Félicitations <strong>{{ authService.currentUser()?.prenom || 'Cher Formateur' }}</strong> ! Votre compte a été mis à niveau avec succès.
-              Vous bénéficiez désormais d'un accès <strong>illimité</strong> à toutes les fonctionnalités de QuizzBoard.
+              Félicitations <strong>{{ authService.currentUser()?.prenom || '' }}</strong> ! Votre compte a été mis à niveau avec succès.
+              @if (authService.isLearner()) {
+                Vous avez désormais accès au perfectionnement (cours et quiz de remise à niveau) et à vos certificats.
+              } @else {
+                Vous bénéficiez désormais des avantages du forfait STARTER (quiz illimités, 100 générations IA par mois, Live jusqu'à 300 joueurs).
+              }
             </p>
 
             @if (invoiceDetails()) {
@@ -69,15 +73,22 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
             }
 
             <div class="actions-row">
-              <a routerLink="/app/dashboard" class="btn btn-primary">
+              <a [routerLink]="authService.dashboardUrl()" class="btn btn-primary">
                 <app-icon name="bar-chart" [size]="16" color="var(--color-navy)"></app-icon>
-                <span>Accéder au Dashboard</span>
+                <span>Accéder à mon espace</span>
               </a>
 
-              <a routerLink="/app/subscription" class="btn btn-outline">
-                <app-icon name="credit-card" [size]="16" color="var(--color-navy)"></app-icon>
-                <span>Consulter mes Factures</span>
-              </a>
+              @if (authService.isLearner()) {
+                <a routerLink="/app/learner/perfectionnement" class="btn btn-outline">
+                  <app-icon name="trending-up" [size]="16" color="var(--color-navy)"></app-icon>
+                  <span>Mon perfectionnement</span>
+                </a>
+              } @else {
+                <a routerLink="/app/subscription" class="btn btn-outline">
+                  <app-icon name="credit-card" [size]="16" color="var(--color-navy)"></app-icon>
+                  <span>Consulter mes Factures</span>
+                </a>
+              }
             </div>
           </div>
         }
@@ -105,7 +116,7 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
                 <span>Réessayer le paiement</span>
               </a>
 
-              <a routerLink="/app/subscription" class="btn btn-outline">
+              <a [routerLink]="authService.isLearner() ? authService.dashboardUrl() : '/app/subscription'" class="btn btn-outline">
                 <span>Retourner à mon compte</span>
               </a>
             </div>

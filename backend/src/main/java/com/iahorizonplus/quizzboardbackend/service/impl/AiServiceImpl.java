@@ -2,6 +2,8 @@ package com.iahorizonplus.quizzboardbackend.service.impl;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.iahorizonplus.quizzboardbackend.dto.request.AiCourseGenerateRequest;
 import com.iahorizonplus.quizzboardbackend.dto.request.AiQuizGenerateRequest;
 import com.iahorizonplus.quizzboardbackend.entity.*;
@@ -222,6 +224,101 @@ public class AiServiceImpl implements AiService {
 
         savedCourse.setChapters(chapters);
         return savedCourse;
+    }
+
+    @Override
+    public ObjectNode generateRemedialContent(String quizTitle, double scorePercent, List<String> missedNotions) {
+        if (!isGeminiConfigured()) {
+            log.warn("Remise à niveau non générée : clé Gemini absente.");
+            return null;
+        }
+        String notions = missedNotions == null || missedNotions.isEmpty()
+                ? "- (détail des réponses indisponible : couvrir les notions essentielles du sujet)"
+                : String.join("\n", missedNotions.stream().limit(10).map(n -> "- " + n).toList());
+        String prompt = String.format("""
+                Tu es un professeur particulier bienveillant et rigoureux.
+                Un apprenant vient d'obtenir %.0f %% au quiz « %s ».
+                Voici les questions qu'il a manquées, avec la bonne réponse :
+                %s
+
+                Prépare en français un parcours de remise à niveau ciblé sur ces notions :
+                1. "chapters" : 3 chapitres courts. Pour chacun : "title", "summary" (une phrase),
+                   "content" (explication claire au format Markdown, avec un exemple concret, 150 à 300 mots),
+                   "estimatedMinutes" (nombre entier).
+                2. "questions" : 5 nouvelles questions d'entraînement sur les mêmes notions (énoncés différents
+                   de ceux ci-dessus). Pour chacune : "text", "type" ("SINGLE_CHOICE", "MULTIPLE_CHOICE" ou "TRUE_FALSE"),
+                   "explanation" (pourquoi la bonne réponse est juste), "choices" (2 à 4 objets avec "text" et "isCorrect").
+                Retourne UNIQUEMENT un objet JSON de la forme {"chapters": [...], "questions": [...]}.
+                """, scorePercent, quizTitle, notions);
+
+        Map<String, Object> requestBody = Map.of(
+                "contents", List.of(Map.of("parts", List.of(Map.of("text", prompt)))),
+                "generationConfig", Map.of("response_mime_type", "application/json", "temperature", 0.6)
+        );
+        try {
+            String response = generateWithGemini(requestBody);
+            if (response == null || response.isBlank()) {
+                return null;
+            }
+            String text = objectMapper.readTree(response).path("candidates").path(0).path("content").path("parts").path(0).path("text").asText("");
+            int start = text.indexOf('{');
+            int end = text.lastIndexOf('}');
+            if (start < 0 || end <= start) {
+                return null;
+            }
+            JsonNode raw = objectMapper.readTree(text.substring(start, end + 1));
+            ObjectNode content = objectMapper.createObjectNode();
+            ArrayNode chapters = content.putArray("chapters");
+            int order = 1;
+            for (JsonNode ch : raw.path("chapters")) {
+                String chapterContent = ch.path("content").asText("").trim();
+                if (chapterContent.isEmpty()) continue;
+                ObjectNode node = chapters.addObject();
+                node.put("order", order);
+                node.put("title", ch.path("title").asText("Chapitre " + order));
+                node.put("summary", ch.path("summary").asText(""));
+                node.put("content", chapterContent);
+                node.put("estimatedMinutes", Math.max(1, ch.path("estimatedMinutes").asInt(5)));
+                order++;
+            }
+            ArrayNode questions = content.putArray("questions");
+            int qOrder = 1;
+            for (JsonNode q : raw.path("questions")) {
+                String type = q.path("type").asText("SINGLE_CHOICE").toUpperCase();
+                if (!List.of("SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE").contains(type)) type = "SINGLE_CHOICE";
+                List<JsonNode> choices = new ArrayList<>();
+                q.path("choices").forEach(c -> { if (!c.path("text").asText("").isBlank()) choices.add(c); });
+                long correct = choices.stream().filter(c -> c.path("isCorrect").asBoolean(false)).count();
+                boolean valid = choices.size() >= 2 && correct >= 1 && (type.equals("MULTIPLE_CHOICE") || correct == 1);
+                if (!valid || q.path("text").asText("").isBlank()) continue;
+                ObjectNode node = questions.addObject();
+                node.put("id", UUID.randomUUID().toString());
+                node.put("text", q.path("text").asText());
+                node.put("type", type);
+                node.put("timeLimitSeconds", 30);
+                node.put("points", 100);
+                node.put("order", qOrder++);
+                node.put("explanation", q.path("explanation").asText(""));
+                ArrayNode choiceNodes = node.putArray("choices");
+                int cOrder = 1;
+                for (JsonNode c : choices) {
+                    ObjectNode choice = choiceNodes.addObject();
+                    choice.put("id", UUID.randomUUID().toString());
+                    choice.put("text", c.path("text").asText().trim());
+                    choice.put("isCorrect", c.path("isCorrect").asBoolean(false));
+                    choice.put("order", cOrder++);
+                }
+            }
+            if (chapters.isEmpty() || questions.isEmpty()) {
+                log.warn("Remise à niveau « {} » : réponse de l'IA incomplète ({} chapitres, {} questions).", quizTitle, chapters.size(), questions.size());
+                return null;
+            }
+            log.info("Remise à niveau « {} » générée : {} chapitres, {} questions.", quizTitle, chapters.size(), questions.size());
+            return content;
+        } catch (Exception e) {
+            log.warn("Remise à niveau « {} » non générée : {}", quizTitle, e.getMessage());
+            return null;
+        }
     }
 
     private boolean isGeminiConfigured() {

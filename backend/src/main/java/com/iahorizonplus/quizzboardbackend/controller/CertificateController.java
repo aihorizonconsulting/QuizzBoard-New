@@ -54,7 +54,12 @@ public class CertificateController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Obtenir un certificat par son ID")
-    public ResponseEntity<ApiResponse<Certificate>> getCertificateById(@PathVariable String id, HttpServletRequest request) {
+    public ResponseEntity<ApiResponse<Certificate>> getCertificateById(@PathVariable String id,
+                                                                    @AuthenticationPrincipal UserPrincipal currentUser,
+                                                                    HttpServletRequest request) {
+        if (currentUser != null) {
+            certificateService.assertCanViewCertificates(currentUser.getId());
+        }
         Certificate cert = certificateService.getCertificateById(id);
         List<LinkDto> links = List.of(
                 LinkDto.of("self", request.getRequestURI(), "GET"),
@@ -67,7 +72,12 @@ public class CertificateController {
 
     @PostMapping("/generate/{participationId}")
     @Operation(summary = "Générer ou récupérer le certificat d'une participation éligible")
-    public ResponseEntity<ApiResponse<Certificate>> generateCertificate(@PathVariable String participationId, HttpServletRequest request) {
+    public ResponseEntity<ApiResponse<Certificate>> generateCertificate(@PathVariable String participationId,
+                                                                     @AuthenticationPrincipal UserPrincipal currentUser,
+                                                                     HttpServletRequest request) {
+        if (currentUser != null) {
+            certificateService.assertCanViewCertificates(currentUser.getId());
+        }
         Certificate cert = certificateService.generateCertificate(participationId);
         List<LinkDto> links = List.of(
                 LinkDto.of("self", "/api/v1/certificates/" + cert.getId(), "GET"),

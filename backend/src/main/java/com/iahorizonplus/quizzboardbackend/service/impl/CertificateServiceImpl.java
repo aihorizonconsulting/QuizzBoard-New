@@ -3,6 +3,7 @@ package com.iahorizonplus.quizzboardbackend.service.impl;
 import com.iahorizonplus.quizzboardbackend.entity.Certificate;
 import com.iahorizonplus.quizzboardbackend.entity.Participation;
 import com.iahorizonplus.quizzboardbackend.entity.User;
+import com.iahorizonplus.quizzboardbackend.exception.PlanRequiredException;
 import com.iahorizonplus.quizzboardbackend.exception.ResourceNotFoundException;
 import com.iahorizonplus.quizzboardbackend.repository.CertificateRepository;
 import com.iahorizonplus.quizzboardbackend.repository.ParticipationRepository;
@@ -107,7 +108,28 @@ public class CertificateServiceImpl implements CertificateService {
             }
         }
         certificates.sort(Comparator.comparing(Certificate::getIssuedAt, Comparator.nullsLast(Comparator.reverseOrder())));
+        if (PlanAccess.isLearner(user) && !PlanAccess.hasLearnerPlus(user)) {
+            // Sans Apprenant Plus : l'apprenant voit ses certificats obtenus, sans le diplôme ni son code
+            return certificates.stream().map(c -> Certificate.builder()
+                    .id(c.getId())
+                    .quizTitle(c.getQuizTitle())
+                    .scorePercent(c.getScorePercent())
+                    .issuerName(c.getIssuerName())
+                    .issuedAt(c.getIssuedAt())
+                    .status(c.getStatus())
+                    .locked(true)
+                    .build()).toList();
+        }
         return certificates;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public void assertCanViewCertificates(String userId) {
+        User user = userRepository.findById(userId).orElse(null);
+        if (PlanAccess.isLearner(user) && !PlanAccess.hasLearnerPlus(user)) {
+            throw new PlanRequiredException("La consultation et le téléchargement des certificats sont réservés à l'abonnement Apprenant Plus.");
+        }
     }
 
     @Override

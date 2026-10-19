@@ -3,7 +3,8 @@ import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../../environments/environment';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
+import { AuthService } from '../../../core/services/auth.service';
 import { ParticipationService } from '../../../core/services/participation.service';
 import { Certificate } from '../../../core/models/participation.model';
 import { IconComponent } from '../../../shared/components/icon/icon.component';
@@ -30,6 +31,17 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
             <span>{{ certificates().length }} Certificat{{ certificates().length > 1 ? 's' : '' }} Obtenu{{ certificates().length > 1 ? 's' : '' }}</span>
           </div>
         </div>
+
+        @if (isLocked()) {
+          <div class="locked-banner card">
+            <app-icon name="lock" [size]="20" color="#92400E"></app-icon>
+            <div class="locked-text">
+              <strong>Certificats réservés à l'abonnement Apprenant Plus (200 F / mois)</strong>
+              <span>Vos certificats obtenus sont conservés. Abonnez-vous pour les consulter, les imprimer et les télécharger.</span>
+            </div>
+            <a routerLink="/tarifs" class="btn btn-primary btn-sm">Découvrir Apprenant Plus</a>
+          </div>
+        }
 
         <!-- UNIFIED COMPACT SEARCH & FILTER TOOLBAR (IDENTICAL TO CREATOR PAGES) -->
         <div class="filter-toolbar card">
@@ -126,14 +138,15 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
                     <span class="cert-issuer">{{ cert.issuerName }}</span>
                     <div class="cert-meta">
                       <span>Délivré le {{ cert.issuedAt | date:'dd/MM/yyyy' }}</span>
-                      <span class="cert-code">#{{ cert.verificationCode }}</span>
+                      @if (!cert.locked) {
+                        <span class="cert-code">#{{ cert.verificationCode }}</span>
+                      }
                     </div>
                   </div>
-
                   <div class="cert-card-actions" (click)="$event.stopPropagation()">
                     <button class="btn btn-primary btn-sm btn-full" (click)="openCertificate(cert)">
-                      <app-icon name="award" [size]="14" color="var(--color-navy)"></app-icon>
-                      <span>Consulter le Diplôme</span>
+                      <app-icon [name]="cert.locked ? 'lock' : 'award'" [size]="14" color="var(--color-navy)"></app-icon>
+                      <span>{{ cert.locked ? 'Débloquer avec Apprenant Plus' : 'Consulter le Diplôme' }}</span>
                     </button>
                   </div>
                 </div>
@@ -153,7 +166,9 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
                       <span class="score-badge" [class.gold]="cert.scorePercent >= 90">
                         {{ cert.scorePercent }}%
                       </span>
-                      <span class="cert-code">#{{ cert.verificationCode }}</span>
+                      @if (!cert.locked) {
+                        <span class="cert-code">#{{ cert.verificationCode }}</span>
+                      }
                     </div>
                     <h3 class="row-title">{{ cert.quizTitle }}</h3>
                     <span class="body-small text-muted">{{ cert.issuerName }} • Délivré le {{ cert.issuedAt | date:'dd/MM/yyyy' }}</span>
@@ -161,7 +176,7 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
 
                   <div class="row-action" (click)="$event.stopPropagation()">
                     <button class="btn btn-primary btn-sm" (click)="openCertificate(cert)">
-                      <span>Consulter</span>
+                      <span>{{ cert.locked ? '🔒 Débloquer' : 'Consulter' }}</span>
                       <app-icon name="arrow-right" [size]="13" color="var(--color-navy)"></app-icon>
                     </button>
                   </div>
@@ -678,6 +693,13 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
       .empty-desc { font-size: 13px; color: var(--color-text-secondary); max-width: 440px; margin: 0 0 20px 0; }
     }
 
+    .locked-banner {
+      display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+      padding: 16px 18px; background: #FFFBEB; border: 1px solid #FCD34D;
+    }
+    .locked-text { flex: 1; min-width: 240px; display: flex; flex-direction: column; gap: 3px; font-size: 13px; color: #78350F; }
+    .locked-text strong { font-size: 14px; color: #92400E; }
+
     @media (max-width: 768px) {
       .certs-grid { grid-template-columns: 1fr; }
       .diploma-body .student-name { font-size: 20px; }
@@ -688,7 +710,14 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
 export class CertificatesComponent {
   private partService = inject(ParticipationService);
   private http = inject(HttpClient);
+  private router = inject(Router);
+  private authService = inject(AuthService);
   certificates = this.partService.getCertificates();
+
+  /** Sans abonnement Apprenant Plus, le serveur renvoie les certificats verrouillés (sans diplôme ni code). */
+  isLocked(): boolean {
+    return !this.authService.hasLearnerPlus() || this.certificates().some(c => c.locked);
+  }
 
   // Signataire configuré par l'administrateur (Admin > Paramètres > Certificats)
   signatoryName = signal('La Direction Pédagogique');
@@ -719,8 +748,8 @@ export class CertificatesComponent {
     return this.certificates().filter(cert => {
       const matchSearch = !this.searchQuery ||
         cert.quizTitle.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-        cert.verificationCode.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-        cert.issuerName.toLowerCase().includes(this.searchQuery.toLowerCase());
+        (cert.verificationCode || '').toLowerCase().includes(this.searchQuery.toLowerCase()) ||
+        (cert.issuerName || '').toLowerCase().includes(this.searchQuery.toLowerCase());
 
       const matchScore = this.filterScore === 'ALL' ||
         (this.filterScore === 'EXCELLENT' && cert.scorePercent >= 90) ||
@@ -737,6 +766,10 @@ export class CertificatesComponent {
   }
 
   openCertificate(cert: Certificate) {
+    if (cert.locked) {
+      this.router.navigate(['/tarifs']);
+      return;
+    }
     this.selectedCert = cert;
   }
 

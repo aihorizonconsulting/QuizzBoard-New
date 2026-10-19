@@ -19,6 +19,10 @@ public class Certificate {
     @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
 
+    /** Certificat obtenu mais verrouillé (apprenant sans abonnement Apprenant Plus) : non enregistré en base. */
+    @Transient
+    private boolean locked;
+
     @Column(nullable = false)
     private String participationId;
 

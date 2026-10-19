@@ -24,6 +24,7 @@ public class ParticipationServiceImpl implements ParticipationService {
     private final CertificateService certificateService;
     private final SmtpEmailService smtpEmailService;
     private final LearningStatsService learningStatsService;
+    private final RemedialService remedialService;
 
     @Override
     @Transactional
@@ -98,6 +99,13 @@ public class ParticipationServiceImpl implements ParticipationService {
             } catch (Exception e) {
                 log.warn("Impossible de générer le certificat automatiquement: {}", e.getMessage());
             }
+        }
+
+        // Quiz réussi à moins de 70 % par un apprenant : parcours de perfectionnement (mini-cours + entraînement)
+        try {
+            remedialService.recordResult(saved, quiz);
+        } catch (Exception e) {
+            log.warn("Parcours de perfectionnement non enregistré : {}", e.getMessage());
         }
 
         // Calcul précis du rang : par classe si le quiz est joué dans une classe, sinon classement général

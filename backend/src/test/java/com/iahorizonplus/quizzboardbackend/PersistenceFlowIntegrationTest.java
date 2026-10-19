@@ -447,6 +447,9 @@ class PersistenceFlowIntegrationTest {
         User creator = newUser(UserRole.CREATOR);
         JsonNode quiz = send(post("/quizzes", quizPayload("Quiz certifiant", 2), creator).andExpect(status().isCreated())).at("/data");
         User learner = newUser(UserRole.LEARNER);
+        // Consultation des certificats : abonnement Apprenant Plus (le verrouillage est testé dans RemedialFlowIntegrationTest)
+        learner.setSubscriptionTier(SubscriptionTier.LEARNER_PLUS);
+        learner = userRepository.save(learner);
 
         // Résultat importé de l'ancien QuizzBoard (réussi à 85 %, sans certificat) et tentative ratée (40 %)
         jdbc.update("insert into participations (id, quiz_id, quiz_title, user_id, participant_name, score, max_score, percentage, status, time_total_seconds, certificate_eligible) values (?,?,?,?,?,?,?,?,?,?,?)",

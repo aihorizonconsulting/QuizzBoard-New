@@ -26,10 +26,16 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
             <p class="body-small">Échangez avec vos pairs, participez aux discussions et accédez aux ressources partagées.</p>
           </div>
 
-          <button class="btn btn-primary btn-sm" (click)="openCodeModal()">
-            <app-icon name="plus" [size]="14" color="var(--color-navy)"></app-icon>
-            <span>Rejoindre par Code</span>
-          </button>
+          <div class="header-actions-row">
+            <button class="btn btn-outline btn-sm" (click)="openCodeModal()">
+              <app-icon name="lock" [size]="14"></app-icon>
+              <span>Rejoindre par Code</span>
+            </button>
+            <button class="btn btn-primary btn-sm" (click)="openCreateModal()">
+              <app-icon name="plus" [size]="14" color="var(--color-navy)"></app-icon>
+              <span>Créer une Communauté</span>
+            </button>
+          </div>
         </div>
 
         <!-- TABS BAR (MES COMMUNAUTÉS vs COMMUNAUTÉS PUBLIQUES) -->
@@ -462,6 +468,54 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
     </div>
 
     <!-- MODAL REJOINDRE PAR CODE (FULLSCREEN VIEWPORT BACKDROP) -->
+    @if (showCreateModal) {
+      <div class="modal-backdrop" (click)="showCreateModal = false">
+        <div class="modal-card card" (click)="$event.stopPropagation()">
+          <div class="modal-head">
+            <div class="head-title">
+              <app-icon name="users" [size]="18" color="var(--color-navy)"></app-icon>
+              <h3 class="h3" style="margin: 0;">Créer une Communauté</h3>
+            </div>
+            <button class="btn-close" (click)="showCreateModal = false">✕</button>
+          </div>
+
+          <form (ngSubmit)="submitCreateCommunity()" class="code-form">
+            <p class="body-small">Créez un espace d'entraide avec vos camarades. Partagez ensuite son code d'accès pour qu'ils la rejoignent.</p>
+            <div class="form-group">
+              <label>Nom de la communauté *</label>
+              <input type="text" [(ngModel)]="newCommName" name="newCommName" maxlength="120" placeholder="ex : Révisions BAC 2026 - Terminale S" class="input-field" required>
+            </div>
+            <div class="form-group">
+              <label>Description *</label>
+              <textarea [(ngModel)]="newCommDesc" name="newCommDesc" rows="3" maxlength="500" placeholder="Objectif du groupe, matières, règles d'entraide..." class="input-field"></textarea>
+            </div>
+            <div class="form-group">
+              <label>Catégorie *</label>
+              <select [(ngModel)]="newCommCategory" name="newCommCategory" class="input-field">
+                @for (cat of communityCategories; track cat) {
+                  <option [value]="cat">{{ cat }}</option>
+                }
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Visibilité</label>
+              <select [(ngModel)]="newCommIsPrivate" name="newCommIsPrivate" class="input-field">
+                <option [ngValue]="false">Publique (visible par tous)</option>
+                <option [ngValue]="true">Privée (accès par code uniquement)</option>
+              </select>
+            </div>
+            @if (createError) {
+              <div class="error-msg">{{ createError }}</div>
+            }
+            <div class="modal-foot">
+              <button type="button" class="btn btn-outline btn-sm" (click)="showCreateModal = false">Annuler</button>
+              <button type="submit" class="btn btn-primary btn-sm" [disabled]="isCreating">{{ isCreating ? 'Création...' : 'Créer la communauté' }}</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    }
+
     @if (showCodeModal) {
       <div class="modal-backdrop" (click)="showCodeModal = false">
         <div class="modal-card card" (click)="$event.stopPropagation()">
@@ -520,6 +574,12 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
       align-items: center;
       flex-wrap: wrap;
       gap: 16px;
+    }
+
+    .header-actions-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
     }
 
     /* TABS TOOLBAR */
@@ -1173,6 +1233,8 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
         }
       }
 
+      .code-form textarea, .code-form select { width: 100%; }
+
       .code-form {
         padding: 20px;
         display: flex;
@@ -1247,6 +1309,55 @@ export class LearnerCommunitiesComponent {
   showCodeModal = false;
   accessCodeInput = '';
   joinError = '';
+
+  // Création d'une communauté par l'apprenant (1 avec le forfait gratuit, illimité avec Apprenant Plus)
+  showCreateModal = false;
+  isCreating = false;
+  createError = '';
+  newCommName = '';
+  newCommDesc = '';
+  newCommCategory = 'Examens & Révisions';
+  newCommIsPrivate = false;
+  readonly communityCategories = ['Examens & Révisions', 'Data & IA', 'Tech & Informatique', 'Business & Marketing', 'Santé & Sciences', 'Pédagogie & EdTech'];
+
+  openCreateModal() {
+    this.createError = '';
+    this.newCommName = '';
+    this.newCommDesc = '';
+    this.newCommCategory = 'Examens & Révisions';
+    this.newCommIsPrivate = false;
+    this.showCreateModal = true;
+  }
+
+  submitCreateCommunity() {
+    this.createError = '';
+    if (!this.newCommName.trim() || !this.newCommDesc.trim()) {
+      this.createError = 'Le nom et la description sont obligatoires.';
+      return;
+    }
+    const user = this.authService.currentUser();
+    this.isCreating = true;
+    this.commService.createCommunityApi({
+      name: this.newCommName.trim(),
+      description: this.newCommDesc.trim(),
+      category: this.newCommCategory,
+      isPrivate: this.newCommIsPrivate,
+      creatorId: user?.id,
+      creatorName: `${user?.prenom ?? ''} ${user?.nom ?? ''}`.trim()
+    }).subscribe({
+      next: (created) => {
+        this.isCreating = false;
+        this.showCreateModal = false;
+        this.mainTab = 'MY_COMMUNITIES';
+        this.toast.success(`Communauté « ${created.name} » créée. Code d'accès : ${created.accessCode}`);
+        this.addLocalMembership(created);
+      },
+      error: (err) => {
+        this.isCreating = false;
+        this.createError = getGeneralErrorMessage(err, 'La communauté n\'a pas pu être créée.');
+      }
+    });
+  }
 
   categories(): string[] {
     const set = new Set<string>();

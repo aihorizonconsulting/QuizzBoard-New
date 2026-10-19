@@ -43,6 +43,20 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(response, HttpStatus.NOT_FOUND);
     }
 
+    /** Fonction réservée à un forfait payant : 403 avec le message à afficher. */
+    @ExceptionHandler(PlanRequiredException.class)
+    public ResponseEntity<ApiResponse<Void>> handlePlanRequired(PlanRequiredException ex, HttpServletRequest request) {
+        ApiResponse<Void> response = ApiResponse.<Void>builder()
+                .status(HttpStatus.FORBIDDEN.value())
+                .success(false)
+                .message(ex.getMessage())
+                .links(List.of(LinkDto.of("self", request.getRequestURI(), request.getMethod()), LinkDto.of("pricing", "/tarifs", "GET")))
+                .path(request.getRequestURI())
+                .timestamp(LocalDateTime.now())
+                .build();
+        return new ResponseEntity<>(response, HttpStatus.FORBIDDEN);
+    }
+
     /** Adresse d'API inexistante : 404 (et non une erreur serveur 500). */
     @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleNoResource(org.springframework.web.servlet.resource.NoResourceFoundException ex, HttpServletRequest request) {

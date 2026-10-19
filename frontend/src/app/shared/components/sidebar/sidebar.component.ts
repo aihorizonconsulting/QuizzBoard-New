@@ -114,6 +114,11 @@ import { IconComponent } from '../icon/icon.component';
             <span class="nav-label">Mes Communautés</span>
           </a>
 
+          <a routerLink="/app/learner/perfectionnement" routerLinkActive="active" class="nav-item">
+            <app-icon name="trending-up" [size]="17" class="nav-icon"></app-icon>
+            <span class="nav-label">Perfectionnement</span>
+          </a>
+
           <a routerLink="/app/learner/certificates" routerLinkActive="active" class="nav-item">
             <app-icon name="file-text" [size]="17" class="nav-icon"></app-icon>
             <span class="nav-label">Mes Certificats</span>

@@ -37,6 +37,8 @@ export interface Certificate {
   issuerName: string;
   verificationCode: string;
   status?: 'VALID' | 'REVOKED';
+  /** Obtenu mais verrouillé : consultation réservée à l'abonnement Apprenant Plus. */
+  locked?: boolean;
 }
 
 export interface LeaderboardEntry {

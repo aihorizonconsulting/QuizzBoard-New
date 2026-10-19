@@ -10,4 +10,7 @@ public interface CertificateService {
     Certificate getCertificateById(String id);
     /** Certificats de l'utilisateur : un par participation terminée réussie (score >= 70 %). */
     List<Certificate> getCertificatesOfUser(String userId);
+
+    /** Apprenant sans abonnement Apprenant Plus : consultation et téléchargement refusés. */
+    void assertCanViewCertificates(String userId);
 }

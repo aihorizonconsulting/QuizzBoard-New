@@ -165,8 +165,8 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/creator/subscription/subscription.component').then(m => m.CreatorSubscriptionComponent)
       },
       {
+        // Retour de paiement PayDunya : formateurs (Starter) comme apprenants (Apprenant Plus)
         path: 'subscription/callback',
-        canActivate: [creatorGuard],
         loadComponent: () => import('./pages/creator/subscription/payment-callback.component').then(m => m.PaymentCallbackComponent)
       },
 
@@ -185,6 +185,11 @@ export const routes: Routes = [
         path: 'learner/certificates',
         canActivate: [learnerGuard],
         loadComponent: () => import('./pages/learner/certificates/certificates.component').then(m => m.CertificatesComponent)
+      },
+      {
+        path: 'learner/perfectionnement',
+        canActivate: [learnerGuard],
+        loadComponent: () => import('./pages/learner/remedial/remedial.component').then(m => m.RemedialComponent)
       },
       {
         path: 'learner/communities',

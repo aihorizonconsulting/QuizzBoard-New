@@ -241,7 +241,7 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
                     <span class="name">À Réviser</span>
                     <strong class="val">{{ 100 - averageScore() }}%</strong>
                   </div>
-                  <span class="sub">{{ toReviewCount() }} notions recommandées</span>
+                  <a routerLink="/app/learner/perfectionnement" class="sub">{{ toReviewCount() }} notions recommandées → Perfectionnement</a>
                 </div>
               </div>
             </div>

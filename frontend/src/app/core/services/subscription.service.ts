@@ -69,14 +69,15 @@ const DEFAULT_PLANS: SubscriptionPlan[] = [
     priceFcfa: 200,
     priceUsd: 0.5,
     period: 'Mois',
-    description: 'Accès mensuel aux corrections d’épreuves, forums et communautés d’examen.',
+    description: 'Perfectionnement par l’IA après chaque quiz raté, certificats et communautés d’entraide.',
     maxActiveQuizzes: 0,
     maxParticipantsPerLive: 0,
     maxCommunities: 9999,
     aiGenerationsPerMonth: 0,
     features: [
-      { text: 'Corrections BAC, BFEM et examens', included: true, highlight: true },
-      { text: 'Forums et communautés d’entraide', included: true, highlight: true },
+      { text: 'Perfectionnement : cours et quiz de remise à niveau générés par l’IA après un quiz raté', included: true, highlight: true },
+      { text: 'Consultation et téléchargement de vos certificats', included: true, highlight: true },
+      { text: 'Communautés d’entraide illimitées (1 avec le forfait gratuit)', included: true },
       { text: 'Accès renouvelable chaque mois', included: true },
       { text: 'Création de quiz professeur', included: false }
     ],

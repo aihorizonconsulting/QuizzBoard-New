@@ -42,6 +42,12 @@ export class AuthService {
   isLearner = computed(() => this.currentUser()?.role === 'LEARNER');
   isAdmin = computed(() => this.currentUser()?.role === 'ADMIN');
   subscriptionTier = computed(() => this.currentUser()?.subscriptionTier || 'FREE');
+  /** Abonnement Apprenant Plus en cours (perfectionnement, certificats). */
+  hasLearnerPlus = computed(() => {
+    const user = this.currentUser();
+    return user?.subscriptionTier === 'LEARNER_PLUS'
+      && (!user.subscriptionExpiresAt || new Date(user.subscriptionExpiresAt).getTime() > Date.now());
+  });
   dashboardUrl = computed(() => {
     const role = this.currentUser()?.role;
     if (role === 'LEARNER') return '/app/learner/dashboard';

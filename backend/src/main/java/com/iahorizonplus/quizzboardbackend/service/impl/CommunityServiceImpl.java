@@ -57,8 +57,9 @@ public class CommunityServiceImpl implements CommunityService {
         long existingCount = communityRepository.countCreatedOnPlatformByCreatorId(creatorId);
 
         if (creator.getSubscriptionTier() == SubscriptionTier.FREE && existingCount >= 1) {
-            throw new BadRequestException("plan",
-                    "Limite du forfait DÉCOUVERTE atteinte (1 communauté maximum). Passez au forfait STARTER pour en créer jusqu'à 10 !");
+            throw new BadRequestException("plan", creator.getRole() == UserRole.LEARNER
+                    ? "Limite du forfait gratuit atteinte (1 communauté). Passez à l'abonnement Apprenant Plus pour créer autant de communautés que vous voulez."
+                    : "Limite du forfait DÉCOUVERTE atteinte (1 communauté maximum). Passez au forfait STARTER pour en créer jusqu'à 10 !");
         } else if (creator.getSubscriptionTier() == SubscriptionTier.STARTER && existingCount >= 10) {
             throw new BadRequestException("plan",
                     "Limite du forfait STARTER atteinte (10 communautés maximum). Contactez-nous pour un accès PREMIUM.");

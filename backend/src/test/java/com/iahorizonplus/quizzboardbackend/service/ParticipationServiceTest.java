@@ -43,6 +43,9 @@ class ParticipationServiceTest {
     @Mock
     private LearningStatsService learningStatsService;
 
+    @Mock
+    private com.iahorizonplus.quizzboardbackend.service.impl.RemedialService remedialService;
+
     @InjectMocks
     private ParticipationServiceImpl participationService;
 
