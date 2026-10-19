@@ -7,6 +7,7 @@ import com.iahorizonplus.quizzboardbackend.entity.*;
 import com.iahorizonplus.quizzboardbackend.exception.BadRequestException;
 import com.iahorizonplus.quizzboardbackend.exception.ResourceNotFoundException;
 import com.iahorizonplus.quizzboardbackend.repository.InvoiceRepository;
+import com.iahorizonplus.quizzboardbackend.repository.PlatformSettingsRepository;
 import com.iahorizonplus.quizzboardbackend.repository.TransactionRepository;
 import com.iahorizonplus.quizzboardbackend.repository.UserRepository;
 import com.iahorizonplus.quizzboardbackend.service.PaymentService;
@@ -31,6 +32,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final OrangeMoneyPaymentService orangeMoneyPaymentService;
     private final PaymentSettlementService paymentSettlementService;
     private final PayDunyaPaymentService payDunyaPaymentService;
+    private final PlatformSettingsRepository settingsRepository;
 
     @Override
     @Transactional
@@ -134,10 +136,21 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private double defaultAmountFcfa(String planId) {
-        return "LEARNER_PLUS".equalsIgnoreCase(planId) || "LEARNER_MONTHLY".equalsIgnoreCase(planId) ? 200.0 : 999.0;
+        PlatformSettings settings = platformSettings();
+        return "LEARNER_PLUS".equalsIgnoreCase(planId) || "LEARNER_MONTHLY".equalsIgnoreCase(planId)
+                ? settings.getLearnerPlusPriceFcfa()
+                : settings.getStarterPriceFcfa();
     }
 
     private double defaultAmountUsd(String planId) {
-        return "LEARNER_PLUS".equalsIgnoreCase(planId) || "LEARNER_MONTHLY".equalsIgnoreCase(planId) ? 0.5 : 2.0;
+        PlatformSettings settings = platformSettings();
+        return "LEARNER_PLUS".equalsIgnoreCase(planId) || "LEARNER_MONTHLY".equalsIgnoreCase(planId)
+                ? settings.getLearnerPlusPriceUsd()
+                : settings.getStarterPriceUsd();
+    }
+
+    private PlatformSettings platformSettings() {
+        return settingsRepository.findById("default-settings")
+                .orElseGet(() -> settingsRepository.save(PlatformSettings.builder().id("default-settings").build()));
     }
 }

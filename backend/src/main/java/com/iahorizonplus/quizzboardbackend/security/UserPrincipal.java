@@ -22,7 +22,9 @@ public class UserPrincipal implements UserDetails {
         this.id = user.getId();
         this.email = user.getEmail();
         this.password = user.getPassword();
-        this.authorities = Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()));
+        this.authorities = user.getRole() == null
+                ? Collections.emptyList()
+                : Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()));
         this.user = user;
     }
 

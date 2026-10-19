@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
@@ -21,6 +22,9 @@ public class DataInitializer implements CommandLineRunner {
     private final ParticipationRepository participationRepository;
     private final PasswordEncoder passwordEncoder;
 
+    @Value("${app.seed-demo-users:true}")
+    private boolean seedDemoUsers;
+
     @Override
     public void run(String... args) {
         // 1. Initialisation des paramètres de la plateforme s'ils n'existent pas
@@ -33,17 +37,28 @@ public class DataInitializer implements CommandLineRunner {
                     .freeAiCreditsMonth(5)
                     .starterPriceFcfa(999.0)
                     .starterPriceUsd(2.0)
+                    .learnerPlusPriceFcfa(200.0)
+                    .learnerPlusPriceUsd(0.5)
                     .isMaintenanceMode(false)
                     .waveActive(true)
                     .omActive(true)
                     .build());
         } else {
             settingsRepository.findById("default-settings").ifPresent(settings -> {
+                boolean changed = false;
                 if (settings.getStarterPriceFcfa() == 9900.0) {
                     settings.setStarterPriceFcfa(999.0);
                     settings.setStarterPriceUsd(2.0);
+                    changed = true;
+                }
+                if (settings.getLearnerPlusPriceFcfa() <= 0) {
+                    settings.setLearnerPlusPriceFcfa(200.0);
+                    settings.setLearnerPlusPriceUsd(0.5);
+                    changed = true;
+                }
+                if (changed) {
                     settingsRepository.save(settings);
-                    log.info("Tarif STARTER mis à jour à 999 FCFA.");
+                    log.info("Tarifs d'abonnement mis à jour depuis les paramètres système.");
                 }
             });
         }
@@ -81,13 +96,59 @@ public class DataInitializer implements CommandLineRunner {
             log.info("Organisation fictive « Organisation Démo » retirée de {} compte(s).", cleaned);
         }
 
+        User teacher = null;
+        if (seedDemoUsers) {
+            teacher = seedUserIfMissing(
+                    "professeur@quizzboard.com",
+                    "Ibrahima",
+                    "Sadio",
+                    UserRole.CREATOR,
+                    SubscriptionTier.STARTER
+            );
+            seedUserIfMissing(
+                    "apprenant@quizzboard.com",
+                    "Amina",
+                    "Diop",
+                    UserRole.LEARNER,
+                    SubscriptionTier.FREE
+            );
+        }
+
         // 3. Initialisation des quiz publics de référence si aucun quiz n'existe en base
         if (quizRepository.count() == 0) {
             log.info("Initialisation des quiz interactifs de référence QuizzBoard...");
-            seedReferenceQuizzes(admin);
+            seedReferenceQuizzes(teacher != null ? teacher : admin);
         }
 
         log.info("Vérification et initialisation de l'environnement QuizzBoard terminées.");
+    }
+
+    private User seedUserIfMissing(
+            String email,
+            String firstName,
+            String lastName,
+            UserRole role,
+            SubscriptionTier subscriptionTier
+    ) {
+        return userRepository.findByEmail(email).orElseGet(() -> {
+            log.info("Création du compte de test QuizzBoard : {}", email);
+            return userRepository.save(User.builder()
+                    .prenom(firstName)
+                    .nom(lastName)
+                    .email(email)
+                    .password(passwordEncoder.encode("Password123!"))
+                    .role(role)
+                    .subscriptionTier(subscriptionTier)
+                    .authProvider(AuthProvider.LOCAL)
+                    .status("ACTIVE")
+                    .emailVerified(true)
+                    .xpPoints(0)
+                    .level(1)
+                    .streakDays(1)
+                    .followersCount(0)
+                    .followingCount(0)
+                    .build());
+        });
     }
 
     private void seedReferenceQuizzes(User creator) {

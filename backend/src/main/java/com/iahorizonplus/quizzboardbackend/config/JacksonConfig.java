@@ -3,11 +3,16 @@ package com.iahorizonplus.quizzboardbackend.config;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonDeserializer;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.deser.LocalDateTimeDeserializer;
 import org.springframework.boot.autoconfigure.jackson.Jackson2ObjectMapperBuilderCustomizer;
+import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 
 import java.io.IOException;
 import java.time.LocalDate;
@@ -22,8 +27,19 @@ import java.util.regex.Pattern;
 public class JacksonConfig {
 
     @Bean
+    @Primary
+    public ObjectMapper objectMapper(Jackson2ObjectMapperBuilder builder) {
+        return builder.build();
+    }
+
+    @Bean
     public Jackson2ObjectMapperBuilderCustomizer lenientLocalDateTimeCustomizer() {
-        return builder -> builder.deserializerByType(LocalDateTime.class, new LenientLocalDateTimeDeserializer());
+        return builder -> builder
+                .featuresToDisable(
+                        DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES,
+                        SerializationFeature.WRITE_DATES_AS_TIMESTAMPS
+                )
+                .deserializerByType(LocalDateTime.class, new LenientLocalDateTimeDeserializer());
     }
 
     /**

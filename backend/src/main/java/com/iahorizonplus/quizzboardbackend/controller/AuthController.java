@@ -57,6 +57,20 @@ public class AuthController {
         );
     }
 
+    @PostMapping("/complete-role")
+    @Operation(summary = "Choix du rôle pour un ancien compte sans rôle")
+    public ResponseEntity<ApiResponse<AuthResponse>> completeRole(@Valid @RequestBody CompleteRoleRequest request, HttpServletRequest httpRequest) {
+        AuthResponse response = authService.completeRole(request);
+        List<LinkDto> links = List.of(
+                LinkDto.of("self", httpRequest.getRequestURI(), "POST"),
+                LinkDto.of("me", "/api/v1/auth/me", "GET", "Consulter votre profil"),
+                LinkDto.of("subscriptions", "/api/v1/subscriptions/current", "GET", "Voir votre abonnement")
+        );
+        return ResponseEntity.ok(
+                ApiResponse.ok(response, "Rôle configuré avec succès. Bienvenue sur QuizzBoard !", links, httpRequest.getRequestURI())
+        );
+    }
+
     @PostMapping("/google")
     @Operation(summary = "Authentification via Google Sign-In (ID Token)")
     public ResponseEntity<ApiResponse<AuthResponse>> googleAuth(@Valid @RequestBody GoogleAuthRequest request, HttpServletRequest httpRequest) {

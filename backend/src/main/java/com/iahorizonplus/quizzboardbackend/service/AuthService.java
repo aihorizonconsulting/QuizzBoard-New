@@ -11,6 +11,8 @@ public interface AuthService {
 
     AuthResponse login(LoginRequest request);
 
+    AuthResponse completeRole(CompleteRoleRequest request);
+
     AuthResponse loginWithGoogle(GoogleAuthRequest request);
 
     MessageResponse forgotPassword(ForgotPasswordRequest request);
