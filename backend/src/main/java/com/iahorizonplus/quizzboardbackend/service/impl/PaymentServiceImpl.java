@@ -66,9 +66,12 @@ public class PaymentServiceImpl implements PaymentService {
 
         String reference = prefix + System.currentTimeMillis() + "-" + UUID.randomUUID().toString().substring(0, 4).toUpperCase();
 
-        String planId = request.planId() != null && !request.planId().isBlank() ? request.planId() : "STARTER";
-        Double amountFcfa = request.amountFcfa() != null ? request.amountFcfa() : defaultAmountFcfa(planId);
-        Double amountUsd = request.amountUsd() != null ? request.amountUsd() : defaultAmountUsd(planId);
+        // Seuls deux forfaits payants existent ; leur prix est celui fixé dans Admin > Paramètres.
+        // Un montant envoyé par le navigateur est ignoré (sinon on pourrait payer 1 F pour un forfait).
+        boolean learnerPlan = "LEARNER_PLUS".equalsIgnoreCase(request.planId()) || "LEARNER_MONTHLY".equalsIgnoreCase(request.planId());
+        String planId = learnerPlan ? "LEARNER_PLUS" : "STARTER";
+        Double amountFcfa = defaultAmountFcfa(planId);
+        Double amountUsd = defaultAmountUsd(planId);
 
         // Enregistrement initial de la transaction en attente
         TransactionRecord record = TransactionRecord.builder()

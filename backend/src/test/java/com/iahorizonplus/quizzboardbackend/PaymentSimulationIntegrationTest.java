@@ -49,7 +49,7 @@ class PaymentSimulationIntegrationTest {
         String auth = "Bearer " + jwtUtils.generateToken(creator.getEmail(), creator.getRole().name());
 
         String init = mvc.perform(post("/payments/initiate").header("Authorization", auth).contentType(MediaType.APPLICATION_JSON)
-                        .content(json.writeValueAsString(Map.of("paymentMethod", "PAYDUNYA", "planId", "STARTER"))))
+                        .content(json.writeValueAsString(Map.of("paymentMethod", "PAYDUNYA", "planId", "STARTER", "amountFcfa", 1, "amountUsd", 0.01))))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         JsonNode payment = json.readTree(init).at("/data");
         assertThat(payment.at("/isSimulated").asBoolean()).isTrue();
@@ -72,5 +72,7 @@ class PaymentSimulationIntegrationTest {
                 .andReturn().getResponse().getContentAsString()).at("/data");
         assertThat(invoices.size()).isEqualTo(1); // une seule facture malgré la double confirmation
         assertThat(invoices.at("/0/status").asText()).isEqualTo("PAID");
+        // Le montant envoyé par le navigateur (1 F) est ignoré : prix du forfait STARTER
+        assertThat(invoices.at("/0/amountFcfa").asDouble()).isEqualTo(999.0);
     }
 }

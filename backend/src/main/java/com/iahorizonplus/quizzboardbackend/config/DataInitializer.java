@@ -22,7 +22,8 @@ public class DataInitializer implements CommandLineRunner {
     private final ParticipationRepository participationRepository;
     private final PasswordEncoder passwordEncoder;
 
-    @Value("${app.seed-demo-users:true}")
+    // Comptes de démonstration (mot de passe public) : uniquement si activés explicitement (profil local)
+    @Value("${app.seed-demo-users:false}")
     private boolean seedDemoUsers;
 
     @Override

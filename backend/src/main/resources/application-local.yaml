@@ -33,6 +33,8 @@ spring:
     password: ${SMTP_PASSWORD:}
 
 app:
+  # Comptes de démonstration professeur@ / apprenant@quizzboard.com (développement local uniquement)
+  seed-demo-users: ${SEED_DEMO_USERS:true}
   cors:
     allowed-origins: ${CORS_ORIGINS:http://localhost:4200,http://127.0.0.1:4200,http://localhost:4327,http://127.0.0.1:4327}
   mail:
