@@ -18,7 +18,7 @@ jobs:
       - name: 1. 🔍 Tester la connexion SSH avec le serveur
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.SERVER_HOST }}
+          host: quizzboard.com
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           password: ${{ secrets.SERVER_PASSWORD }}
@@ -37,7 +37,7 @@ jobs:
       - name: 2. 📥 Mettre à jour le code Git (branche main)
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.SERVER_HOST }}
+          host: quizzboard.com
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           password: ${{ secrets.SERVER_PASSWORD }}
@@ -59,7 +59,7 @@ jobs:
       - name: 3. ⚙️ Vérifier la configuration (.env.prod)
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.SERVER_HOST }}
+          host: quizzboard.com
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           password: ${{ secrets.SERVER_PASSWORD }}
@@ -82,7 +82,7 @@ jobs:
       - name: 4. 🐳 Reconstruire et démarrer les conteneurs PRODUCTION (Docker Compose)
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.SERVER_HOST }}
+          host: quizzboard.com
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           password: ${{ secrets.SERVER_PASSWORD }}
@@ -110,7 +110,7 @@ jobs:
       - name: 5. 🌐 Installer la configuration Nginx PRODUCTION
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.SERVER_HOST }}
+          host: quizzboard.com
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           password: ${{ secrets.SERVER_PASSWORD }}
@@ -137,7 +137,7 @@ jobs:
       - name: 6. 🩺 Vérifier l'état et la santé des services PRODUCTION
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.SERVER_HOST }}
+          host: quizzboard.com
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           password: ${{ secrets.SERVER_PASSWORD }}
@@ -175,7 +175,7 @@ jobs:
       - name: 7. 🧹 Nettoyer les images Docker orphelines
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.SERVER_HOST }}
+          host: quizzboard.com
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           password: ${{ secrets.SERVER_PASSWORD }}
