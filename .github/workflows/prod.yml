@@ -95,7 +95,13 @@ jobs:
             echo "🐳 ÉTAPE 4 : Build et lancement Docker Compose PROD..."
             cd /var/www/QuizzBoard-New
             docker compose -f docker-compose.prod.yml up -d --build
-            echo "✅ Conteneurs PRODUCTION reconstruits et démarrés."
+            # Les documents déposés dans les communautés sont écrits par l'utilisateur non root du conteneur :
+            # le dossier monté backend/uploads doit lui appartenir.
+            APP_UID=$(docker exec quizzboard-prod-backend id -u)
+            APP_GID=$(docker exec quizzboard-prod-backend id -g)
+            mkdir -p backend/uploads
+            chown -R "$APP_UID:$APP_GID" backend/uploads
+            echo "✅ Conteneurs PRODUCTION reconstruits et démarrés (uploads : $APP_UID:$APP_GID)."
             echo "===================================================="
 
       # ------------------------------------------------------------------------

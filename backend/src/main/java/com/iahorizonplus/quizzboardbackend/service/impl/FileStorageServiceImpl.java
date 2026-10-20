@@ -88,6 +88,9 @@ public class FileStorageServiceImpl implements FileStorageService {
         } catch (IOException e) {
             log.warn("Impossible de pré-créer les répertoires d'upload locaux : {}", e.getMessage());
         }
+        if (!Files.isWritable(rootLocation)) {
+            log.error("Dossier d'upload {} non accessible en écriture : les documents des communautés ne pourront pas être déposés.", rootLocation);
+        }
 
         if (isCloudinaryConfigured()) {
             this.cloudinary = new Cloudinary(ObjectUtils.asMap(
