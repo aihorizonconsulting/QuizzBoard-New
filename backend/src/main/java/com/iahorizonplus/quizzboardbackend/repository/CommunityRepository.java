@@ -13,6 +13,7 @@ import java.util.Optional;
 public interface CommunityRepository extends JpaRepository<Community, String> {
     List<Community> findByCreatorIdOrderByCreatedAtDesc(String creatorId);
     Optional<Community> findByAccessCode(String accessCode);
+    boolean existsByAccessCode(String accessCode);
     long countByCreatorId(String creatorId);
 
     /** Communautés créées sur la plateforme actuelle (UUID) : celles importées de l'ancien QuizzBoard ne comptent pas dans les quotas. */

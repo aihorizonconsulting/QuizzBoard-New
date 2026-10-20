@@ -1,26 +1,27 @@
-import { Component, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { ActivatedRoute, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { CommunityService } from '../../../core/services/community.service';
 import { AuthService } from '../../../core/services/auth.service';
-import { QuizService } from '../../../core/services/quiz.service';
-import { Community, ForumTopic, ResourceFile, Meeting } from '../../../core/models/community.model';
-import { Quiz } from '../../../core/models/quiz.model';
+import { ToastService } from '../../../core/services/toast.service';
+import { Community } from '../../../core/models/community.model';
 import { extractFieldErrors, getGeneralErrorMessage } from '../../../core/utils/form-error.util';
 import { IconComponent } from '../../../shared/components/icon/icon.component';
-import { QuizModalPlayerComponent } from '../../../shared/components/quiz-modal-player/quiz-modal-player.component';
+import { CommunityHubComponent } from '../../../shared/components/community-hub/community-hub.component';
 import { PaginationComponent } from '../../../shared/components/pagination/pagination.component';
 
 @Component({
   selector: 'app-community-manage',
   standalone: true,
-  imports: [CommonModule, FormsModule, IconComponent, QuizModalPlayerComponent, PaginationComponent],
+  imports: [CommonModule, FormsModule, IconComponent, CommunityHubComponent, PaginationComponent],
   template: `
     <div class="community-page">
       <!-- =========================================================================
            VIEW 1: DIRECTORY OF COMMUNITIES (CLEAN & AIRY)
            ========================================================================= -->
-      @if (!selectedCommunity) {
+      @if (!selectedCommunityId) {
         <!-- CLEAN PAGE HEADER -->
         <div class="page-header animate-fade-in">
           <div class="header-titles">
@@ -62,6 +63,13 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
               [class.active]="filterType === 'ALL'" 
               (click)="filterType = 'ALL'; currentPage = 1">
               Toutes ({{ communities().length }})
+            </button>
+            <button
+              type="button"
+              class="pill-btn"
+              [class.active]="filterType === 'MINE'"
+              (click)="filterType = 'MINE'; currentPage = 1">
+              Mes communautés ({{ myCommunitiesCount() }})
             </button>
             <button 
               type="button" 
@@ -171,7 +179,7 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
                           <span class="status-dot"></span>
                           {{ comm.isPrivate ? 'Privée' : 'Publique' }}
                         </span>
-                        <span class="code-txt">#{{ comm.accessCode }}</span>
+                        @if (comm.myRole && comm.accessCode) { <span class="code-txt">#{{ comm.accessCode }}</span> }
                       </div>
 
                       <h3 class="comm-title" [title]="comm.name">{{ comm.name }}</h3>
@@ -187,9 +195,12 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
                   </div>
 
                   <div class="card-action-bar">
-                    <span class="creator-label">Par {{ comm.creatorName }}</span>
-                    <button class="btn btn-primary btn-sm btn-enter" (click)="openCommunity(comm)">
-                      <span>Entrer</span>
+                    <span class="creator-label">
+                      @if (comm.myRole) { <strong class="role-chip">{{ roleLabel(comm.myRole) }}</strong> }
+                      Par {{ comm.creatorName }}
+                    </span>
+                    <button class="btn btn-primary btn-sm btn-enter" (click)="$event.stopPropagation(); openCommunity(comm)">
+                      <span>{{ comm.myRole ? 'Entrer' : 'Rejoindre' }}</span>
                       <app-icon name="arrow-right" [size]="12" color="var(--color-navy)"></app-icon>
                     </button>
                   </div>
@@ -216,7 +227,7 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
                         <span class="status-dot"></span>
                         {{ comm.isPrivate ? 'Privée' : 'Publique' }}
                       </span>
-                      <span class="code-txt">#{{ comm.accessCode }}</span>
+                      @if (comm.myRole && comm.accessCode) { <span class="code-txt">#{{ comm.accessCode }}</span> }
                     </div>
                     <h3 class="row-title">{{ comm.name }}</h3>
                   </div>
@@ -237,8 +248,9 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
                   </div>
 
                   <div class="row-actions">
-                    <button class="btn btn-primary btn-sm btn-enter" (click)="openCommunity(comm)">
-                      <span>Entrer</span>
+                    @if (comm.myRole) { <strong class="role-chip">{{ roleLabel(comm.myRole) }}</strong> }
+                    <button class="btn btn-primary btn-sm btn-enter" (click)="$event.stopPropagation(); openCommunity(comm)">
+                      <span>{{ comm.myRole ? 'Entrer' : 'Rejoindre' }}</span>
                       <app-icon name="arrow-right" [size]="12" color="var(--color-navy)"></app-icon>
                     </button>
                   </div>
@@ -257,339 +269,14 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
         }
       }
 
-      <!-- =========================================================================
-           VIEW 2: DEDICATED COMMUNITY HUB (FOCUS VIEW)
-           ========================================================================= -->
-      @if (selectedCommunity; as comm) {
-        <div class="community-hub-view animate-fade-in">
-          <!-- Back navigation bar -->
-          <div class="hub-top-nav">
-            <button class="btn btn-outline btn-sm" (click)="selectedCommunity = null">
-              <app-icon name="arrow-left" [size]="14"></app-icon>
-              <span>← Toutes les Communautés</span>
-            </button>
-            <div class="hub-code-chip" (click)="copyCode(comm.accessCode)">
-              <app-icon [name]="isCodeCopied ? 'check' : 'copy'" [size]="13"></app-icon>
-              <span>Code : <strong>{{ comm.accessCode }}</strong> ({{ isCodeCopied ? 'Copié !' : 'Copier' }})</span>
-            </div>
-          </div>
-
-          <!-- COMMUNITY HERO HEADER -->
-          <div class="comm-hero card" [style.backgroundImage]="'linear-gradient(rgba(3, 36, 71, 0.75), rgba(3, 36, 71, 0.92)), url(' + comm.coverImage + ')'">
-            <div class="hero-content">
-              <div class="hero-top">
-                <span class="badge badge-primary">CODE : {{ comm.accessCode }}</span>
-                <span class="badge badge-navy" style="background: rgba(255,255,255,0.2); color: #FFFFFF;">
-                  <app-icon [name]="comm.isPrivate ? 'lock' : 'globe'" [size]="12" color="#FFFFFF"></app-icon>
-                  <span>{{ comm.isPrivate ? 'Privée' : 'Publique' }}</span>
-                </span>
-                @if (comm.category) {
-                  <span class="badge badge-orange" style="color: #FFFFFF; background: var(--color-orange);">{{ comm.category }}</span>
-                }
-              </div>
-
-              <h1 class="display-title" style="color: #FFFFFF; margin: 12px 0 6px 0;">{{ comm.name }}</h1>
-              <p class="body-text" style="color: #CBD5E1; max-width: 750px;">{{ comm.description }}</p>
-
-              <div class="hero-metrics">
-                <span>
-                  <app-icon name="users" [size]="14" color="#CBD5E1"></app-icon>
-                  {{ comm.membersCount }} Membres
-                </span>
-                <span>
-                  <app-icon name="file-text" [size]="14" color="#CBD5E1"></app-icon>
-                  {{ comm.quizzesCount }} Quiz actifs
-                </span>
-                <span>
-                  <app-icon name="message-square" [size]="14" color="#CBD5E1"></app-icon>
-                  {{ comm.topicsCount }} Sujets
-                </span>
-                <span>
-                  <app-icon name="download" [size]="14" color="#CBD5E1"></app-icon>
-                  {{ comm.resourcesCount }} Documents
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <!-- NAVIGATION TABS -->
-          <div class="hub-tabs">
-            <button 
-              type="button" 
-              class="tab-btn" 
-              [class.active]="activeTab === 'FORUM'"
-              (click)="activeTab = 'FORUM'">
-              <app-icon name="message-square" [size]="16"></app-icon>
-              <span>Forum & Débats ({{ comm.topics?.length || 0 }})</span>
-            </button>
-            <button 
-              type="button" 
-              class="tab-btn" 
-              [class.active]="activeTab === 'QUIZZES'"
-              (click)="activeTab = 'QUIZZES'">
-              <app-icon name="play" [size]="16"></app-icon>
-              <span>Quiz Partagés ({{ getCommunityQuizzes(comm).length }})</span>
-            </button>
-            <button 
-              type="button" 
-              class="tab-btn" 
-              [class.active]="activeTab === 'RESOURCES'"
-              (click)="activeTab = 'RESOURCES'">
-              <app-icon name="download" [size]="16"></app-icon>
-              <span>Documents ({{ comm.resources?.length || 0 }})</span>
-            </button>
-            <button 
-              type="button" 
-              class="tab-btn" 
-              [class.active]="activeTab === 'MEMBERS'"
-              (click)="activeTab = 'MEMBERS'">
-              <app-icon name="users" [size]="16"></app-icon>
-              <span>Membres & Visio ({{ comm.members?.length || 0 }})</span>
-            </button>
-          </div>
-
-          <!-- TAB 1: FORUM & TOPICS -->
-          @if (activeTab === 'FORUM') {
-            <div class="tab-content animate-fade-in">
-              <div class="section-actions">
-                <h3 class="h2">Discussions & Entraide</h3>
-                <button class="btn btn-primary btn-sm" (click)="showNewTopicModal = true">
-                  <app-icon name="plus" [size]="14" color="var(--color-navy)"></app-icon>
-                  <span>Nouveau Sujet</span>
-                </button>
-              </div>
-
-              <div class="topics-list">
-                @if (!comm.topics || comm.topics.length === 0) {
-                  <div class="empty-state-box">
-                    <app-icon name="message-square" [size]="28" color="var(--color-navy)"></app-icon>
-                    <h3 class="empty-title">Aucune discussion lancée</h3>
-                    <p class="empty-desc">Soyez le premier à poser une question ou lancer un sujet d'échange pédagogique !</p>
-                    <button class="btn btn-primary btn-sm" (click)="showNewTopicModal = true">Lancer un Sujet</button>
-                  </div>
-                } @else {
-                  @for (topic of comm.topics; track topic.id) {
-                    <div class="topic-item card">
-                      <div class="topic-header">
-                        <div class="topic-avatar-icon">
-                          <app-icon name="user" [size]="18" color="var(--color-navy)"></app-icon>
-                        </div>
-                        <div class="topic-meta">
-                          <strong class="author-name">{{ topic.authorName }}</strong>
-                          <span class="topic-date">{{ topic.createdAt | date:'short' }}</span>
-                        </div>
-                        @if (topic.isPinned) {
-                          <span class="badge badge-primary">
-                            <app-icon name="award" [size]="12" color="var(--color-navy)"></app-icon>
-                            <span>Épinglé</span>
-                          </span>
-                        }
-                      </div>
-
-                      <h4 class="topic-title">{{ topic.title }}</h4>
-                      <p class="topic-body">{{ topic.content }}</p>
-
-                      <!-- Comments Section -->
-                      <div class="comments-section">
-                        <div class="comments-count">
-                          <app-icon name="message-square" [size]="14" color="var(--color-navy)"></app-icon>
-                          <span>{{ topic.comments.length }} Réponses</span>
-                        </div>
-
-                        <div class="comments-list">
-                          @for (comment of topic.comments; track comment.id) {
-                            <div class="comment-bubble">
-                              <div class="comment-avatar-icon">
-                                <app-icon name="user" [size]="13" color="var(--color-navy)"></app-icon>
-                              </div>
-                              <div class="comment-content">
-                                <div class="comment-author-row">
-                                  <strong>{{ comment.authorName }}</strong>
-                                  <span class="comment-time">{{ comment.createdAt | date:'shortTime' }}</span>
-                                </div>
-                                <p class="comment-text">{{ comment.content }}</p>
-                              </div>
-                            </div>
-                          }
-                        </div>
-
-                        <!-- Add Comment Input -->
-                        <div class="comment-input-row">
-                          <input 
-                            type="text" 
-                            [(ngModel)]="newCommentTexts[topic.id]" 
-                            placeholder="Écrivez une réponse..." 
-                            class="input-field comment-input"
-                            (keyup.enter)="submitComment(comm.id, topic.id)">
-                          <button class="btn btn-secondary btn-sm" (click)="submitComment(comm.id, topic.id)">
-                            Répondre
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  }
-                }
-              </div>
-            </div>
-          }
-
-          <!-- TAB 2: SHARED QUIZZES -->
-          @if (activeTab === 'QUIZZES') {
-            <div class="tab-content animate-fade-in">
-              <div class="section-actions">
-                <h3 class="h2">Quiz Partagés dans cette Communauté</h3>
-              </div>
-
-              <div class="quizzes-grid">
-                @for (quiz of getCommunityQuizzes(comm); track quiz.id) {
-                  <div class="quiz-compact-card card card-interactive">
-                    <div class="card-main-row">
-                      <img [src]="quiz.coverImage" class="quiz-thumb" alt="Quiz cover">
-                      <div class="quiz-info">
-                        <div class="tags-row">
-                          <span class="category-pill">{{ quiz.category }}</span>
-                        </div>
-
-                        <h3 class="quiz-title" [title]="quiz.title">{{ quiz.title }}</h3>
-
-                        <div class="quiz-metrics">
-                          <span><strong>{{ quiz.questionsCount }}</strong> Qs</span>
-                          <span>•</span>
-                          <span><strong>{{ quiz.participationsCount }}</strong> joués</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div class="card-action-bar">
-                      <button class="btn btn-primary btn-sm btn-full" (click)="activeTestQuiz = quiz">
-                        <app-icon name="play" [size]="13" color="var(--color-navy)"></app-icon>
-                        <span>Jouer / Tester ce Quiz</span>
-                      </button>
-                    </div>
-                  </div>
-                }
-              </div>
-            </div>
-          }
-
-          <!-- TAB 3: RESOURCES & DOCUMENTS -->
-          @if (activeTab === 'RESOURCES') {
-            <div class="tab-content animate-fade-in">
-              <div class="section-actions">
-                <h3 class="h2">Supports Pédagogiques & Fichiers</h3>
-              </div>
-
-              <div class="resources-grid">
-                @if (!comm.resources || comm.resources.length === 0) {
-                  <div class="empty-state-box">
-                    <app-icon name="download" [size]="28" color="var(--color-navy)"></app-icon>
-                    <h3 class="empty-title">Aucun document partagé</h3>
-                    <p class="empty-desc">Les cours, PDF et fiches de révision partagés apparaîtront ici.</p>
-                  </div>
-                } @else {
-                  @for (res of comm.resources; track res.id) {
-                    <div class="resource-card card">
-                      <div class="file-icon-box">
-                        <app-icon name="file-text" [size]="24" color="var(--color-navy)"></app-icon>
-                      </div>
-                      <div class="file-info">
-                        <h4 class="file-title">{{ res.title }}</h4>
-                        <div class="file-meta">
-                          <span>{{ res.fileSize }} • Ajouté par <strong>{{ res.uploadedByName }}</strong></span>
-                        </div>
-                      </div>
-                      <button class="btn btn-outline btn-sm" (click)="downloadSimulated(res.title)">
-                        <app-icon name="download" [size]="14"></app-icon>
-                        <span>Télécharger</span>
-                      </button>
-                    </div>
-                  }
-                }
-              </div>
-            </div>
-          }
-
-          <!-- TAB 4: MEMBERS & MEETINGS -->
-          @if (activeTab === 'MEMBERS') {
-            <div class="tab-content animate-fade-in">
-              <!-- MEETINGS SECTION -->
-              @if (comm.meetings && comm.meetings.length > 0) {
-                <div style="margin-bottom: 32px;">
-                  <h3 class="h2" style="margin-bottom: 16px;">Sessions Visio Planifiées</h3>
-                  <div class="meetings-list">
-                    @for (meet of comm.meetings; track meet.id) {
-                      <div class="meeting-card card">
-                        <div class="meet-badge">
-                          <app-icon name="video" [size]="14" color="var(--color-orange)"></app-icon>
-                          <span>{{ meet.platform }}</span>
-                        </div>
-                        <h4 class="meet-title">{{ meet.title }}</h4>
-                        <p class="body-small">{{ meet.description }}</p>
-                        <div class="meet-timing">
-                          <span><app-icon name="calendar" [size]="12"></app-icon> {{ meet.scheduledAt | date:'medium' }}</span>
-                          <span><app-icon name="clock" [size]="12"></app-icon> Durée : {{ meet.durationMinutes }} min</span>
-                        </div>
-                        <a [href]="meet.meetingUrl" target="_blank" class="btn btn-primary btn-sm">
-                          <app-icon name="video" [size]="14" color="var(--color-navy)"></app-icon>
-                          <span>Rejoindre la Réunion</span>
-                        </a>
-                      </div>
-                    }
-                  </div>
-                </div>
-              }
-
-              <!-- MEMBERS ROSTER -->
-              <h3 class="h2" style="margin-bottom: 16px;">Membres de la Communauté ({{ comm.members?.length || 0 }})</h3>
-              <div class="members-table card">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Membre</th>
-                      <th>Rôle</th>
-                      <th>Quiz Réussis</th>
-                      <th>Total XP</th>
-                      <th>Rejoint le</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    @for (member of comm.members; track member.userId) {
-                      <tr>
-                        <td style="display: flex; align-items: center; gap: 10px;">
-                          <div class="member-avatar-icon" style="width: 32px; height: 32px; min-width: 32px; border-radius: 50%; background: #EEF2F6; display: flex; align-items: center; justify-content: center; border: 1px solid var(--color-border); flex-shrink: 0;">
-                            <app-icon name="user" [size]="15" color="var(--color-navy)"></app-icon>
-                          </div>
-                          <div>
-                            <strong>{{ member.name }}</strong>
-                            <div class="body-small">{{ member.email }}</div>
-                          </div>
-                        </td>
-                        <td>
-                          <span class="badge" [ngClass]="member.role === 'CREATOR' ? 'badge-primary' : 'badge-navy'">
-                            {{ member.role }}
-                          </span>
-                        </td>
-                        <td><strong>{{ member.quizzesCompleted }}</strong> quiz</td>
-                        <td>
-                          <strong style="color: var(--color-orange);">
-                            <app-icon name="zap" [size]="13" color="var(--color-orange)"></app-icon>
-                            {{ member.totalXp }} XP
-                          </strong>
-                        </td>
-                        <td class="body-small">{{ member.joinedAt | date:'dd/MM/yyyy' }}</td>
-                      </tr>
-                    }
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          }
-        </div>
-      }
-
-      <!-- POPUP MODAL: QUIZ MODAL PLAYER -->
-      @if (activeTestQuiz) {
-        <app-quiz-modal-player [quiz]="activeTestQuiz" (closed)="activeTestQuiz = null"></app-quiz-modal-player>
+      <!-- VUE 2 : ESPACE DE LA COMMUNAUTÉ (discussions, documents, réunions, quiz, membres, paramètres) -->
+      @if (selectedCommunityId) {
+        <app-community-hub
+          [communityId]="selectedCommunityId"
+          [initialTab]="initialTab"
+          (back)="closeHub()"
+          (left)="closeHub()">
+        </app-community-hub>
       }
 
       <!-- POPUP MODAL: CREATE COMMUNITY (FULLSCREEN BACKDROP) -->
@@ -738,71 +425,6 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
         </div>
       }
 
-      <!-- POPUP MODAL: CREATE NEW TOPIC -->
-      @if (showNewTopicModal) {
-        <div class="modal-backdrop animate-fade-in" (click)="showNewTopicModal = false">
-          <div class="modal-card card" (click)="$event.stopPropagation()">
-            <div class="modal-header">
-              <h3 class="h2">Lancer un Nouveau Sujet</h3>
-              <button class="close-btn" (click)="showNewTopicModal = false">✕</button>
-            </div>
-
-            <form (ngSubmit)="submitNewTopic()" class="modal-form">
-              @if (topicGeneralError) {
-                <div class="auth-error-banner animate-shake" style="margin-bottom: 14px;">
-                  <app-icon name="alert" [size]="16" color="#FFFFFF"></app-icon>
-                  <span>{{ topicGeneralError }}</span>
-                </div>
-              }
-
-              <div class="form-group">
-                <label class="form-label">Titre du Sujet *</label>
-                <input 
-                  type="text" 
-                  [(ngModel)]="newTopicTitle" 
-                  name="newTopicTitle" 
-                  required 
-                  placeholder="Ex: Question sur l'exercice 3, Ressources complémentaires..." 
-                  class="input-field"
-                  [class.input-error]="topicFieldErrors['title']"
-                  (input)="clearTopicFieldError('title')">
-                @if (topicFieldErrors['title']) {
-                  <span class="field-error-msg">
-                    <app-icon name="alert" [size]="13" color="var(--color-danger)"></app-icon>
-                    <span>{{ topicFieldErrors['title'] }}</span>
-                  </span>
-                }
-              </div>
-
-              <div class="form-group">
-                <label class="form-label">Message / Contenu *</label>
-                <textarea 
-                  [(ngModel)]="newTopicContent" 
-                  name="newTopicContent" 
-                  rows="4" 
-                  placeholder="Expliquez votre question ou détaillez le sujet de discussion..." 
-                  class="input-field"
-                  [class.input-error]="topicFieldErrors['content']"
-                  (input)="clearTopicFieldError('content')"></textarea>
-                @if (topicFieldErrors['content']) {
-                  <span class="field-error-msg">
-                    <app-icon name="alert" [size]="13" color="var(--color-danger)"></app-icon>
-                    <span>{{ topicFieldErrors['content'] }}</span>
-                  </span>
-                }
-              </div>
-
-              <div class="modal-actions-footer">
-                <button type="button" class="btn btn-outline" (click)="showNewTopicModal = false">Annuler</button>
-                <button type="submit" class="btn btn-primary">
-                  <app-icon name="message-square" [size]="15" color="var(--color-navy)"></app-icon>
-                  <span>Publier le Sujet</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      }
     </div>
   `,
   styles: [`
@@ -1216,375 +838,15 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
       }
     }
 
-    /* COMMUNITY HUB FOCUS VIEW */
-    .hub-top-nav {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 18px;
-      flex-wrap: wrap;
-      gap: 12px;
-
-      .hub-code-chip {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        background: #FFFFFF;
-        border: 1px solid var(--color-border);
-        padding: 5px 12px;
-        border-radius: var(--radius-full);
-        font-size: 12px;
-        cursor: pointer;
-        color: var(--color-navy);
-        transition: background 0.15s ease;
-
-        &:hover { background: var(--color-navy-light); }
-      }
-    }
-
-    .comm-hero {
-      background-size: cover;
-      background-position: center;
-      padding: 28px 24px;
-      margin-bottom: 20px;
-      border: none;
-
-      .hero-top {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-      }
-
-      .hero-metrics {
-        display: flex;
-        gap: 20px;
-        margin-top: 16px;
-        flex-wrap: wrap;
-
-        span {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          font-size: 13px;
-          font-weight: 600;
-          color: #E2E8F0;
-        }
-      }
-    }
-
-    .hub-tabs {
-      display: flex;
-      gap: 8px;
-      border-bottom: 2px solid var(--color-border);
-      margin-bottom: 20px;
-      overflow-x: auto;
-
-      .tab-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 10px 16px;
-        background: transparent;
-        border: none;
-        border-bottom: 2px solid transparent;
-        margin-bottom: -2px;
-        font-size: 13px;
-        font-weight: 700;
-        color: var(--color-text-secondary);
-        cursor: pointer;
-        transition: all 0.15s ease;
-        white-space: nowrap;
-
-        &:hover { color: var(--color-navy); }
-        &.active {
-          color: var(--color-navy);
-          border-bottom-color: var(--color-navy);
-        }
-      }
-    }
-
-    /* TOPICS & FORUM */
-    .section-actions {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 16px;
-    }
-
-    .topics-list {
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-
-    .topic-item {
-      padding: 20px;
-
-      .topic-header {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        margin-bottom: 10px;
-
-        .topic-avatar-icon {
-          width: 40px;
-          height: 40px;
-          min-width: 40px;
-          min-height: 40px;
-          border-radius: 50%;
-          background: var(--color-primary-light);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border: 2px solid var(--color-primary);
-        }
-
-        .topic-meta {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          .author-name { font-size: 14px; color: var(--color-navy); }
-          .topic-date { font-size: 11px; color: var(--color-text-secondary); }
-        }
-      }
-
-      .topic-title { font-size: 15px; font-weight: 800; color: var(--color-navy); margin-bottom: 4px; }
-      .topic-body { font-size: 13px; color: var(--color-text-primary); line-height: 20px; margin-bottom: 14px; }
-
-      .comments-section {
-        background: var(--color-background);
-        border-radius: var(--radius-md);
-        padding: 14px;
-
-        .comments-count {
-          font-size: 12px;
-          font-weight: 700;
-          color: var(--color-navy);
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          margin-bottom: 10px;
-        }
-
-        .comments-list {
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-          margin-bottom: 12px;
-        }
-
-        .comment-bubble {
-          display: flex;
-          gap: 10px;
-          background: #FFFFFF;
-          padding: 8px 12px;
-          border-radius: var(--radius-md);
-          border: 1px solid var(--color-border);
-
-          .comment-avatar-icon {
-            width: 28px;
-            height: 28px;
-            min-width: 28px;
-            min-height: 28px;
-            border-radius: 50%;
-            background: var(--color-background);
-            border: 1px solid var(--color-border);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-
-          .comment-content {
-            flex: 1;
-            .comment-author-row {
-              display: flex;
-              justify-content: space-between;
-              font-size: 11px;
-              margin-bottom: 2px;
-              .comment-time { color: var(--color-text-secondary); font-size: 10px; }
-            }
-            .comment-text { font-size: 12px; color: var(--color-text-primary); line-height: 16px; margin: 0; }
-          }
-        }
-
-        .comment-input-row {
-          display: flex;
-          gap: 8px;
-          .comment-input { flex: 1; height: 38px; font-size: 13px; }
-        }
-      }
-    }
-
-    /* COMMUNITY SHARED QUIZZES GRID (ULTRA COMPACT) */
-    .quizzes-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      gap: 14px;
-    }
-
-    .quiz-compact-card {
-      padding: 14px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      border-radius: var(--radius-md);
-      transition: transform 0.15s ease, box-shadow 0.15s ease;
-
-      &:hover {
-        transform: translateY(-2px);
-        box-shadow: var(--shadow-sm);
-      }
-
-      .card-main-row {
-        display: flex;
-        gap: 12px;
-        align-items: flex-start;
-
-        .quiz-thumb {
-          width: 52px;
-          height: 52px;
-          min-width: 52px;
-          border-radius: var(--radius-sm);
-          object-fit: cover;
-          border: 1px solid var(--color-border);
-        }
-
-        .quiz-info {
-          flex: 1;
-          min-width: 0;
-
-          .tags-row {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            margin-bottom: 3px;
-
-            .category-pill {
-              font-size: 10px;
-              font-weight: 700;
-              color: var(--color-navy);
-              background: var(--color-navy-light);
-              padding: 2px 6px;
-              border-radius: var(--radius-xs);
-            }
-          }
-
-          .quiz-title {
-            font-size: 14px;
-            font-weight: 800;
-            color: var(--color-navy);
-            margin: 0 0 3px 0;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-          }
-
-          .quiz-metrics {
-            font-size: 11px;
-            color: var(--color-text-secondary);
-            display: flex;
-            align-items: center;
-            gap: 5px;
-
-            strong { color: var(--color-navy); }
-          }
-        }
-      }
-
-      .card-action-bar {
-        padding-top: 8px;
-        border-top: 1px solid var(--color-border);
-        margin-top: auto;
-
-        .btn-full {
-          width: 100%;
-          font-size: 11px;
-          font-weight: 800;
-          height: 28px;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 4px;
-        }
-      }
-    }
-
-    /* RESOURCES */
-    .resources-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 14px;
-
-      .resource-card {
-        padding: 14px 18px;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-
-        .file-icon-box {
-          width: 40px;
-          height: 40px;
-          border-radius: var(--radius-md);
-          background: var(--color-navy-light);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .file-info {
-          flex: 1;
-          .file-title { font-size: 13px; font-weight: 700; color: var(--color-navy); margin-bottom: 2px; }
-          .file-meta { font-size: 11px; color: var(--color-text-secondary); }
-        }
-      }
-    }
-
-    /* MEETINGS */
-    .meetings-list {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 14px;
-
-      .meeting-card {
-        padding: 18px;
-        .meet-badge {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          font-size: 11px;
-          font-weight: 800;
-          color: var(--color-orange);
-          margin-bottom: 6px;
-        }
-        .meet-title { font-size: 15px; font-weight: 800; color: var(--color-navy); margin-bottom: 4px; }
-        .meet-timing {
-          font-size: 12px;
-          color: var(--color-text-secondary);
-          margin: 10px 0;
-          display: flex;
-          flex-direction: column;
-          gap: 3px;
-          span { display: inline-flex; align-items: center; gap: 6px; }
-        }
-      }
-    }
-
-    /* MEMBERS TABLE */
-    .members-table {
-      padding: 0;
-      overflow-x: auto;
-      table { width: 100%; border-collapse: collapse; }
-      th { background: var(--color-navy); color: #FFFFFF; padding: 10px 16px; font-size: 12px; text-align: left; }
-      td { padding: 10px 16px; border-bottom: 1px solid var(--color-border); font-size: 13px; }
-
-      .table-avatar {
-        width: 34px !important;
-        height: 34px !important;
-        min-width: 34px !important;
-        min-height: 34px !important;
-        border-radius: 50% !important;
-        object-fit: cover !important;
-      }
+    .role-chip {
+      display: inline-block;
+      margin-right: 6px;
+      padding: 1px 8px;
+      border-radius: 999px;
+      background: #FFF7ED;
+      color: #C2410C;
+      font-size: 11px;
+      font-weight: 800;
     }
 
     /* MODALS */
@@ -1630,16 +892,19 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
 })
 export class CommunityManageComponent {
   public commService = inject(CommunityService);
-  private quizService = inject(QuizService);
   public authService = inject(AuthService);
+  private toast = inject(ToastService);
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
+  private cdr = inject(ChangeDetectorRef);
 
   communities = this.commService.getCommunities();
-  selectedCommunity: Community | null = null;
-  activeTab: 'FORUM' | 'QUIZZES' | 'RESOURCES' | 'MEMBERS' = 'FORUM';
-  activeTestQuiz: Quiz | null = null;
+  /** Communauté ouverte (espace détaillé) ; null = annuaire. */
+  selectedCommunityId: string | null = null;
+  initialTab: string | null = null;
 
   searchQuery = '';
-  filterType: 'ALL' | 'PUBLIC' | 'PRIVATE' = 'ALL';
+  filterType: 'ALL' | 'MINE' | 'PUBLIC' | 'PRIVATE' = 'ALL';
   viewMode: 'grid' | 'list' = 'grid';
 
   currentPage = 1;
@@ -1648,8 +913,6 @@ export class CommunityManageComponent {
   // Modals
   showCreateModal = false;
   showJoinModal = false;
-  showNewTopicModal = false;
-  isCodeCopied = false;
 
   // New community form
   newCommName = '';
@@ -1661,22 +924,42 @@ export class CommunityManageComponent {
   joinCodeInput = '';
   joinError = '';
 
-  newCommentTexts: { [topicId: string]: string } = {};
+  // Form field errors
+  fieldErrors: Record<string, string> = {};
+  joinFieldErrors: Record<string, string> = {};
+  generalError = '';
+
+  constructor() {
+    // Liens des notifications et emails : ?communaute=<id>&onglet=documents|reunions|quiz...
+    this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe(params => {
+      const id = params.get('communaute');
+      if (id) {
+        this.initialTab = params.get('onglet');
+        this.selectedCommunityId = id;
+        this.cdr.markForCheck();
+      }
+    });
+  }
+
+  myCommunitiesCount(): number {
+    return this.communities().filter(c => !!c.myRole && c.myRole !== 'ADMIN').length;
+  }
 
   filteredCommunities(): Community[] {
     // Mes communautés d'abord, puis les plus récentes (une nouvelle communauté apparaît en tête de liste)
-    const myId = this.authService.currentUser()?.id;
+    const q = this.searchQuery.trim().toLowerCase();
     const byRelevance = (a: Community, b: Community) =>
-      Number(b.creatorId === myId) - Number(a.creatorId === myId) ||
+      Number(!!b.myRole) - Number(!!a.myRole) ||
       (b.createdAt || '').localeCompare(a.createdAt || '');
     return this.communities().filter(c => {
-      const matchSearch = !this.searchQuery ||
-        c.name.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-        c.description.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-        c.accessCode.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-        (c.category && c.category.toLowerCase().includes(this.searchQuery.toLowerCase()));
-      
+      const matchSearch = !q ||
+        c.name.toLowerCase().includes(q) ||
+        (c.description || '').toLowerCase().includes(q) ||
+        (c.accessCode || '').toLowerCase().includes(q) ||
+        (c.category || '').toLowerCase().includes(q);
+
       const matchType = this.filterType === 'ALL' ||
+        (this.filterType === 'MINE' && !!c.myRole && c.myRole !== 'ADMIN') ||
         (this.filterType === 'PUBLIC' && !c.isPrivate) ||
         (this.filterType === 'PRIVATE' && c.isPrivate);
 
@@ -1690,77 +973,41 @@ export class CommunityManageComponent {
     return list.slice(start, start + this.pageSize);
   }
 
+  /** Membre : ouvre l'espace ; communauté publique dont on n'est pas membre : la rejoindre d'abord. */
   openCommunity(comm: Community) {
-    this.selectedCommunity = comm;
-    this.activeTab = 'FORUM';
-  }
-
-  getCommunityQuizzes(comm: Community): Quiz[] {
-    const allQuizzes = this.quizService.getQuizzes()();
-    if (comm.sharedQuizIds && comm.sharedQuizIds.length > 0) {
-      return allQuizzes.filter(q => comm.sharedQuizIds?.includes(q.id));
-    }
-    return allQuizzes.slice(0, 2);
-  }
-
-  copyCode(code: string) {
-    navigator.clipboard.writeText(code);
-    this.isCodeCopied = true;
-    setTimeout(() => this.isCodeCopied = false, 2000);
-  }
-
-  // Form field errors
-  fieldErrors: Record<string, string> = {};
-  joinFieldErrors: Record<string, string> = {};
-  generalError = '';
-
-  newTopicTitle = '';
-  newTopicContent = '';
-  topicFieldErrors: Record<string, string> = {};
-  topicGeneralError = '';
-
-  clearTopicFieldError(field: string): void {
-    if (this.topicFieldErrors[field]) {
-      const updated = { ...this.topicFieldErrors };
-      delete updated[field];
-      this.topicFieldErrors = updated;
-    }
-  }
-
-  submitNewTopic(): void {
-    this.topicFieldErrors = {};
-    this.topicGeneralError = '';
-
-    if (!this.newTopicTitle.trim()) {
-      this.topicFieldErrors['title'] = 'Le titre du sujet est obligatoire.';
-    }
-    if (!this.newTopicContent.trim()) {
-      this.topicFieldErrors['content'] = 'Le contenu ou la description du sujet est obligatoire.';
-    }
-
-    if (Object.keys(this.topicFieldErrors).length > 0) {
+    if (comm.myRole) {
+      this.initialTab = null;
+      this.selectedCommunityId = comm.id;
       return;
     }
-
-    if (!this.selectedCommunity) return;
-
-    const user = this.authService.currentUser();
-    const createdTopic = this.commService.addTopic(this.selectedCommunity.id, {
-      title: this.newTopicTitle.trim(),
-      content: this.newTopicContent.trim(),
-      authorName: user ? `${user.prenom} ${user.nom}` : 'Formateur',
-      authorId: user?.id || 'u1',
-      authorAvatar: user?.avatarUrl
+    if (!comm.accessCode) return;
+    this.commService.joinCommunityApi(comm.accessCode).subscribe({
+      next: (joined) => {
+        this.toast.success(`Bienvenue dans « ${joined.name} » !`);
+        this.initialTab = null;
+        this.selectedCommunityId = joined.id;
+        this.cdr.markForCheck();
+      },
+      error: (err) => this.toast.apiError(err, 'Impossible de rejoindre cette communauté pour le moment.')
     });
+  }
 
-    if (this.selectedCommunity.topics) {
-      this.selectedCommunity.topics = [createdTopic, ...this.selectedCommunity.topics];
-      this.selectedCommunity.topicsCount = (this.selectedCommunity.topicsCount || 0) + 1;
+  closeHub() {
+    this.selectedCommunityId = null;
+    this.initialTab = null;
+    if (this.route.snapshot.queryParamMap.has('communaute')) {
+      this.router.navigate([], { relativeTo: this.route, queryParams: {} });
     }
+  }
 
-    this.newTopicTitle = '';
-    this.newTopicContent = '';
-    this.showNewTopicModal = false;
+  roleLabel(role: Community['myRole']): string {
+    switch (role) {
+      case 'CREATOR': return 'Créateur';
+      case 'MODERATOR': return 'Modérateur';
+      case 'STUDENT': return 'Membre';
+      case 'ADMIN': return 'Admin';
+      default: return '';
+    }
   }
 
   clearFieldError(field: string): void {
@@ -1798,25 +1045,26 @@ export class CommunityManageComponent {
       return;
     }
 
-    const user = this.authService.currentUser();
     this.commService.createCommunityApi({
       name: this.newCommName.trim(),
       description: this.newCommDesc.trim(),
       category: this.newCommCategory,
-      isPrivate: this.newCommIsPrivate,
-      creatorId: user?.id || 'u1',
-      creatorName: `${user?.prenom} ${user?.nom}`
+      isPrivate: this.newCommIsPrivate
     }).subscribe({
       next: (newComm) => {
         this.showCreateModal = false;
         this.newCommName = '';
         this.newCommDesc = '';
         this.fieldErrors = {};
-        this.selectedCommunity = newComm;
+        this.toast.success(`Communauté créée. Code d'accès à partager : ${newComm.accessCode}`);
+        this.initialTab = null;
+        this.selectedCommunityId = newComm.id;
+        this.cdr.markForCheck();
       },
       error: (err) => {
         this.fieldErrors = extractFieldErrors(err);
         this.generalError = getGeneralErrorMessage(err, 'Impossible de créer la communauté.');
+        this.cdr.markForCheck();
       }
     });
   }
@@ -1833,10 +1081,12 @@ export class CommunityManageComponent {
 
     this.commService.joinCommunityApi(code).subscribe({
       next: (found) => {
-        this.selectedCommunity = found;
         this.showJoinModal = false;
         this.joinCodeInput = '';
         this.joinFieldErrors = {};
+        this.initialTab = null;
+        this.selectedCommunityId = found.id;
+        this.cdr.markForCheck();
       },
       error: (err) => {
         this.joinFieldErrors = extractFieldErrors(err);
@@ -1845,27 +1095,8 @@ export class CommunityManageComponent {
         } else {
           this.joinError = getGeneralErrorMessage(err, 'Code d\'accès introuvable. Vérifiez l\'orthographe.');
         }
+        this.cdr.markForCheck();
       }
     });
-  }
-
-  submitComment(communityId: string, topicId: string) {
-    const text = this.newCommentTexts[topicId];
-    if (text && text.trim()) {
-      const user = this.authService.currentUser();
-      this.commService.addComment(communityId, topicId, {
-        content: text.trim(),
-        authorName: `${user?.prenom} ${user?.nom}`,
-        authorId: user?.id || 'u1',
-        authorAvatar: user?.avatarUrl
-      });
-      this.newCommentTexts[topicId] = '';
-      // La vue détaillée affiche une copie : on la rafraîchit pour montrer la réponse tout de suite
-      this.selectedCommunity = this.commService.getCommunityById(communityId) || this.selectedCommunity;
-    }
-  }
-
-  downloadSimulated(title: string) {
-    alert(`Téléchargement de "${title}" démarré !`);
   }
 }

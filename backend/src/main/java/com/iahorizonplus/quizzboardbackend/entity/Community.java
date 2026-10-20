@@ -42,6 +42,9 @@ public class Community {
     @Builder.Default
     private boolean isPrivate = true;
 
+    /** Les membres peuvent aussi partager des documents (sinon : animateur et modérateurs uniquement). */
+    private Boolean membersCanShare;
+
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "community_shared_quizzes", joinColumns = @JoinColumn(name = "community_id"))
     @Column(name = "quiz_id")
@@ -49,14 +52,17 @@ public class Community {
     private List<String> sharedQuizIds = new ArrayList<>();
 
     @OneToMany(mappedBy = "community", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @OrderBy("createdAt DESC")
     @Builder.Default
     private List<ForumTopic> topics = new ArrayList<>();
 
     @OneToMany(mappedBy = "community", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @OrderBy("uploadedAt DESC")
     @Builder.Default
     private List<ResourceFile> resources = new ArrayList<>();
 
     @OneToMany(mappedBy = "community", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @OrderBy("scheduledAt ASC")
     @Builder.Default
     private List<Meeting> meetings = new ArrayList<>();
 
@@ -78,6 +84,10 @@ public class Community {
     @JsonProperty("isPrivate")
     public void setPrivate(boolean isPrivate) {
         this.isPrivate = isPrivate;
+    }
+
+    public boolean isMembersCanShare() {
+        return Boolean.TRUE.equals(membersCanShare);
     }
 
     public int getMembersCount() {

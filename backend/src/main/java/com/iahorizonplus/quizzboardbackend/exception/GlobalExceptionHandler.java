@@ -57,6 +57,26 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(response, HttpStatus.FORBIDDEN);
     }
 
+    /** Action refusée à cet utilisateur : 403 avec le message à afficher. */
+    @ExceptionHandler(ForbiddenException.class)
+    public ResponseEntity<ApiResponse<Void>> handleForbidden(ForbiddenException ex, HttpServletRequest request) {
+        ApiResponse<Void> response = ApiResponse.<Void>builder()
+                .status(HttpStatus.FORBIDDEN.value())
+                .success(false)
+                .message(ex.getMessage())
+                .links(List.of(LinkDto.of("self", request.getRequestURI(), request.getMethod())))
+                .path(request.getRequestURI())
+                .timestamp(LocalDateTime.now())
+                .build();
+        return new ResponseEntity<>(response, HttpStatus.FORBIDDEN);
+    }
+
+    /** Fichier envoyé au-delà de la taille autorisée : 400 avec un message clair (et non une erreur serveur). */
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMaxUpload(org.springframework.web.multipart.MaxUploadSizeExceededException ex, HttpServletRequest request) {
+        return handleBadRequest(new BadRequestException("file", "Fichier trop volumineux : 20 Mo maximum."), request);
+    }
+
     /** Adresse d'API inexistante : 404 (et non une erreur serveur 500). */
     @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleNoResource(org.springframework.web.servlet.resource.NoResourceFoundException ex, HttpServletRequest request) {

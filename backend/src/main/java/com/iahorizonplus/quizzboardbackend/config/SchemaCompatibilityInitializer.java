@@ -20,6 +20,21 @@ public class SchemaCompatibilityInitializer implements CommandLineRunner {
     public void run(String... args) {
         ensurePlatformSettingsPricingColumns();
         allowUsersWithoutRoleDuringMigration();
+        widenCommunityLinkColumns();
+    }
+
+    /** Liens de visio (Teams...) et liens de ressources souvent plus longs que 255 caractères. */
+    private void widenCommunityLinkColumns() {
+        widenColumn("community_meetings", "meeting_url", 1000);
+        widenColumn("community_resources", "file_url", 1000);
+    }
+
+    private void widenColumn(String table, String column, int length) {
+        try {
+            jdbcTemplate.execute("ALTER TABLE " + table + " ALTER COLUMN " + column + " SET DATA TYPE VARCHAR(" + length + ")");
+        } catch (Exception ex) {
+            log.debug("Colonne {}.{} non élargie (déjà à jour ou table absente).", table, column);
+        }
     }
 
     private void ensurePlatformSettingsPricingColumns() {

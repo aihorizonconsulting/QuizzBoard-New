@@ -10,14 +10,13 @@ import { ConfirmDialogService } from '../../../core/services/confirm-dialog.serv
 import { Quiz } from '../../../core/models/quiz.model';
 import { Course } from '../../../core/models/course.model';
 import { Certificate } from '../../../core/models/participation.model';
-import { ForumTopic } from '../../../core/models/community.model';
+import { ModeratedTopic } from '../../../core/models/community.model';
+import { ToastService } from '../../../core/services/toast.service';
 import { IconComponent } from '../../../shared/components/icon/icon.component';
 import { PaginationComponent } from '../../../shared/components/pagination/pagination.component';
 
-interface AdminTopicItem extends ForumTopic {
-  communityName: string;
-  isReported?: boolean;
-}
+/** Sujet de forum vu par la modération (toutes les communautés, signalés en premier). */
+type AdminTopicItem = ModeratedTopic;
 
 @Component({
   selector: 'app-admin-content',
@@ -111,7 +110,7 @@ interface AdminTopicItem extends ForumTopic {
               <span class="filter-lbl">Statut Modération :</span>
               <div class="pill-group">
                 <button type="button" class="filter-pill" [class.active]="forumFilter === 'ALL'" (click)="setForumFilter('ALL')">Tous les sujets</button>
-                <button type="button" class="filter-pill" [class.active]="forumFilter === 'REPORTED'" (click)="setForumFilter('REPORTED')">⚠️ Signalés (1)</button>
+                <button type="button" class="filter-pill" [class.active]="forumFilter === 'REPORTED'" (click)="setForumFilter('REPORTED')">⚠️ Signalés ({{ reportedCount() }})</button>
               </div>
             </div>
           } @else if (activeTab === 'CERTIFICATES') {
@@ -359,9 +358,15 @@ interface AdminTopicItem extends ForumTopic {
 
                   <td>
                     <div class="actions-cell">
-                      <button 
-                        type="button" 
-                        class="btn-action" 
+                      @if (topic.isReported) {
+                        <button type="button" class="btn-action" title="Le sujet est conforme : retirer le signalement" (click)="clearTopicReport(topic)">
+                          <app-icon name="check" [size]="13"></app-icon>
+                          <span>Conforme</span>
+                        </button>
+                      }
+                      <button
+                        type="button"
+                        class="btn-action"
                         (click)="confirmToggleTopicLock(topic)"
                         [title]="topic.isLocked ? 'Déverrouiller le sujet' : 'Verrouiller le sujet'">
                         <app-icon [name]="topic.isLocked ? 'check' : 'lock'" [size]="13"></app-icon>
@@ -813,10 +818,10 @@ export class AdminContentComponent {
   private participationService = inject(ParticipationService);
   private quizPlayerModalService = inject(QuizPlayerModalService);
   private confirmService = inject(ConfirmDialogService);
+  private toast = inject(ToastService);
 
   quizzes = this.quizService.getQuizzes();
   courses = this.courseService.getCourses();
-  communities = this.communityService.getCommunities();
   certificates = this.participationService.getCertificates();
 
   activeTab: 'QUIZZES' | 'COURSES' | 'FORUMS_HUB' | 'CERTIFICATES' = 'QUIZZES';
@@ -827,36 +832,22 @@ export class AdminContentComponent {
   currentPage = 1;
   pageSize = 10;
 
-  // Extract all forum topics across communities with extra mock metadata
-  allForumTopics = computed<AdminTopicItem[]>(() => {
-    const list: AdminTopicItem[] = [];
-    for (const comm of this.communities()) {
-      for (const topic of comm.topics || []) {
-        list.push({
-          ...topic,
-          communityName: comm.name,
-          isReported: false
-        });
-      }
+  /** Sujets de toutes les communautés (API de modération, réservée aux administrateurs). */
+  private forumTopics = signal<AdminTopicItem[]>([]);
+  allForumTopics = computed(() => this.forumTopics());
+  reportedCount = computed(() => this.forumTopics().filter(t => t.isReported).length);
+
+  constructor() {
+    this.loadForumTopics();
+  }
+
+  private async loadForumTopics(): Promise<void> {
+    try {
+      this.forumTopics.set(await this.communityService.getModerationTopics());
+    } catch (err) {
+      this.toast.apiError(err, 'Les sujets des forums n\'ont pas pu être chargés.');
     }
-    // Add a reported topic for demo moderation
-    list.unshift({
-      id: 'topic-rep-1',
-      communityId: 'comm-info-2026',
-      communityName: 'Club National des Formateurs',
-      title: 'Partage d\'annales d\'examens non officielles',
-      content: 'Ce sujet contient des liens externes non vérifiés signalés par plusieurs enseignants pour violation de droits.',
-      authorName: 'Jean-Paul Badji',
-      authorId: 'user-suspended-test',
-      createdAt: '2026-03-01',
-      commentsCount: 8,
-      comments: [],
-      isPinned: false,
-      isLocked: false,
-      isReported: true
-    });
-    return list;
-  });
+  }
 
   filteredQuizzes(): Quiz[] {
     return this.quizzes().filter(q => {
@@ -1018,7 +1009,23 @@ export class AdminContentComponent {
       icon: 'lock'
     });
     if (confirmed) {
-      this.communityService.toggleTopicLock(topic.communityId, topic.id);
+      try {
+        await this.communityService.moderateTopic(topic.communityId, topic.id, { isLocked: willLock });
+        this.toast.success(willLock ? 'Sujet verrouillé.' : 'Sujet déverrouillé.');
+        await this.loadForumTopics();
+      } catch (err) {
+        this.toast.apiError(err, 'Le sujet n\'a pas pu être modifié.');
+      }
+    }
+  }
+
+  async clearTopicReport(topic: AdminTopicItem) {
+    try {
+      await this.communityService.moderateTopic(topic.communityId, topic.id, { isReported: false });
+      this.toast.success('Signalement retiré : le sujet est conforme.');
+      await this.loadForumTopics();
+    } catch (err) {
+      this.toast.apiError(err, 'Le signalement n\'a pas pu être retiré.');
     }
   }
 
@@ -1031,7 +1038,13 @@ export class AdminContentComponent {
       icon: 'trash'
     });
     if (confirmed) {
-      this.communityService.deleteTopic(topic.communityId, topic.id);
+      try {
+        await this.communityService.deleteTopic(topic.communityId, topic.id);
+        this.toast.success('Sujet supprimé.');
+        await this.loadForumTopics();
+      } catch (err) {
+        this.toast.apiError(err, 'Le sujet n\'a pas pu être supprimé.');
+      }
     }
   }
 

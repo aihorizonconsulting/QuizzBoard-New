@@ -33,4 +33,16 @@ public interface FileStorageService {
      * @return le Content-Type (ex: image/png, image/jpeg)
      */
     String getContentType(String filename);
+
+    /**
+     * Document partagé dans une communauté (PDF, Word, PowerPoint, Excel, ZIP, image...) : toujours stocké sur le disque
+     * du serveur (dossier conservé entre les déploiements), jamais servi par l'adresse publique /files.
+     *
+     * @return le nom du fichier stocké (à conserver pour le téléchargement)
+     */
+    String storeDocument(MultipartFile file);
+
+    Resource loadDocument(String storedFileName);
+
+    void deleteDocument(String storedFileName);
 }

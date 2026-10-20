@@ -25,6 +25,35 @@ import java.util.UUID;
 @Slf4j
 public class FileStorageServiceImpl implements FileStorageService {
 
+    private static final String DOCUMENTS_FOLDER = "documents";
+    private static final long MAX_DOCUMENT_BYTES = 20L * 1024 * 1024;
+
+    /** Formats acceptés pour les documents de communauté, avec leur type MIME. */
+    private static final Map<String, String> DOCUMENT_TYPES = Map.ofEntries(
+            Map.entry("pdf", "application/pdf"),
+            Map.entry("doc", "application/msword"),
+            Map.entry("docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+            Map.entry("odt", "application/vnd.oasis.opendocument.text"),
+            Map.entry("rtf", "application/rtf"),
+            Map.entry("txt", "text/plain; charset=UTF-8"),
+            Map.entry("ppt", "application/vnd.ms-powerpoint"),
+            Map.entry("pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation"),
+            Map.entry("odp", "application/vnd.oasis.opendocument.presentation"),
+            Map.entry("xls", "application/vnd.ms-excel"),
+            Map.entry("xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+            Map.entry("ods", "application/vnd.oasis.opendocument.spreadsheet"),
+            Map.entry("csv", "text/csv; charset=UTF-8"),
+            Map.entry("zip", "application/zip"),
+            Map.entry("rar", "application/vnd.rar"),
+            Map.entry("7z", "application/x-7z-compressed"),
+            Map.entry("png", "image/png"),
+            Map.entry("jpg", "image/jpeg"),
+            Map.entry("jpeg", "image/jpeg"),
+            Map.entry("gif", "image/gif"),
+            Map.entry("webp", "image/webp"),
+            Map.entry("mp3", "audio/mpeg"),
+            Map.entry("mp4", "video/mp4"));
+
     @Value("${app.storage.provider:local}")
     private String storageProvider;
 
@@ -159,8 +188,72 @@ public class FileStorageServiceImpl implements FileStorageService {
         if (lower.endsWith(".webp")) return "image/webp";
         if (lower.endsWith(".gif")) return "image/gif";
         if (lower.endsWith(".svg")) return "image/svg+xml";
-        if (lower.endsWith(".pdf")) return "application/pdf";
-        return "application/octet-stream";
+        String type = DOCUMENT_TYPES.get(extensionOf(lower));
+        return type != null ? type : "application/octet-stream";
+    }
+
+    @Override
+    public String storeDocument(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new BadRequestException("file", "Choisissez un fichier à partager.");
+        }
+        if (file.getSize() > MAX_DOCUMENT_BYTES) {
+            throw new BadRequestException("file", "Fichier trop volumineux : 20 Mo maximum.");
+        }
+        String extension = extensionOf(file.getOriginalFilename());
+        if (!DOCUMENT_TYPES.containsKey(extension)) {
+            throw new BadRequestException("file",
+                    "Format non pris en charge. Formats acceptés : PDF, Word, PowerPoint, Excel, texte, ZIP, images, MP3 et MP4.");
+        }
+        String storedFileName = UUID.randomUUID() + "." + extension;
+        try (var in = file.getInputStream()) {
+            Path folder = rootLocation.resolve(DOCUMENTS_FOLDER);
+            Files.createDirectories(folder);
+            Files.copy(in, folder.resolve(storedFileName));
+            log.info("Document de communauté enregistré : {} ({} octets)", storedFileName, file.getSize());
+            return storedFileName;
+        } catch (IOException e) {
+            log.error("Enregistrement du document impossible : {}", e.getMessage());
+            throw new BadRequestException("file", "Le document n'a pas pu être enregistré. Réessayez dans un instant.");
+        }
+    }
+
+    @Override
+    public Resource loadDocument(String storedFileName) {
+        Path path = documentPath(storedFileName);
+        if (path == null || !Files.isReadable(path)) {
+            throw new ResourceNotFoundException("Ce document n'est plus disponible sur le serveur.");
+        }
+        try {
+            return new UrlResource(path.toUri());
+        } catch (MalformedURLException e) {
+            throw new ResourceNotFoundException("Ce document n'est plus disponible sur le serveur.");
+        }
+    }
+
+    @Override
+    public void deleteDocument(String storedFileName) {
+        Path path = documentPath(storedFileName);
+        if (path == null) return;
+        try {
+            Files.deleteIfExists(path);
+        } catch (IOException e) {
+            log.warn("Suppression du document {} impossible : {}", storedFileName, e.getMessage());
+        }
+    }
+
+    /** Chemin d'un document stocké ; null si le nom n'est pas un nom généré par storeDocument (pas de ../). */
+    private Path documentPath(String storedFileName) {
+        if (storedFileName == null || !storedFileName.matches("[0-9a-f-]{36}\\.[a-z0-9]{1,5}")) {
+            return null;
+        }
+        return rootLocation.resolve(DOCUMENTS_FOLDER).resolve(storedFileName).normalize();
+    }
+
+    private static String extensionOf(String filename) {
+        if (filename == null) return "";
+        int dot = filename.lastIndexOf('.');
+        return dot >= 0 ? filename.substring(dot + 1).toLowerCase() : "";
     }
 
     private String cleanFolder(String folder) {
@@ -168,6 +261,7 @@ public class FileStorageServiceImpl implements FileStorageService {
             return "general";
         }
         String clean = folder.toLowerCase().replaceAll("[^a-z0-9_-]", "");
-        return clean.isEmpty() ? "general" : clean;
+        // Le dossier des documents de communauté n'est accessible qu'aux membres (téléchargement via l'API communautés)
+        return clean.isEmpty() || clean.equals(DOCUMENTS_FOLDER) ? "general" : clean;
     }
 }

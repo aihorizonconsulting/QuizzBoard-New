@@ -549,6 +549,107 @@ public class SmtpEmailService {
     }
 
     /**
+     * Réunion programmée (ou modifiée) dans une communauté : date, durée, plateforme et lien pour rejoindre.
+     */
+    @Async
+    public void sendCommunityMeetingEmail(
+            String toEmail,
+            String userName,
+            String communityName,
+            String meetingTitle,
+            String whenLabel,
+            int durationMinutes,
+            String platformLabel,
+            String meetingUrl,
+            String hostName,
+            String communityUrl,
+            boolean updated) {
+        if (toEmail == null || toEmail.isBlank()) return;
+
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setFrom(resolveFromEmail());
+            helper.setTo(toEmail);
+            helper.setSubject((updated ? "Réunion modifiée : " : "Nouvelle réunion : ") + meetingTitle + " (" + communityName + ")");
+
+            String htmlContent = """
+                <!DOCTYPE html>
+                <html>
+                <body style="margin: 0; padding: 0; background-color: #F8FAFC; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                    <table width="100%%" border="0" cellspacing="0" cellpadding="0" style="padding: 40px 20px;">
+                        <tr>
+                            <td align="center">
+                                <table width="600" border="0" cellspacing="0" cellpadding="0" style="background: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0; overflow: hidden;">
+                                    <tr>
+                                        <td style="background-color: #0F172A; padding: 32px 40px; text-align: center;">
+                                            <h1 style="color: #FFFFFF; margin: 0; font-size: 24px; font-weight: 800;">QUIZZBOARD</h1>
+                                            <p style="color: #94A3B8; margin: 6px 0 0 0; font-size: 13px;">Communauté %s</p>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 36px 40px;">
+                                            <h2 style="color: #0F172A; font-size: 20px; font-weight: 700; margin-top: 0;">Bonjour %s,</h2>
+                                            <p style="color: #475569; font-size: 15px; line-height: 1.6;">
+                                                %s <strong>%s</strong> dans la communauté <strong>%s</strong>.
+                                            </p>
+                                            <div style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 18px 24px; margin: 20px 0;">
+                                                <div style="font-size: 18px; font-weight: 800; color: #0F172A; margin-bottom: 8px;">%s</div>
+                                                <div style="color: #334155; font-size: 14px; line-height: 1.8;">
+                                                    📅 %s<br>
+                                                    ⏱️ Durée : %d min<br>
+                                                    🎥 %s<br>
+                                                    👤 Animée par %s
+                                                </div>
+                                            </div>
+                                            <table width="100%%" border="0" cellspacing="0" cellpadding="0" style="margin: 28px 0 12px 0;">
+                                                <tr>
+                                                    <td align="center">
+                                                        <a href="%s" style="background-color: #F97316; color: #FFFFFF; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 700; font-size: 15px; display: inline-block;">
+                                                            Rejoindre la réunion
+                                                        </a>
+                                                    </td>
+                                                </tr>
+                                            </table>
+                                            <p style="color: #64748B; font-size: 13px; text-align: center; margin: 0;">
+                                                Retrouvez aussi la réunion dans <a href="%s" style="color: #F97316;">votre communauté sur QuizzBoard</a>.
+                                            </p>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="background-color: #F8FAFC; border-top: 1px solid #E2E8F0; padding: 20px; text-align: center;">
+                                            <p style="color: #64748B; font-size: 12px; margin: 0;">
+                                                © 2026 QuizzBoard • Horizon Plus Consulting. Tous droits réservés.
+                                            </p>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                    </table>
+                </body>
+                </html>
+            """.formatted(escapeHtml(communityName), escapeHtml(userName),
+                    updated ? "La réunion a été modifiée :" : "Une réunion a été programmée :",
+                    escapeHtml(meetingTitle), escapeHtml(communityName), escapeHtml(meetingTitle),
+                    escapeHtml(whenLabel), durationMinutes, escapeHtml(platformLabel), escapeHtml(hostName),
+                    escapeHtml(meetingUrl), communityUrl);
+
+            helper.setText(withAppUrl(htmlContent), true);
+            mailSender.send(message);
+            log.info("Email de réunion de communauté envoyé à {}", toEmail);
+        } catch (Exception e) {
+            log.warn("Erreur lors de l'envoi de l'email de réunion : {}", e.getMessage());
+        }
+    }
+
+    private static String escapeHtml(String value) {
+        if (value == null) return "";
+        return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;");
+    }
+
+    /**
      * Confirmation de changement de mot de passe
      */
     @Async

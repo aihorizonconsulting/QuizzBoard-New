@@ -52,6 +52,7 @@ public class ForumTopic {
     private Community community;
 
     @OneToMany(mappedBy = "topic", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @OrderBy("createdAt ASC")
     @Builder.Default
     private List<ForumComment> comments = new ArrayList<>();
 

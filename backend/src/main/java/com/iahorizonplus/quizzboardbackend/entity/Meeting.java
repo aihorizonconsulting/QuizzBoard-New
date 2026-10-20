@@ -26,7 +26,7 @@ public class Meeting {
     @Column(length = 1000)
     private String description;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 1000)
     private String meetingUrl;
 
     @Column(nullable = false)
@@ -39,6 +39,7 @@ public class Meeting {
     private int durationMinutes = 60;
 
     private String hostName;
+    private String createdById;
 
     @Builder.Default
     private boolean isLive = false;

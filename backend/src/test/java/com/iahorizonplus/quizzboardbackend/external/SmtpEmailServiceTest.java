@@ -127,6 +127,20 @@ class SmtpEmailServiceTest {
     }
 
     @Test
+    @DisplayName("Réunion de communauté : date, lien de visio, lien vers la communauté sur le site public, HTML échappé")
+    void communityMeetingEmail() throws Exception {
+        emailService.sendCommunityMeetingEmail("awa@example.com", "Awa Diop", "Club Data <IA>", "Révision 100 % SQL",
+                "samedi 25 octobre 2026 à 14h30", 90, "Google Meet", "https://meet.google.com/abc-defg-hij",
+                "Bakary Diassy", "http://localhost:4200/app/learner/communities?communaute=c1&onglet=reunions", false);
+        verify(mailSender).send(any(MimeMessage.class));
+        String html = findHtml(message.getContent());
+        assertThat(html).contains("Révision 100 % SQL", "samedi 25 octobre 2026 à 14h30", "90 min",
+                "href=\"https://meet.google.com/abc-defg-hij\"", "https://quizzboard.com/app/learner/communities?communaute=c1",
+                "Club Data &lt;IA&gt;").doesNotContain("localhost", "<IA>");
+        assertThat(message.getSubject()).startsWith("Nouvelle réunion : Révision 100 % SQL");
+    }
+
+    @Test
     @DisplayName("Mot de passe modifié")
     void passwordChangedEmail() {
         emailService.sendPasswordChangedEmail("awa@example.com", "Awa Diop");

@@ -1,25 +1,27 @@
-import { Component, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { CommunityService } from '../../../core/services/community.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { ToastService } from '../../../core/services/toast.service';
-import { Community, ForumTopic } from '../../../core/models/community.model';
+import { Community } from '../../../core/models/community.model';
 import { extractFieldErrors, getGeneralErrorMessage } from '../../../core/utils/form-error.util';
 import { IconComponent } from '../../../shared/components/icon/icon.component';
 import { PaginationComponent } from '../../../shared/components/pagination/pagination.component';
+import { CommunityHubComponent } from '../../../shared/components/community-hub/community-hub.component';
 
 @Component({
   selector: 'app-learner-communities',
   standalone: true,
-  imports: [CommonModule, FormsModule, IconComponent, PaginationComponent],
+  imports: [CommonModule, FormsModule, IconComponent, PaginationComponent, CommunityHubComponent],
   template: `
     <div class="learner-communities-page">
       <!-- =========================================================================
            VUE 1 : CATALOGUE DES COMMUNAUTÉS (AVEC ONGLET PUBLIC)
            ========================================================================= -->
-      @if (!selectedCommunity) {
+      @if (!selectedCommunityId) {
         <div class="page-header">
           <div>
             <h1 class="h1">Communautés & Hubs d'Échange</h1>
@@ -153,7 +155,7 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
                       <app-icon [name]="comm.isPrivate ? 'lock' : 'globe'" [size]="11"></app-icon>
                       <span>{{ comm.isPrivate ? 'Privée' : 'Publique' }}</span>
                     </span>
-                    <span class="code-pill">#{{ comm.accessCode }}</span>
+                    @if (isMember(comm) && comm.accessCode) { <span class="code-pill">#{{ comm.accessCode }}</span> }
                   </div>
 
                   <div class="comm-body">
@@ -211,7 +213,7 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
                       <span class="type-pill" [class.public]="!comm.isPrivate">
                         {{ comm.isPrivate ? 'Privée' : 'Publique' }}
                       </span>
-                      <span class="code-txt">#{{ comm.accessCode }}</span>
+                      @if (isMember(comm) && comm.accessCode) { <span class="code-txt">#{{ comm.accessCode }}</span> }
                     </div>
                     <h3 class="row-title">{{ comm.name }}</h3>
                     <p class="row-desc">{{ comm.description }}</p>
@@ -255,215 +257,14 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
         }
       }
 
-      <!-- =========================================================================
-           VUE 2 : ESPACE INTERACTION & FORUM DE LA COMMUNAUTÉ
-           ========================================================================= -->
-      @if (selectedCommunity) {
-        <div class="community-hub-view animate-fade-in">
-          <!-- Top Back button -->
-          <div class="hub-top-bar">
-            <button class="btn btn-outline btn-sm btn-back" (click)="selectedCommunity = null">
-              <app-icon name="arrow-right" [size]="13" style="transform: rotate(180deg);"></app-icon>
-              <span>Retour aux communautés</span>
-            </button>
-          </div>
-
-          <!-- Hero Banner -->
-          <div class="hub-hero card">
-            <div class="hub-hero-left">
-              <div class="tags-row">
-                <span class="type-pill" [class.public]="!selectedCommunity.isPrivate">
-                  {{ selectedCommunity.isPrivate ? 'Communauté Privée' : 'Communauté Ouverte' }}
-                </span>
-                <span class="code-badge">Code : {{ selectedCommunity.accessCode }}</span>
-              </div>
-              <h1 class="h1" style="margin: 8px 0 4px 0;">{{ selectedCommunity.name }}</h1>
-              <p class="body-small" style="margin: 0;">{{ selectedCommunity.description }}</p>
-            </div>
-
-            <div class="hub-hero-stats">
-              <div class="stat-pill">
-                <app-icon name="users" [size]="14"></app-icon>
-                <span><strong>{{ selectedCommunity.membersCount }}</strong> membres</span>
-              </div>
-              <div class="stat-pill">
-                <app-icon name="message-square" [size]="14"></app-icon>
-                <span><strong>{{ selectedCommunity.topicsCount }}</strong> discussions</span>
-              </div>
-              <div class="stat-pill">
-                <app-icon name="folder" [size]="14"></app-icon>
-                <span><strong>{{ selectedCommunity.resourcesCount }}</strong> fichiers</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Hub Sub-Tabs -->
-          <div class="hub-tabs">
-            <button 
-              type="button" 
-              class="tab-btn" 
-              [class.active]="hubTab === 'DISCUSSIONS'"
-              (click)="hubTab = 'DISCUSSIONS'">
-              <app-icon name="message-square" [size]="15"></app-icon>
-              <span>Discussions & Forum ({{ selectedCommunity.topics?.length || 0 }})</span>
-            </button>
-
-            <button 
-              type="button" 
-              class="tab-btn" 
-              [class.active]="hubTab === 'RESOURCES'"
-              (click)="hubTab = 'RESOURCES'">
-              <app-icon name="folder" [size]="15"></app-icon>
-              <span>Fichiers & Cours ({{ selectedCommunity.resources?.length || 0 }})</span>
-            </button>
-
-            <button 
-              type="button" 
-              class="tab-btn" 
-              [class.active]="hubTab === 'MEMBERS'"
-              (click)="hubTab = 'MEMBERS'">
-              <app-icon name="users" [size]="15"></app-icon>
-              <span>Membres ({{ selectedCommunity.members?.length || 0 }})</span>
-            </button>
-          </div>
-
-          <!-- TAB 1: DISCUSSIONS & QUESTIONS -->
-          @if (hubTab === 'DISCUSSIONS') {
-            <div class="discussions-layout">
-              <!-- New Question Card -->
-              <div class="card new-topic-card">
-                <div class="topic-head">
-                  <app-icon name="help-circle" [size]="18" color="var(--color-navy)"></app-icon>
-                  <h3 class="h3" style="margin: 0; font-size: 15px;">Poser une question à la communauté</h3>
-                </div>
-                <div class="topic-form">
-                  <input 
-                    type="text" 
-                    [(ngModel)]="newTopicTitle" 
-                    placeholder="Titre de votre question ou sujet de discussion..." 
-                    class="input-field">
-                  <textarea 
-                    [(ngModel)]="newTopicContent" 
-                    rows="2" 
-                    placeholder="Détaillez votre question ou partagez une information..." 
-                    class="input-field"></textarea>
-                  <div class="form-action-row">
-                    <button 
-                      class="btn btn-primary btn-sm" 
-                      [disabled]="!newTopicTitle.trim() || !newTopicContent.trim()" 
-                      (click)="submitNewTopic()">
-                      <span>Publier la Question</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Topics List -->
-              <div class="topics-list">
-                @for (top of selectedCommunity.topics || []; track top.id) {
-                  <div class="topic-card card">
-                    <div class="topic-meta">
-                      <div class="author-avatar">
-                        {{ top.authorName.charAt(0) }}
-                      </div>
-                      <div class="author-info">
-                        <strong>{{ top.authorName }}</strong>
-                        <span class="body-small text-muted">{{ top.createdAt | date:'short' }}</span>
-                      </div>
-                      @if (top.isPinned) {
-                        <span class="badge badge-primary">📌 Épinglé</span>
-                      }
-                    </div>
-
-                    <h3 class="topic-title">{{ top.title }}</h3>
-                    <p class="topic-body">{{ top.content }}</p>
-
-                    <!-- Comments preview / Reply -->
-                    @if (top.comments && top.comments.length > 0) {
-                      <div class="comments-box">
-                        <span class="comments-title">Réponses ({{ top.comments.length }}) :</span>
-                        @for (com of top.comments; track com.id) {
-                          <div class="comment-item">
-                            <strong>{{ com.authorName }} :</strong>
-                            <span>{{ com.content }}</span>
-                          </div>
-                        }
-                      </div>
-                    }
-
-                    <!-- Add Comment input -->
-                    <div class="reply-row">
-                      <input 
-                        type="text" 
-                        [(ngModel)]="replyTexts[top.id]" 
-                        placeholder="Écrire une réponse..." 
-                        class="input-field reply-input"
-                        (keyup.enter)="submitComment(top.id)">
-                      <button 
-                        class="btn btn-outline btn-sm" 
-                        [disabled]="!replyTexts[top.id]?.trim()"
-                        (click)="submitComment(top.id)">
-                        Répondre
-                      </button>
-                    </div>
-                  </div>
-                }
-              </div>
-            </div>
-          }
-
-          <!-- TAB 2: RESOURCES -->
-          @if (hubTab === 'RESOURCES') {
-            <div class="resources-grid">
-              @for (res of selectedCommunity.resources || []; track res.id) {
-                <div class="card resource-card">
-                  <div class="res-icon">
-                    <app-icon name="file-text" [size]="24" color="var(--color-navy)"></app-icon>
-                  </div>
-                  <div class="res-info">
-                    <h4 class="res-title">{{ res.title }}</h4>
-                    <span class="body-small text-muted">{{ res.fileType }} • {{ res.fileSize }} • Partagé par {{ res.uploadedByName }}</span>
-                  </div>
-                  <button class="btn btn-outline btn-sm" (click)="downloadResource(res.title)">
-                    <app-icon name="download" [size]="13"></app-icon>
-                    <span>Télécharger</span>
-                  </button>
-                </div>
-              }
-              @if ((selectedCommunity.resources || []).length === 0) {
-                <div class="card empty-tab-box">
-                  <app-icon name="folder" [size]="28" color="var(--color-text-secondary)"></app-icon>
-                  <p>Aucun fichier partagé dans cette communauté.</p>
-                </div>
-              }
-            </div>
-          }
-
-          <!-- TAB 3: MEMBERS -->
-          @if (hubTab === 'MEMBERS') {
-            <div class="card members-card">
-              <div class="members-head">
-                <h3 class="h3" style="font-size: 15px; margin: 0;">Membres inscrits ({{ selectedCommunity.members?.length || 0 }})</h3>
-              </div>
-              <div class="members-list">
-                @for (m of selectedCommunity.members || []; track m.userId) {
-                  <div class="member-item">
-                    <div class="member-avatar">
-                      {{ m.name.charAt(0) }}
-                    </div>
-                    <div class="member-info">
-                      <strong>{{ m.name }}</strong>
-                      <span class="body-small text-muted">{{ m.email }}</span>
-                    </div>
-                    <span class="badge" [ngClass]="m.role === 'CREATOR' ? 'badge-primary' : 'badge-navy'">
-                      {{ m.role === 'CREATOR' ? 'Animateur / Prof' : 'Apprenant' }}
-                    </span>
-                  </div>
-                }
-              </div>
-            </div>
-          }
-        </div>
+      <!-- VUE 2 : ESPACE DE LA COMMUNAUTÉ (discussions, documents, réunions, quiz, membres) -->
+      @if (selectedCommunityId) {
+        <app-community-hub
+          [communityId]="selectedCommunityId"
+          [initialTab]="initialTab"
+          (back)="closeHub()"
+          (left)="closeHub()">
+        </app-community-hub>
       }
     </div>
 
@@ -892,274 +693,6 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
       }
     }
 
-    /* HUB DETAIL VIEW */
-    .community-hub-view {
-      display: flex;
-      flex-direction: column;
-      gap: 18px;
-
-      .hub-hero {
-        padding: 24px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 16px;
-        background: #FFFFFF;
-
-        .hub-hero-left {
-          flex: 1;
-          min-width: 260px;
-
-          .tags-row {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-
-            .type-pill {
-              font-size: 11px;
-              font-weight: 700;
-              padding: 2px 8px;
-              border-radius: var(--radius-xs);
-              background: var(--color-navy-light);
-              color: var(--color-navy);
-              &.public { background: #DCFCE7; color: #166534; }
-            }
-
-            .code-badge { font-size: 11.5px; font-weight: 700; color: var(--color-navy); }
-          }
-        }
-
-        .hub-hero-stats {
-          display: flex;
-          gap: 10px;
-          flex-wrap: wrap;
-
-          .stat-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 12px;
-            background: var(--color-background);
-            border: 1px solid var(--color-border);
-            border-radius: var(--radius-full);
-            font-size: 12px;
-            color: var(--color-navy);
-          }
-        }
-      }
-
-      .hub-tabs {
-        display: flex;
-        gap: 8px;
-        border-bottom: 1px solid var(--color-border);
-        padding-bottom: 8px;
-
-        .tab-btn {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          padding: 8px 16px;
-          border-radius: var(--radius-md);
-          border: none;
-          background: transparent;
-          font-size: 13.5px;
-          font-weight: 700;
-          color: var(--color-text-secondary);
-          cursor: pointer;
-          transition: all 0.15s ease;
-
-          &:hover { background: var(--color-background); color: var(--color-navy); }
-          &.active {
-            background: var(--color-navy);
-            color: #FFFFFF;
-            ::ng-deep svg { stroke: #FFFFFF !important; }
-          }
-        }
-      }
-    }
-
-    /* DISCUSSIONS */
-    .discussions-layout {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-
-      .new-topic-card {
-        padding: 18px;
-        background: #FFFFFF;
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-
-        .topic-head {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          color: var(--color-navy);
-        }
-
-        .topic-form {
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-
-          .form-action-row {
-            display: flex;
-            justify-content: flex-end;
-          }
-        }
-      }
-
-      .topics-list {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-
-        .topic-card {
-          padding: 18px;
-          background: #FFFFFF;
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-
-          .topic-meta {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-
-            .author-avatar {
-              width: 32px;
-              height: 32px;
-              border-radius: 50%;
-              background: var(--color-navy);
-              color: #FFFFFF;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              font-size: 12px;
-              font-weight: 800;
-            }
-
-            .author-info {
-              display: flex;
-              flex-direction: column;
-              flex: 1;
-              font-size: 12.5px;
-            }
-          }
-
-          .topic-title {
-            font-size: 15px;
-            font-weight: 800;
-            color: var(--color-navy);
-            margin: 0;
-          }
-
-          .topic-body {
-            font-size: 13px;
-            color: var(--color-text-primary);
-            line-height: 1.4;
-            margin: 0;
-          }
-
-          .comments-box {
-            padding: 12px;
-            background: var(--color-background);
-            border-radius: var(--radius-sm);
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            font-size: 12px;
-
-            .comments-title { font-weight: 700; color: var(--color-navy); }
-            .comment-item { color: var(--color-text-primary); }
-          }
-
-          .reply-row {
-            display: flex;
-            gap: 8px;
-            margin-top: 4px;
-
-            .reply-input { flex: 1; height: 34px; font-size: 12.5px; }
-          }
-        }
-      }
-    }
-
-    /* RESOURCES */
-    .resources-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 14px;
-
-      .resource-card {
-        padding: 16px;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        background: #FFFFFF;
-
-        .res-info {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          gap: 2px;
-          .res-title { font-size: 13px; font-weight: 700; color: var(--color-navy); margin: 0; }
-        }
-      }
-    }
-
-    /* MEMBERS */
-    .members-card {
-      padding: 0;
-      background: #FFFFFF;
-      overflow: hidden;
-
-      .members-head {
-        padding: 14px 20px;
-        border-bottom: 1px solid var(--color-border);
-        background: #F8FAFC;
-      }
-
-      .members-list {
-        display: flex;
-        flex-direction: column;
-
-        .member-item {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 12px 20px;
-          border-bottom: 1px solid var(--color-border);
-          gap: 12px;
-
-          &:last-child { border-bottom: none; }
-
-          .member-avatar {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            background: var(--color-navy);
-            color: #FFFFFF;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            font-weight: 800;
-          }
-
-          .member-info {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-            font-size: 13px;
-          }
-        }
-      }
-    }
-
     /* EMPTY */
     .empty-state-box {
       padding: 50px 20px;
@@ -1288,6 +821,9 @@ export class LearnerCommunitiesComponent {
   private commService = inject(CommunityService);
   public authService = inject(AuthService);
   private toast = inject(ToastService);
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
+  private cdr = inject(ChangeDetectorRef);
 
   allCommunities = this.commService.getCommunities();
 
@@ -1299,12 +835,9 @@ export class LearnerCommunitiesComponent {
   currentPage = 1;
   pageSize = 8;
 
-  selectedCommunity: Community | null = null;
-  hubTab: 'DISCUSSIONS' | 'RESOURCES' | 'MEMBERS' = 'DISCUSSIONS';
-
-  newTopicTitle = '';
-  newTopicContent = '';
-  replyTexts: Record<string, string> = {};
+  /** Communauté ouverte (espace détaillé) ; null = catalogue. */
+  selectedCommunityId: string | null = null;
+  initialTab: string | null = null;
 
   showCodeModal = false;
   accessCodeInput = '';
@@ -1319,6 +852,18 @@ export class LearnerCommunitiesComponent {
   newCommCategory = 'Examens & Révisions';
   newCommIsPrivate = false;
   readonly communityCategories = ['Examens & Révisions', 'Data & IA', 'Tech & Informatique', 'Business & Marketing', 'Santé & Sciences', 'Pédagogie & EdTech'];
+
+  constructor() {
+    // Liens des notifications et emails : ?communaute=<id>&onglet=documents|reunions|quiz...
+    this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe(params => {
+      const id = params.get('communaute');
+      if (id) {
+        this.initialTab = params.get('onglet');
+        this.selectedCommunityId = id;
+        this.cdr.markForCheck();
+      }
+    });
+  }
 
   openCreateModal() {
     this.createError = '';
@@ -1335,26 +880,24 @@ export class LearnerCommunitiesComponent {
       this.createError = 'Le nom et la description sont obligatoires.';
       return;
     }
-    const user = this.authService.currentUser();
     this.isCreating = true;
     this.commService.createCommunityApi({
       name: this.newCommName.trim(),
       description: this.newCommDesc.trim(),
       category: this.newCommCategory,
-      isPrivate: this.newCommIsPrivate,
-      creatorId: user?.id,
-      creatorName: `${user?.prenom ?? ''} ${user?.nom ?? ''}`.trim()
+      isPrivate: this.newCommIsPrivate
     }).subscribe({
       next: (created) => {
         this.isCreating = false;
         this.showCreateModal = false;
         this.mainTab = 'MY_COMMUNITIES';
         this.toast.success(`Communauté « ${created.name} » créée. Code d'accès : ${created.accessCode}`);
-        this.addLocalMembership(created);
+        this.open(created.id);
       },
       error: (err) => {
         this.isCreating = false;
         this.createError = getGeneralErrorMessage(err, 'La communauté n\'a pas pu être créée.');
+        this.cdr.markForCheck();
       }
     });
   }
@@ -1368,8 +911,7 @@ export class LearnerCommunitiesComponent {
   }
 
   isMember(comm: Community): boolean {
-    const currentUserId = this.authService.currentUser()?.id;
-    return !!currentUserId && (comm.members || []).some(m => m.userId === currentUserId);
+    return !!comm.myRole;
   }
 
   myCommunities(): Community[] {
@@ -1382,12 +924,13 @@ export class LearnerCommunitiesComponent {
 
   displayedCommunities(): Community[] {
     const list = this.mainTab === 'MY_COMMUNITIES' ? this.myCommunities() : this.publicCommunities();
+    const q = this.searchQuery.trim().toLowerCase();
 
     return list.filter(c => {
-      const matchSearch = !this.searchQuery ||
-        c.name.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-        c.description.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-        c.accessCode.toLowerCase().includes(this.searchQuery.toLowerCase());
+      const matchSearch = !q ||
+        c.name.toLowerCase().includes(q) ||
+        (c.description || '').toLowerCase().includes(q) ||
+        (c.accessCode || '').toLowerCase().includes(q);
 
       const matchCategory = this.selectedCategory === 'ALL' || c.category === this.selectedCategory;
 
@@ -1401,70 +944,38 @@ export class LearnerCommunitiesComponent {
     return list.slice(start, start + this.pageSize);
   }
 
+  /** Membre : ouvre l'espace de la communauté ; sinon, la rejoindre d'abord (communauté publique). */
   openCommunity(comm: Community) {
-    this.selectedCommunity = comm;
-    this.hubTab = 'DISCUSSIONS';
+    if (this.isMember(comm)) {
+      this.open(comm.id);
+    } else {
+      this.joinCommunity(comm);
+    }
   }
 
   joinCommunity(comm: Community) {
-    // L'adhésion est enregistrée sur le serveur (via le code d'accès de la communauté)
-    if (!this.isMember(comm)) {
-      this.commService.joinCommunityApi(comm.accessCode).subscribe({
-        next: (joined) => this.addLocalMembership(joined),
-        error: (err) => this.toast.apiError(err, 'Impossible de rejoindre cette communauté pour le moment.')
-      });
-      return;
+    if (!comm.accessCode) return;
+    this.commService.joinCommunityApi(comm.accessCode).subscribe({
+      next: (joined) => {
+        this.toast.success(`Bienvenue dans « ${joined.name} » !`);
+        this.open(joined.id);
+      },
+      error: (err) => this.toast.apiError(err, 'Impossible de rejoindre cette communauté pour le moment.')
+    });
+  }
+
+  private open(id: string) {
+    this.initialTab = null;
+    this.selectedCommunityId = id;
+    this.cdr.markForCheck();
+  }
+
+  closeHub() {
+    this.selectedCommunityId = null;
+    this.initialTab = null;
+    if (this.route.snapshot.queryParamMap.has('communaute')) {
+      this.router.navigate([], { relativeTo: this.route, queryParams: {} });
     }
-    this.openCommunity(this.commService.getCommunityById(comm.id) || comm);
-  }
-
-  private addLocalMembership(comm: Community) {
-    const user = this.authService.currentUser();
-    this.commService.joinCommunity(comm.id, {
-      userId: user?.id || 'user-learner-1',
-      name: (user?.prenom || 'Étudiant') + ' ' + (user?.nom || ''),
-      email: user?.email || 'etudiant@univ.edu',
-      avatarUrl: user?.avatarUrl
-    });
-    this.openCommunity(this.commService.getCommunityById(comm.id) || comm);
-  }
-
-  submitNewTopic() {
-    if (!this.selectedCommunity || !this.newTopicTitle.trim() || !this.newTopicContent.trim()) return;
-    const user = this.authService.currentUser();
-
-    this.commService.addTopic(this.selectedCommunity.id, {
-      title: this.newTopicTitle.trim(),
-      content: this.newTopicContent.trim(),
-      authorId: user?.id || 'user-learner-1',
-      authorName: (user?.prenom || 'Fatou') + ' ' + (user?.nom || 'Sow'),
-      authorAvatar: user?.avatarUrl
-    });
-
-    this.newTopicTitle = '';
-    this.newTopicContent = '';
-    // Refresh local selected
-    this.selectedCommunity = this.commService.getCommunityById(this.selectedCommunity.id) || this.selectedCommunity;
-  }
-
-  submitComment(topicId: string) {
-    const text = (this.replyTexts[topicId] || '').trim();
-    if (!text || !this.selectedCommunity) return;
-    const user = this.authService.currentUser();
-
-    this.commService.addComment(this.selectedCommunity.id, topicId, {
-      content: text,
-      authorId: user?.id || 'user-learner-1',
-      authorName: (user?.prenom || 'Fatou') + ' ' + (user?.nom || 'Sow'),
-      authorAvatar: user?.avatarUrl
-    });
-
-    this.replyTexts[topicId] = '';
-    this.selectedCommunity = this.commService.getCommunityById(this.selectedCommunity.id) || this.selectedCommunity;
-  }
-
-  downloadResource(title: string) {
-    alert(`Téléchargement de "${title}" en cours...`);
   }
 
   openCodeModal() {
@@ -1482,13 +993,15 @@ export class LearnerCommunitiesComponent {
 
     this.commService.joinCommunityApi(code).subscribe({
       next: (found) => {
-        this.addLocalMembership(found);
         this.showCodeModal = false;
         this.joinError = '';
+        this.toast.success(`Bienvenue dans « ${found.name} » !`);
+        this.open(found.id);
       },
       error: (err) => {
         const fieldErrors = extractFieldErrors(err);
         this.joinError = fieldErrors['accessCode'] || getGeneralErrorMessage(err, 'Code de communauté introuvable. Veuillez vérifier le code d\'accès.');
+        this.cdr.markForCheck();
       }
     });
   }
