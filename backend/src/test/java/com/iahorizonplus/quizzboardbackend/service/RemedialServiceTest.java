@@ -29,6 +29,7 @@ class RemedialServiceTest {
     @Mock private RemedialPackRepository packRepository;
     @Mock private UserRepository userRepository;
     @Mock private RemedialGenerationWorker worker;
+    @Mock private LiveSessionService liveSessionService;
     @Spy private ObjectMapper objectMapper = new ObjectMapper();
     @InjectMocks private RemedialService service;
 
@@ -87,5 +88,39 @@ class RemedialServiceTest {
         when(userRepository.findById("u2")).thenReturn(Optional.of(creator));
         service.recordResult(failed("u2", 0, false), quiz());
         verify(packRepository, times(1)).save(any(RemedialPack.class));
+    }
+
+    @Test
+    @DisplayName("Live sans connexion : parcours rattaché au compte de l'email saisi en rejoignant le Live")
+    void recordResult_LiveGuest_UsesJoinEmailOfTheLiveRoster() {
+        User learner = User.builder().id("u1").email("awa@ecole.sn").role(UserRole.LEARNER).subscriptionTier(SubscriptionTier.FREE).build();
+        Participation guest = failed(null, 20, false);
+        guest.setLiveSessionId("live-1");
+        guest.setParticipantEmail(" Awa@Ecole.sn ");
+        when(liveSessionService.hasPlayerEmail("live-1", "quiz-1", "awa@ecole.sn")).thenReturn(true);
+        when(userRepository.findByEmail("awa@ecole.sn")).thenReturn(Optional.of(learner));
+        when(packRepository.findFirstByUserIdAndQuizId("u1", "quiz-1")).thenReturn(Optional.empty());
+        when(packRepository.save(any(RemedialPack.class))).thenAnswer(i -> i.getArgument(0));
+
+        service.recordResult(guest, quiz());
+
+        verify(packRepository).save(argThat(p -> "u1".equals(p.getUserId()) && "quiz-1".equals(p.getQuizId())));
+    }
+
+    @Test
+    @DisplayName("Sans connexion : aucun parcours hors Live ou pour un email absent des joueurs du Live")
+    void recordResult_GuestOutsideLiveOrNotInRoster_Ignored() {
+        Participation solo = failed(null, 20, false);
+        solo.setParticipantEmail("awa@ecole.sn");
+        service.recordResult(solo, quiz());
+
+        Participation intruder = failed(null, 20, false);
+        intruder.setLiveSessionId("live-1");
+        intruder.setParticipantEmail("awa@ecole.sn");
+        when(liveSessionService.hasPlayerEmail("live-1", "quiz-1", "awa@ecole.sn")).thenReturn(false);
+        service.recordResult(intruder, quiz());
+
+        verify(userRepository, never()).findByEmail(anyString());
+        verify(packRepository, never()).save(any(RemedialPack.class));
     }
 }

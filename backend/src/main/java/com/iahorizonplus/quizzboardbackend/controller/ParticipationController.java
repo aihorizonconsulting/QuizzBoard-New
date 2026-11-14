@@ -36,6 +36,8 @@ public class ParticipationController {
         participation.setId(null);
         participation.setCompletedAt(null);
         participation.setCertificateId(null);
+        // Le compte du joueur vient uniquement du jeton de connexion, jamais du corps de la requête
+        participation.setUserId(null);
         if (participation.getAnswers() != null) {
             for (com.iahorizonplus.quizzboardbackend.entity.ParticipantAnswer ans : participation.getAnswers()) {
                 ans.setId(null);

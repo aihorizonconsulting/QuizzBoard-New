@@ -280,6 +280,22 @@ public class LiveSessionServiceImpl implements LiveSessionService {
         }
     }
 
+    @Override
+    public boolean hasPlayerEmail(String sessionId, String quizId, String email) {
+        if (isBlank(sessionId) || isBlank(quizId) || isBlank(email)) {
+            return false;
+        }
+        try {
+            synchronized (lockFor(sessionId)) {
+                LiveSessionState state = findById(sessionId);
+                return quizId.equals(state.quizId) && state.players != null
+                        && state.players.stream().anyMatch(p -> email.trim().equalsIgnoreCase(p.email));
+            }
+        } catch (ResourceNotFoundException e) {
+            return false;
+        }
+    }
+
     private Object lockFor(String id) {
         return locks.computeIfAbsent(id, key -> new Object());
     }

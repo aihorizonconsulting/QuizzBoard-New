@@ -96,9 +96,9 @@ class RemedialFlowIntegrationTest {
         return send(postAs("/quizzes", payload, creator).andExpect(status().isCreated())).at("/data/id").asText();
     }
 
-    /** Joue le quiz : les « goodAnswers » premières questions justes, les suivantes fausses. */
-    private JsonNode play(String quizId, User learner, int goodAnswers) throws Exception {
-        JsonNode quiz = send(getAs("/quizzes/" + quizId, learner)).at("/data");
+    /** Réponses au quiz : les « goodAnswers » premières questions justes, les suivantes fausses. */
+    private List<Map<String, Object>> answers(String quizId, User viewer, int goodAnswers) throws Exception {
+        JsonNode quiz = send(getAs("/quizzes/" + quizId, viewer)).at("/data");
         List<Map<String, Object>> answers = new ArrayList<>();
         int index = 0;
         for (JsonNode q : quiz.at("/questions")) {
@@ -109,8 +109,21 @@ class RemedialFlowIntegrationTest {
             }
             answers.add(Map.of("questionId", q.at("/id").asText(), "selectedChoiceIds", List.of(choiceId), "timeSpentSeconds", 2));
         }
+        return answers;
+    }
+
+    /** Joue le quiz connecté : les « goodAnswers » premières questions justes, les suivantes fausses. */
+    private JsonNode play(String quizId, User learner, int goodAnswers) throws Exception {
         return send(postAs("/participations", Map.of("quizId", quizId, "participantName", "Test LEARNER", "status", "COMPLETED",
-                "timeTotalSeconds", 6, "answers", answers), learner).andExpect(status().isCreated())).at("/data");
+                "timeTotalSeconds", 6, "answers", answers(quizId, learner, goodAnswers)), learner).andExpect(status().isCreated())).at("/data");
+    }
+
+    /** Joue le quiz dans un Live sans être connecté (comme un élève qui rejoint avec le PIN, son nom et son email). */
+    private JsonNode playLiveAsGuest(String quizId, String liveId, String email, int goodAnswers, User viewer) throws Exception {
+        Map<String, Object> payload = Map.of("quizId", quizId, "liveSessionId", liveId, "participantName", "Élève Live",
+                "participantEmail", email, "status", "COMPLETED", "timeTotalSeconds", 6, "answers", answers(quizId, viewer, goodAnswers));
+        return send(mvc.perform(post("/participations").contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(payload)))
+                .andExpect(status().isCreated())).at("/data");
     }
 
     private ObjectNode generatedContent() {
@@ -173,6 +186,33 @@ class RemedialFlowIntegrationTest {
 
         // Un parcours n'est visible que par son propriétaire
         getAs("/remedial/" + pack.at("/id").asText(), newUser(UserRole.LEARNER)).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void failedLiveQuiz_GuestPlayer_PackForTheLearnerAccountOfTheJoinEmail() throws Exception {
+        User creator = newUser(UserRole.CREATOR);
+        String quizId = createQuiz(creator, 3);
+        User learner = newUser(UserRole.LEARNER);
+        User absent = newUser(UserRole.LEARNER);
+
+        String liveId = send(postAs("/live-sessions", Map.of("quizId", quizId, "quizTitle", "Les jointures SQL",
+                "totalQuestions", 3, "timePerQuestionSeconds", 20), creator).andExpect(status().isCreated())).at("/data/id").asText();
+        // L'élève rejoint le Live sans être connecté, avec l'email de son compte apprenant
+        mvc.perform(post("/live-sessions/" + liveId + "/join").contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(Map.of("nickname", "Awa", "email", learner.getEmail().toUpperCase()))))
+                .andExpect(status().isOk());
+
+        JsonNode participation = playLiveAsGuest(quizId, liveId, learner.getEmail(), 1, creator);
+        assertThat(participation.at("/percentage").asDouble()).isLessThan(70.0);
+
+        JsonNode packs = send(getAs("/remedial/my", learner).andExpect(status().isOk())).at("/data");
+        assertThat(packs.size()).isEqualTo(1);
+        assertThat(packs.get(0).at("/quizTitle").asText()).isEqualTo("Les jointures SQL");
+        assertThat(packs.get(0).at("/missedCount").asInt()).isEqualTo(2);
+
+        // Email absent de la liste des joueurs de ce Live : aucun parcours n'est rattaché à ce compte
+        playLiveAsGuest(quizId, liveId, absent.getEmail(), 0, creator);
+        assertThat(send(getAs("/remedial/my", absent)).at("/data").size()).isZero();
     }
 
     @Test

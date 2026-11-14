@@ -20,4 +20,7 @@ public interface LiveSessionService {
     LiveSessionResponse recordProgress(String id, LiveProgressRequest request);
     LiveSessionResponse finishSession(String id);
     LiveSessionResponse stopSession(String id);
+
+    /** Vrai si un joueur a rejoint cette session Live de ce quiz avec cet email. */
+    boolean hasPlayerEmail(String sessionId, String quizId, String email);
 }

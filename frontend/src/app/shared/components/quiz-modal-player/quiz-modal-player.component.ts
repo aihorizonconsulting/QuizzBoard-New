@@ -146,6 +146,16 @@ import { IconComponent } from '../icon/icon.component';
                   </span>
                   <a routerLink="/app/learner/perfectionnement" (click)="close()" class="btn btn-outline btn-sm">Voir mon perfectionnement</a>
                 </div>
+              } @else if (!practice && liveContext && !authService.isAuthenticated() && guestEmail && scorePercentage < 70) {
+                <!-- Live joué sans connexion : le parcours est rattaché au compte apprenant de l'email saisi en rejoignant -->
+                <div class="remedial-hint">
+                  <strong>📚 Un parcours de remise à niveau vous attend</strong>
+                  <span>
+                    Si {{ guestEmail }} est l'adresse de votre compte apprenant QuizzBoard, un mini-cours et un quiz
+                    d'entraînement sur les notions manquées vous attendent dans « Perfectionnement ».
+                  </span>
+                  <a routerLink="/connexion" (click)="close()" class="btn btn-outline btn-sm">Me connecter pour le voir</a>
+                </div>
               }
 
               <!-- EMAIL SCORE & RANK RECAP -->
@@ -662,6 +672,11 @@ export class QuizModalPlayerComponent implements OnInit, OnDestroy, OnChanges {
   /** Session Live dans laquelle ce quiz est joué (absente pour un quiz individuel). */
   get liveContext(): LivePlayContext | undefined {
     return this.playerModalService.guestParticipant()?.live;
+  }
+
+  /** Email saisi par un joueur non connecté en rejoignant (résultats et perfectionnement du Live). */
+  get guestEmail(): string | undefined {
+    return this.playerModalService.guestParticipant()?.email?.trim() || undefined;
   }
 
   get questionTimeLimit(): number {

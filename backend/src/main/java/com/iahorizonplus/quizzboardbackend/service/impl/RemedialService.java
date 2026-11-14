@@ -8,6 +8,7 @@ import com.iahorizonplus.quizzboardbackend.exception.PlanRequiredException;
 import com.iahorizonplus.quizzboardbackend.exception.ResourceNotFoundException;
 import com.iahorizonplus.quizzboardbackend.repository.RemedialPackRepository;
 import com.iahorizonplus.quizzboardbackend.repository.UserRepository;
+import com.iahorizonplus.quizzboardbackend.service.LiveSessionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -33,16 +34,20 @@ public class RemedialService {
     private final UserRepository userRepository;
     private final RemedialGenerationWorker worker;
     private final ObjectMapper objectMapper;
+    private final LiveSessionService liveSessionService;
 
-    /** Après un quiz terminé : crée ou met à jour le parcours de l'apprenant s'il a obtenu moins de 70 %. */
+    /**
+     * Après un quiz terminé (seul ou en Live) : crée ou met à jour le parcours de l'apprenant s'il a obtenu
+     * moins de 70 %.
+     */
     @Transactional
     public void recordResult(Participation participation, Quiz quiz) {
-        if (participation.getUserId() == null || quiz == null
+        if (quiz == null
                 || !LearningStatsService.COMPLETED.equalsIgnoreCase(participation.getStatus())
                 || participation.getPercentage() >= LearningStatsService.PASS_THRESHOLD) {
             return;
         }
-        User user = userRepository.findById(participation.getUserId()).orElse(null);
+        User user = learnerOf(participation, quiz);
         if (!PlanAccess.isLearner(user)) {
             return;
         }
@@ -60,6 +65,23 @@ public class RemedialService {
         if (PlanAccess.hasLearnerPlus(user) && !RemedialPack.READY.equals(saved.getStatus())) {
             generateAfterCommit(saved.getId());
         }
+    }
+
+    /**
+     * Compte de l'apprenant qui a joué. En Live, un élève rejoint souvent sans être connecté (PIN + nom + email) :
+     * son résultat est alors rattaché au compte de l'email saisi en rejoignant, à condition que cet email figure
+     * parmi les joueurs de cette session Live de ce quiz.
+     */
+    private User learnerOf(Participation participation, Quiz quiz) {
+        if (participation.getUserId() != null) {
+            return userRepository.findById(participation.getUserId()).orElse(null);
+        }
+        String email = participation.getParticipantEmail() == null ? "" : participation.getParticipantEmail().trim().toLowerCase();
+        if (email.isEmpty() || participation.getLiveSessionId() == null
+                || !liveSessionService.hasPlayerEmail(participation.getLiveSessionId(), quiz.getId(), email)) {
+            return null;
+        }
+        return userRepository.findByEmail(email).orElse(null);
     }
 
     /** Parcours de l'apprenant (les parcours en attente sont préparés dès qu'il est abonné). */
