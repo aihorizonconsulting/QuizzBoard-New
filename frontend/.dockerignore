@@ -1,0 +1,14 @@
+# Dépendances et builds de la machine hôte : l'image installe les siennes (npm ci)
+# et un node_modules Windows écraserait les binaires Linux du conteneur.
+node_modules
+dist
+.angular
+coverage
+
+# Fichiers inutiles à l'image
+.git
+.vscode
+.idea
+*.md
+Dockerfile
+.dockerignore
