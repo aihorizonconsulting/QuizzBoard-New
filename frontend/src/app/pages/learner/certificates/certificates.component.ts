@@ -3,8 +3,10 @@ import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../../environments/environment';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
+import { SubscriptionService } from '../../../core/services/subscription.service';
+import { CheckoutButtonComponent } from '../../../shared/components/checkout-button/checkout-button.component';
 import { ParticipationService } from '../../../core/services/participation.service';
 import { Certificate } from '../../../core/models/participation.model';
 import { IconComponent } from '../../../shared/components/icon/icon.component';
@@ -13,7 +15,7 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
 @Component({
   selector: 'app-certificates',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, IconComponent, PaginationComponent],
+  imports: [CommonModule, FormsModule, RouterLink, IconComponent, PaginationComponent, CheckoutButtonComponent],
   template: `
     <div class="certificates-page animate-fade-in">
       <!-- =========================================================================
@@ -39,7 +41,7 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
               <strong>Certificats réservés à l'abonnement Apprenant Plus (200 F / mois)</strong>
               <span>Vos certificats obtenus sont conservés. Abonnez-vous pour les consulter, les imprimer et les télécharger.</span>
             </div>
-            <a routerLink="/tarifs" class="btn btn-primary btn-sm">Découvrir Apprenant Plus</a>
+            <app-checkout-button plan="LEARNER_PLUS">Découvrir Apprenant Plus</app-checkout-button>
           </div>
         }
 
@@ -144,9 +146,10 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
                     </div>
                   </div>
                   <div class="cert-card-actions" (click)="$event.stopPropagation()">
-                    <button class="btn btn-primary btn-sm btn-full" (click)="openCertificate(cert)">
+                    <button class="btn btn-primary btn-sm btn-full" (click)="openCertificate(cert)"
+                      [class.is-loading]="cert.locked && checkoutPending()" [disabled]="cert.locked && checkoutPending()">
                       <app-icon [name]="cert.locked ? 'lock' : 'award'" [size]="14" color="var(--color-navy)"></app-icon>
-                      <span>{{ cert.locked ? 'Débloquer avec Apprenant Plus' : 'Consulter le Diplôme' }}</span>
+                      <span>{{ cert.locked ? (checkoutPending() ? 'Redirection vers PayDunya...' : 'Débloquer avec Apprenant Plus') : 'Consulter le Diplôme' }}</span>
                     </button>
                   </div>
                 </div>
@@ -175,8 +178,9 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
                   </div>
 
                   <div class="row-action" (click)="$event.stopPropagation()">
-                    <button class="btn btn-primary btn-sm" (click)="openCertificate(cert)">
-                      <span>{{ cert.locked ? '🔒 Débloquer' : 'Consulter' }}</span>
+                    <button class="btn btn-primary btn-sm" (click)="openCertificate(cert)"
+                      [class.is-loading]="cert.locked && checkoutPending()" [disabled]="cert.locked && checkoutPending()">
+                      <span>{{ cert.locked ? (checkoutPending() ? 'Redirection...' : '🔒 Débloquer') : 'Consulter' }}</span>
                       <app-icon name="arrow-right" [size]="13" color="var(--color-navy)"></app-icon>
                     </button>
                   </div>
@@ -710,8 +714,11 @@ import { PaginationComponent } from '../../../shared/components/pagination/pagin
 export class CertificatesComponent {
   private partService = inject(ParticipationService);
   private http = inject(HttpClient);
-  private router = inject(Router);
   private authService = inject(AuthService);
+  private subService = inject(SubscriptionService);
+
+  /** Un certificat verrouillé mène directement au paiement Apprenant Plus. */
+  checkoutPending = () => this.subService.pendingCheckout() !== null;
   certificates = this.partService.getCertificates();
 
   /** Sans abonnement Apprenant Plus, le serveur renvoie les certificats verrouillés (sans diplôme ni code). */
@@ -767,7 +774,7 @@ export class CertificatesComponent {
 
   openCertificate(cert: Certificate) {
     if (cert.locked) {
-      this.router.navigate(['/tarifs']);
+      this.subService.goToCheckout('LEARNER_PLUS');
       return;
     }
     this.selectedCert = cert;

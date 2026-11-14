@@ -6,11 +6,12 @@ import { AuthService } from '../../../core/services/auth.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Invoice } from '../../../core/models/plan.model';
 import { IconComponent } from '../../../shared/components/icon/icon.component';
+import { CheckoutButtonComponent } from '../../../shared/components/checkout-button/checkout-button.component';
 
 @Component({
   selector: 'app-creator-subscription',
   standalone: true,
-  imports: [CommonModule, RouterLink, IconComponent],
+  imports: [CommonModule, RouterLink, IconComponent, CheckoutButtonComponent],
   template: `
     <div class="subscription-page animate-fade-in">
       <!-- 1. HEADER (SAME AS OTHER PAGES) -->
@@ -62,9 +63,17 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
         </div>
 
         <div class="plan-side">
-          <a routerLink="/tarifs" class="btn btn-outline btn-sm">
-            Voir le comparatif des forfaits
-          </a>
+          @if (authService.subscriptionTier() === 'FREE') {
+            <!-- Accès direct au paiement PayDunya, sans passer par la page Tarifs -->
+            <app-checkout-button plan="STARTER">
+              <app-icon name="sparkles" [size]="14" color="var(--color-navy)"></app-icon>
+              <span>Passer au forfait STARTER</span>
+            </app-checkout-button>
+          } @else {
+            <a routerLink="/tarifs" class="btn btn-outline btn-sm">
+              Voir le comparatif des forfaits
+            </a>
+          }
         </div>
       </div>
 

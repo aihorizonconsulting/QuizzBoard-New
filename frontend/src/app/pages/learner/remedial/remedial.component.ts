@@ -8,6 +8,7 @@ import { Quiz } from '../../../core/models/quiz.model';
 import { markdownToHtml } from '../../../core/utils/markdown.util';
 import { IconComponent } from '../../../shared/components/icon/icon.component';
 import { QuizModalPlayerComponent } from '../../../shared/components/quiz-modal-player/quiz-modal-player.component';
+import { CheckoutButtonComponent } from '../../../shared/components/checkout-button/checkout-button.component';
 
 /**
  * Perfectionnement : après un quiz réussi à moins de 70 %, QuizzBoard prépare un mini-cours et un quiz
@@ -16,7 +17,7 @@ import { QuizModalPlayerComponent } from '../../../shared/components/quiz-modal-
 @Component({
   selector: 'app-learner-remedial',
   standalone: true,
-  imports: [CommonModule, RouterLink, IconComponent, QuizModalPlayerComponent],
+  imports: [CommonModule, RouterLink, IconComponent, QuizModalPlayerComponent, CheckoutButtonComponent],
   template: `
     <div class="remedial-page animate-fade-in">
       @if (!selected()) {
@@ -41,7 +42,7 @@ import { QuizModalPlayerComponent } from '../../../shared/components/quiz-modal-
               <strong>Réservé à l'abonnement Apprenant Plus (200 F / mois)</strong>
               <span>Vos parcours sont préparés, mais leur consultation (mini-cours et quiz d'entraînement) nécessite l'abonnement Apprenant Plus. Il donne aussi accès à vos certificats.</span>
             </div>
-            <a routerLink="/tarifs" class="btn btn-primary btn-sm">Découvrir Apprenant Plus</a>
+            <app-checkout-button plan="LEARNER_PLUS">Découvrir Apprenant Plus</app-checkout-button>
           </div>
         }
 
@@ -73,10 +74,10 @@ import { QuizModalPlayerComponent } from '../../../shared/components/quiz-modal-
 
                 <div class="pack-actions">
                   @if (pack.locked) {
-                    <a routerLink="/tarifs" class="btn btn-outline btn-sm btn-full">
+                    <app-checkout-button plan="LEARNER_PLUS" btnClass="btn btn-outline btn-sm btn-full">
                       <app-icon name="lock" [size]="13"></app-icon>
                       <span>Débloquer avec Apprenant Plus</span>
-                    </a>
+                    </app-checkout-button>
                   } @else if (pack.status === 'READY') {
                     <button type="button" class="btn btn-primary btn-sm" (click)="open(pack)">
                       <app-icon name="book-open" [size]="13" color="var(--color-navy)"></app-icon>

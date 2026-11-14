@@ -4,11 +4,12 @@ import { Router, ActivatedRoute, RouterLink } from '@angular/router';
 import { SubscriptionService } from '../../../core/services/subscription.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { IconComponent } from '../../../shared/components/icon/icon.component';
+import { CheckoutButtonComponent } from '../../../shared/components/checkout-button/checkout-button.component';
 
 @Component({
   selector: 'app-payment-callback',
   standalone: true,
-  imports: [CommonModule, RouterLink, IconComponent],
+  imports: [CommonModule, RouterLink, IconComponent, CheckoutButtonComponent],
   template: `
     <div class="callback-container animate-fade-in">
       <div class="callback-card card">
@@ -111,10 +112,18 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
             </p>
 
             <div class="actions-row">
-              <a routerLink="/tarifs" class="btn btn-primary">
-                <app-icon name="refresh-cw" [size]="16" color="var(--color-navy)"></app-icon>
-                <span>Réessayer le paiement</span>
-              </a>
+              @if (awaitingConfirmation()) {
+                <!-- Paiement peut-être déjà débité : on revérifie au lieu d'en relancer un second -->
+                <button type="button" class="btn btn-primary" (click)="reload()">
+                  <app-icon name="refresh-cw" [size]="16" color="var(--color-navy)"></app-icon>
+                  <span>Vérifier à nouveau</span>
+                </button>
+              } @else {
+                <app-checkout-button [plan]="subService.paidPlanForCurrentUser()" btnClass="btn btn-primary">
+                  <app-icon name="refresh-cw" [size]="16" color="var(--color-navy)"></app-icon>
+                  <span>Réessayer le paiement</span>
+                </app-checkout-button>
+              }
 
               <a [routerLink]="authService.isLearner() ? authService.dashboardUrl() : '/app/subscription'" class="btn btn-outline">
                 <span>Retourner à mon compte</span>
@@ -259,13 +268,19 @@ import { IconComponent } from '../../../shared/components/icon/icon.component';
 export class PaymentCallbackComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
-  private subService = inject(SubscriptionService);
+  public subService = inject(SubscriptionService);
   public authService = inject(AuthService);
 
   status = signal<'loading' | 'success' | 'error'>('loading');
   errorMessage = signal<string>('');
   invoiceDetails = signal<any>(null);
   simulated = signal(false);
+  /** Paiement transmis à PayDunya mais pas encore confirmé : pas de nouveau paiement proposé. */
+  awaitingConfirmation = signal(false);
+
+  reload(): void {
+    window.location.reload();
+  }
 
   ngOnInit(): void {
     this.route.queryParams.subscribe(async (params) => {
@@ -290,6 +305,7 @@ export class PaymentCallbackComponent implements OnInit {
         if (!invoice) {
           // PayDunya n'a pas encore confirmé le paiement : le forfait n'est PAS encore actif
           this.status.set('error');
+          this.awaitingConfirmation.set(true);
           this.errorMessage.set('Paiement en attente de confirmation par PayDunya. Votre forfait sera activé automatiquement dès la validation ; rechargez cette page dans quelques instants.');
           return;
         }

@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../../core/services/auth.service';
+import { SubscriptionService } from '../../../core/services/subscription.service';
 import { UserRole } from '../../../core/models/user.model';
 import { IconComponent } from '../../../shared/components/icon/icon.component';
 import { extractFieldErrors, getGeneralErrorMessage } from '../../../core/utils/form-error.util';
@@ -598,6 +599,7 @@ declare const google: any;
 })
 export class SignupComponent {
   private authService = inject(AuthService);
+  private subService = inject(SubscriptionService);
   private router = inject(Router);
   private cdr = inject(ChangeDetectorRef);
 
@@ -716,12 +718,20 @@ export class SignupComponent {
       password: this.password,
       role: this.selectedRole
     }).subscribe({
-      next: (res: any) => {
+      next: async (res: any) => {
+        if (this.selectedRole === 'CREATOR' && this.selectedPlan === 'STARTER') {
+          // Compte créé et connecté : départ direct vers le paiement PayDunya du forfait STARTER.
+          // Si le guichet ne s'ouvre pas (erreur affichée), le formateur retrouve son forfait dans son espace.
+          if (!(await this.subService.goToCheckout('STARTER'))) {
+            this.isLoading = false;
+            this.cdr.markForCheck();
+            this.router.navigate(['/app/subscription']);
+          }
+          return;
+        }
         this.isLoading = false;
         this.cdr.markForCheck();
-        if (this.selectedRole === 'CREATOR' && this.selectedPlan === 'STARTER') {
-          this.router.navigate(['/tarifs'], { queryParams: { plan: 'STARTER' } });
-        } else if (this.selectedRole === 'CREATOR') {
+        if (this.selectedRole === 'CREATOR') {
           this.router.navigate(['/app/dashboard']);
         } else {
           this.router.navigate(['/app/learner/dashboard']);

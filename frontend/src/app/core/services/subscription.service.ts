@@ -1,9 +1,14 @@
 import { Injectable, signal, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { Router } from '@angular/router';
 import { SubscriptionPlan, Invoice } from '../models/plan.model';
 import { AuthService } from './auth.service';
+import { ToastService } from './toast.service';
 import { environment } from '../../../environments/environment';
 import { firstValueFrom } from 'rxjs';
+
+/** Forfaits payants : STARTER pour les formateurs, Apprenant Plus pour les élèves. */
+export type PaidPlanId = 'STARTER' | 'LEARNER_PLUS';
 
 export interface PaymentInitiateResponse {
   transactionId: string;
@@ -105,12 +110,52 @@ export interface PlanUsage {
 export class SubscriptionService {
   private http = inject(HttpClient);
   private authService = inject(AuthService);
+  private router = inject(Router);
+  private toast = inject(ToastService);
 
   private plans = signal<SubscriptionPlan[]>(DEFAULT_PLANS);
   private invoices = signal<Invoice[]>([]);
 
+  /** Forfait dont le guichet PayDunya est en cours d'ouverture (boutons d'abonnement en attente). */
+  private checkoutPlan = signal<PaidPlanId | null>(null);
+  readonly pendingCheckout = this.checkoutPlan.asReadonly();
+
   constructor() {
     this.loadInvoices();
+    // Retour arrière depuis PayDunya : la page restaurée par le navigateur ne doit pas rester en attente
+    window.addEventListener('pageshow', (event) => {
+      if (event.persisted) this.checkoutPlan.set(null);
+    });
+  }
+
+  /** Forfait payant proposé à l'utilisateur connecté selon son rôle. */
+  paidPlanForCurrentUser(): PaidPlanId {
+    return this.authService.isLearner() ? 'LEARNER_PLUS' : 'STARTER';
+  }
+
+  /**
+   * Parcours direct vers le guichet PayDunya, sans page intermédiaire : la facture est créée par le
+   * serveur (au prix fixé dans Admin > Paramètres) puis le navigateur quitte QuizzBoard pour PayDunya.
+   * Retourne false si la redirection n'a pas pu démarrer (l'erreur est déjà affichée).
+   */
+  async goToCheckout(planId: PaidPlanId): Promise<boolean> {
+    if (this.checkoutPlan()) return false;
+    if (!this.authService.isAuthenticated()) {
+      this.router.navigate(['/connexion']);
+      return false;
+    }
+
+    this.checkoutPlan.set(planId);
+    try {
+      if (await this.subscribeToPlan(planId, 'PAYDUNYA')) {
+        return true; // le bouton reste en attente jusqu'au départ vers PayDunya
+      }
+      this.toast.error('Impossible d\'ouvrir le paiement PayDunya. Veuillez réessayer dans un instant.');
+    } catch (err) {
+      this.toast.apiError(err, 'La connexion avec la passerelle PayDunya a échoué. Veuillez réessayer.');
+    }
+    this.checkoutPlan.set(null);
+    return false;
   }
 
   getPlans() {
